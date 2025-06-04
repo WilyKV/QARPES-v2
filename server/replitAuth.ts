@@ -1,25 +1,7 @@
-import passport from "passport";
-import * as client from "openid-client";
-import { Strategy, type VerifyFunction } from "openid-client/passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
-import memoize from "memoizee";
 import { storage } from "./storage";
-
-if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET || !process.env.MICROSOFT_TENANT_ID) {
-  throw new Error("Microsoft Azure AD environment variables not provided");
-}
-
-const getMicrosoftOidcConfig = memoize(
-  async () => {
-    return await client.discovery(
-      new URL(`https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID}/v2.0`),
-      process.env.MICROSOFT_CLIENT_ID!
-    );
-  },
-  { maxAge: 3600 * 1000 }
-);
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -43,121 +25,142 @@ export function getSession() {
   });
 }
 
-function updateUserSession(
-  user: any,
-  tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
-) {
-  user.claims = tokens.claims();
-  user.access_token = tokens.access_token;
-  user.refresh_token = tokens.refresh_token;
-  user.expires_at = user.claims?.exp;
-}
-
-async function upsertUser(claims: any) {
-  await storage.upsertUser({
-    id: claims.oid || claims.sub,
-    email: claims.upn || claims.email,
-    firstName: claims.given_name,
-    lastName: claims.family_name,
-    profileImageUrl: null,
-  });
-}
-
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
-  app.use(passport.initialize());
-  app.use(passport.session());
 
-  const config = await getMicrosoftOidcConfig();
-
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-    verified: passport.AuthenticateCallback
-  ) => {
-    const claims = tokens.claims();
-    
-    // Verify domain restriction
-    const email = claims?.upn || claims?.email;
-    if (!email || typeof email !== 'string' || !email.endsWith('@omneseducation.com')) {
-      return verified(new Error('Access restricted to omneseducation.com domain'), false);
+  // Microsoft O365 authentication with Azure AD
+  app.get("/api/login", (req, res) => {
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_TENANT_ID) {
+      return res.status(500).json({ error: "Microsoft Azure AD configuration missing" });
     }
 
-    const user = {};
-    updateUserSession(user, tokens);
-    await upsertUser(claims);
-    verified(null, user);
-  };
+    const baseUrl = process.env.NODE_ENV === 'development' 
+      ? `http://localhost:5000` 
+      : `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+    
+    const redirectUri = `${baseUrl}/api/callback`;
+    const state = Math.random().toString(36).substring(7);
+    
+    // Store state in session for security
+    (req.session as any).oauth_state = state;
+    
+    const microsoftLoginUrl = new URL('https://login.microsoftonline.com/' + process.env.MICROSOFT_TENANT_ID + '/oauth2/v2.0/authorize');
+    microsoftLoginUrl.searchParams.set('client_id', process.env.MICROSOFT_CLIENT_ID);
+    microsoftLoginUrl.searchParams.set('response_type', 'code');
+    microsoftLoginUrl.searchParams.set('redirect_uri', redirectUri);
+    microsoftLoginUrl.searchParams.set('scope', 'openid email profile');
+    microsoftLoginUrl.searchParams.set('state', state);
+    microsoftLoginUrl.searchParams.set('prompt', 'login');
+    microsoftLoginUrl.searchParams.set('domain_hint', 'omneseducation.com');
 
-  const redirectUrl = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:5000/api/callback'
-    : `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}/api/callback`;
-
-  const strategy = new Strategy(
-    {
-      name: "microsoft",
-      config,
-      scope: "openid email profile",
-      callbackURL: redirectUrl,
-    },
-    verify,
-  );
-  
-  passport.use(strategy);
-
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
-
-  app.get("/api/login", (req, res, next) => {
-    passport.authenticate("microsoft", {
-      prompt: "select_account",
-    })(req, res, next);
+    res.redirect(microsoftLoginUrl.toString());
   });
 
-  app.get("/api/callback", (req, res, next) => {
-    passport.authenticate("microsoft", {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
-    })(req, res, next);
+  // Microsoft O365 callback handler
+  app.get("/api/callback", async (req, res) => {
+    const { code, state, error } = req.query;
+    
+    if (error) {
+      console.error("OAuth error:", error);
+      return res.redirect("/api/login");
+    }
+
+    // Verify state for security
+    if (state !== (req.session as any).oauth_state) {
+      console.error("Invalid OAuth state");
+      return res.redirect("/api/login");
+    }
+
+    if (!code || !process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
+      return res.redirect("/api/login");
+    }
+
+    try {
+      // Exchange code for token
+      const baseUrl = process.env.NODE_ENV === 'development' 
+        ? `http://localhost:5000` 
+        : `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      
+      const tokenUrl = `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID}/oauth2/v2.0/token`;
+      const tokenParams = new URLSearchParams({
+        client_id: process.env.MICROSOFT_CLIENT_ID,
+        client_secret: process.env.MICROSOFT_CLIENT_SECRET,
+        code: code as string,
+        grant_type: 'authorization_code',
+        redirect_uri: `${baseUrl}/api/callback`,
+      });
+
+      const tokenResponse = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenParams.toString(),
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error(`Token exchange failed: ${tokenResponse.status}`);
+      }
+
+      const tokens = await tokenResponse.json();
+      
+      // Get user info from Microsoft Graph
+      const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: { 'Authorization': `Bearer ${tokens.access_token}` },
+      });
+
+      if (!userResponse.ok) {
+        throw new Error(`User info fetch failed: ${userResponse.status}`);
+      }
+
+      const userInfo = await userResponse.json();
+
+      // Verify domain restriction
+      if (!userInfo.mail || !userInfo.mail.endsWith('@omneseducation.com')) {
+        return res.status(403).send('Access restricted to omneseducation.com domain');
+      }
+
+      // Create/update user in database
+      await storage.upsertUser({
+        id: userInfo.id,
+        email: userInfo.mail,
+        firstName: userInfo.givenName || 'User',
+        lastName: userInfo.surname || 'O365',
+        profileImageUrl: null,
+      });
+
+      // Store user session
+      (req.session as any).user = {
+        id: userInfo.id,
+        email: userInfo.mail,
+        expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+      };
+
+      res.redirect("/");
+    } catch (error) {
+      console.error("Error during OAuth callback:", error);
+      res.redirect("/api/login");
+    }
   });
 
   app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.MICROSOFT_CLIENT_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
-    });
+    (req.session as any).user = null;
+    res.redirect("https://login.microsoftonline.com/common/oauth2/v2.0/logout");
   });
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
+  const session = req.session as any;
+  const user = session?.user;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!user || !user.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
-    return next();
+  if (now > user.expires_at) {
+    session.user = null;
+    return res.status(401).json({ message: "Unauthorized" });
   }
 
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  try {
-    const config = await getMicrosoftOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  return next();
 };
