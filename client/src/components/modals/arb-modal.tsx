@@ -316,8 +316,8 @@ export function ArbModal({ open, onOpenChange, arb }: ArbModalProps) {
                   <FormItem>
                     <FormLabel>Projet (optionnel)</FormLabel>
                     <Select 
-                      onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} 
-                      defaultValue={field.value?.toString()}
+                      onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))} 
+                      defaultValue={field.value?.toString() || "none"}
                     >
                       <FormControl>
                         <SelectTrigger>
