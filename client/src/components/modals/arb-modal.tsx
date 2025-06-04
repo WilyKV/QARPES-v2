@@ -325,7 +325,7 @@ export function ArbModal({ open, onOpenChange, arb }: ArbModalProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Aucun projet</SelectItem>
+                        <SelectItem value="none">Aucun projet</SelectItem>
                         {projects?.map((project: any) => (
                           <SelectItem key={project.id} value={project.id.toString()}>
                             {project.name}
