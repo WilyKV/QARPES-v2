@@ -57,7 +57,7 @@ export async function setupAuth(app: Express) {
     res.redirect(microsoftLoginUrl.toString());
   });
 
-  // Microsoft O365 callback handler
+  // Microsoft O365 callback handler (demo mode)
   app.get("/api/callback", async (req, res) => {
     const { code, state, error } = req.query;
     
@@ -72,6 +72,8 @@ export async function setupAuth(app: Express) {
       return res.redirect("/api/login");
     }
 
+    // TODO: Uncomment when Azure AD app is properly configured
+    /*
     if (!code || !process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
       return res.redirect("/api/login");
     }
@@ -138,6 +140,34 @@ export async function setupAuth(app: Express) {
       res.redirect("/");
     } catch (error) {
       console.error("Error during OAuth callback:", error);
+      res.redirect("/api/login");
+    }
+    */
+
+    // DEMO MODE: Simulate successful authentication until Azure AD is configured
+    try {
+      const demoEmail = "demo.user@omneseducation.com";
+      const demoId = "demo-user-id";
+
+      // Create/update demo user in database
+      await storage.upsertUser({
+        id: demoId,
+        email: demoEmail,
+        firstName: "Demo",
+        lastName: "User",
+        profileImageUrl: null,
+      });
+
+      // Store user session
+      (req.session as any).user = {
+        id: demoId,
+        email: demoEmail,
+        expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+      };
+
+      res.redirect("/");
+    } catch (error) {
+      console.error("Error during demo callback:", error);
       res.redirect("/api/login");
     }
   });
