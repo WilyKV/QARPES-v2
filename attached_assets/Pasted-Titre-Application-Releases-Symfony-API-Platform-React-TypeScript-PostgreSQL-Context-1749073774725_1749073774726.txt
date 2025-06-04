@@ -1,0 +1,99 @@
+Titre : Application “Releases” – Symfony + API Platform / React + TypeScript / PostgreSQL
+
+Contexte :
+Développer une application interne “Releases” dont le cœur est la gestion des notes de release (version YYYYMM-NN). L’application doit exposer une API REST sécurisée, s’authentifier via Azure Active Directory pour gérer finement les droits (RBAC/ABAC), et proposer une interface SPA moderne.
+
+Spécifications :
+
+1. Authentification & Autorisation  
+   • Authentification via Azure AD (OAuth 2.0 / OpenID Connect).  
+   • Mapping des groupes AD sur des rôles internes (ROLE_ADMIN, ROLE_MANAGER, ROLE_DEV, ROLE_OPS, ROLE_VIEWER).  
+   • Symfony + API Platform : `knpuniversity/oauth2-client-bundle` + `lexik/jwt-authentication-bundle` pour valider le token AD, créer/mettre à jour automatiquement l’utilisateur dans la table User (stocker `azureAdId`, `email`, `displayName`, `roles`).  
+   • Mise en place de Voters (Symfony) pour vérifier, sur chaque endpoint, si l’utilisateur a les bonnes permissions (scopes ou rôles).
+
+2. Bases de données & Entités (PostgreSQL)  
+   • **User** :  
+     – `id` (UUID), `azureAdId` (string), `email` (string), `displayName` (string), `roles` (json-array), `teamIds` (json-array).  
+   • **Team** :  
+     – `id` (UUID), `name` (string), `roleTeam` (enum {Dev, Ops, QA, PO, Mixte}), `memberIds` (json-array de `azureAdId`).  
+   • **Project** :  
+     – `id` (UUID), `name` (string), `slug` (string, unique), `description` (text), `currentVersion` (string x.y.z), `status` (enum {Dev, Recette, Preprod, Prod}), `teamId` (UUID).  
+   • **ARB** :  
+     – `id` (UUID), `name` (string), `description` (text), `status` (enum {À venir, En cours, Terminé}), `startDate` (date), `expectedEndDate` (date), `actualEndDate` (date|null), `projectIds` (json-array), `responsibleTeamId` (UUID).  
+   • **Release** :  
+     – `id` (UUID), `versionOp` (string YYYYMM-NN), `startRecette` (date), `endRecette` (date), `startPreprod` (date), `endPreprod` (date), `prodDate` (date),  
+       `projectIds` (json-array), `teamIds` (json-array), `arbIds` (json-array), `devDetails` (json : {commits[], envVars[], services[], commands[], prUrl, releaseNum x.y.z, procèsVerbaux[], besoinsExpédiés[]}).
+
+3. Endpoints API (Symfony + API Platform)  
+   • **/api/auth/login** : redirige vers Azure AD, récupère ID Token + Access Token, synchronise l’utilisateur en base.  
+   • **/api/releases** (GET) : liste paginée/filtres (status, date, projet, équipe, ARB) → accessible à ROLE_VIEWER+.  
+   • **/api/releases/{id}** (GET) : détail complet de la release (incluant devDetails) → ROLE_VIEWER+.  
+   • **/api/releases** (POST) : création d’une release → si `versionOp` absent, générer automatiquement (YYYYMM-<incr>). Accessible à ROLE_DEV+.  
+   • **/api/releases/{id}** (PUT) : mise à jour (dates, projets, équipes, ARB, devDetails) → ROLE_DEV+.  
+   • **/api/releases/{id}** (DELETE) : suppression → ROLE_ADMIN.  
+   • **/api/projects**, **/api/teams**, **/api/arb** : CRUD complet, avec contrôle de rôle (ROLE_MANAGER+ pour créations/modifs, ROLE_VIEWER+ pour la lecture).  
+   • **/api/uploads/proces-verbaux** (POST) : upload de fichiers PDF/DOCX (max 10 Mo) vers Azure Blob Storage, renvoyer URL.
+
+4. Back-end – Stack technique  
+   • Symfony 6 + API Platform (v4)  
+   • Doctrine ORM + PostgreSQL (migrations automatiques)  
+   • Sécurité :  
+     – Provider LDAP/AD (ou directement client OAuth2 Azure AD) dans `security.yaml`.  
+     – LexikJWTAuthenticationBundle pour valider et émettre JWT interne si besoin.  
+     – Voters pour RBAC/ABAC sur chaque ressource.  
+   • Conteneur Docker (PHP-FPM + Nginx)  
+   • CI/CD (GitHub Actions ou Azure DevOps) : linting (PHPStan), tests unitaires (PHPUnit), build docker, push sur ACR, déploiement AKS/App Service.
+
+5. Front-end – Stack technique  
+   • React (v18) + TypeScript  
+   • MSAL.js (`@azure/msal-react`) pour l’authentification Azure AD :  
+     – Récupérer et stocker le token dans un cookie HttpOnly+Secure ou en mémoire MSAL.  
+     – À chaque appel API, utiliser `Authorization: Bearer <token>`.  
+   • React Router v6 + `ProtectedRoute` pour sécuriser les pages selon rôle (d’après le token).  
+   • State management : Redux Toolkit ou Recoil pour stocker user, token, rôles.  
+   • UI : Material UI (MUI) pour un design épuré (tableaux, modals, onglets).  
+   • Axios pour les appels API (interceptor d’erreurs 401/403).  
+   • Pages principales :  
+     – **/login** : redirection Azure AD  
+     – **/releases** : tableau des releases + bouton “Créer” → ouvre modal/formulaire React (multi-select projets/équipes/ARB, dates).  
+     – **/releases/{id}** : détails avec onglets “Opérations” (dates, CAB, PV) et “Développement” (devDetails modifiables).  
+     – **/projects**, **/teams**, **/arb** : tableaux CRUD, modals pour création/modification.
+
+6. Flux de données & scénarios principaux  
+   1. **Authentification** : l’utilisateur arrive sur `/login`, MSAL.js redirige vers Azure AD, réception du token, stockage en contexte, redirection `/releases`.  
+   2. **Liste des Releases** : GET `/api/releases`, affichage tableau MUI (versionOp, projets, équipes, statut, dates).  
+   3. **Créer une Release** :  
+      • Formulaire React → sélection multiple `projectIds`, `teamIds`, `arbIds`, dates de recette/préprod/Prod.  
+      • Si `versionOp` vide : back génère `YYYYMM-<count+1>`.  
+      • POST `/api/releases` avec body JSON.  
+   4. **Modifier une Release** : PUT `/api/releases/{id}` pour mettre à jour champs ou devDetails (commits, variables, etc.).  
+   5. **Détails Release** : GET `/api/releases/{id}`, afficher onglets MUI pour chaque section.  
+   6. **CRUD Projets/Teams/ARB** : pages React dédiées, GET/POST/PUT/DELETE sur `/api/projects`, `/api/teams`, `/api/arb`, avec `ProtectedRoute` selon rôle.
+
+7. Sécurité & bonnes pratiques  
+   • Activer CORS uniquement pour le domaine front.  
+   • Valider côté back toutes les dates (`startRecette < endRecette <= startPreprod < endPreprod <= prodDate`).  
+   • Limiter taille d’upload des PV à 10 Mo, n’autoriser que PDF/DOCX.  
+   • Logger chaque création/modification dans Monolog (utilisateur, timestamp, action).  
+   • Tests unitaires back (PHPUnit) et tests d’intégration (Postman/Newman ou PHPUnit).  
+   • Tests front (Jest + React Testing Library) pour composants critiques (ProtectedRoute, formulaires).
+
+8. Déploiement & monitoring  
+   • Conteneurs Docker pushés dans Azure Container Registry (ACR).  
+   • CI/CD (GitHub Actions) :  
+     1. Linter (ESLint, PHPStan)  
+     2. Tests unitaires (Jest, PHPUnit)  
+     3. Build Docker, push sur ACR  
+     4. Déploiement automatique sur AKS/App Service selon branche (staging/production).  
+   • Monitoring back : Application Insights (Azure) ou Grafana/Prometheus.  
+   • Monitoring front : Sentry (errors JS) + Analytics (optionnel).
+
+---
+
+Résultat attendu :  
+- **Back** : API Symfony + API Platform sécurisée, intégration SSO Azure AD, RBAC/ABAC, CRUD complet sur Releases/Projects/Teams/ARB.  
+- **Front** : SPA React + TypeScript, MSAL.js pour AD, MUI pour UI, ProtectedRoute selon rôle, formulaires modaux, pages listing + détail.  
+- **BDD** : PostgreSQL, entités et migrations Doctrine générées automatiquement.  
+- **Déploiement** : Docker, CI/CD, Azure.  
+
+Ce prompt décrit l’architecture, le choix technologique et les endpoints pour votre application “Releases” afin que vous puissiez lancer immédiatement le développement.```

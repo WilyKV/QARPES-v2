@@ -1,0 +1,31 @@
+L’objectif est de créer une API REST sécurisée, intégrée à Azure Active Directory pour un contrôle d’accès précis (RBAC/ABAC), qui gérera les entités suivantes :
+
+Releases : versions au format YYYYMM-NN, avec dates de recette, pré-production et production, liens vers projets, équipes et ARB, et sections techniques (commits, variables, services, commandes, PV).
+
+Projets : chaque projet possède un nom, une version courante, un statut (développement, recette, pré-prod, prod) et est lié à une équipe.
+
+Équipes : groupes internes (Dev, Ops, QA, PO, etc.) avec liste de membres et rôle fonctionnel.
+
+ARB : unités “Accès/Responsabilités/Budgets” à suivre (statut À venir, En cours, Terminé), associées à un ou plusieurs projets et à une équipe responsable.
+
+Les utilisateurs se connectent via SSO Azure AD ; leurs groupes AD sont mappés à des rôles internes (ROLE_ADMIN, ROLE_MANAGER, ROLE_DEV, ROLE_OPS, ROLE_VIEWER). L’API vérifie à chaque requête (token JWT) que l’utilisateur dispose des droits nécessaires pour lire, créer ou modifier les ressources.
+
+Côté client, une SPA en TypeScript exploite le token d’accès pour afficher :
+
+Un tableau des releases avec filtres (projet, équipe, ARB, statut).
+
+Des modals/formulaires pour créer ou mettre à jour une release (sélection multiple de projets/équipes/ARB, gestion des dates, génération automatique de la version).
+
+Des pages dédiées pour CRUD des projets, équipes et ARB, protégées selon les rôles.
+
+Une page de détail pour chaque release, répartie en onglets “Opérationnel” (dates, CAB, PV) et “Développement” (sections techniques modifiables).
+
+La base de données relationnelle (PostgreSQL) stocke l’ensemble des tables (utilisateurs, équipes, projets, ARB, releases). Les versions historiques des projets peuvent être conservées dans une table annexe pour tracer l’évolution.
+
+L’application est conteneurisée (Docker) pour faciliter le déploiement :
+
+Un pipeline CI/CD automatisé se charge de compiler, tester, générer l’image Docker et déployer sur un cluster cloud.
+
+Un monitoring centralisé collecte les logs d’accès, d’erreurs et de performance (alertes Slack ou e-mails à chaque montée en production).
+
+En résumé, ce système fournit une plateforme unique pour créer, éditer et suivre les releases, les projets, les équipes et les ARB, tout en garantissant une sécurité d’entreprise grâce à Azure AD et une architecture moderne (API + SPA + conteneurs + CI/CD).
