@@ -637,10 +637,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: gitRepos.id,
         name: gitRepos.name,
         url: gitRepos.url,
-        description: gitRepos.description,
       })
       .from(gitRepos)
-      .groupBy(gitRepos.name, gitRepos.url, gitRepos.id, gitRepos.description);
+      .groupBy(gitRepos.name, gitRepos.url, gitRepos.id);
       
       res.json(allRepos);
     } catch (error) {

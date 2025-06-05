@@ -79,7 +79,6 @@ export function GitRepoModal({
     defaultValues: {
       name: gitRepo?.name || "",
       url: gitRepo?.url || "",
-      description: gitRepo?.description || "",
     },
   });
 
@@ -88,13 +87,11 @@ export function GitRepoModal({
       form.reset({
         name: gitRepo.name,
         url: gitRepo.url || "",
-        description: gitRepo.description || "",
       });
     } else if (!isEditing) {
       form.reset({
         name: "",
         url: "",
-        description: "",
       });
     }
   }, [gitRepo, isEditing, form]);
@@ -155,7 +152,6 @@ export function GitRepoModal({
         await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, {
           name: selectedRepo.name,
           url: selectedRepo.url,
-          description: selectedRepo.description,
           branch: automaticBranch, // Branche automatique basée sur la release
         });
         
@@ -166,7 +162,7 @@ export function GitRepoModal({
         });
         onOpenChange(false);
       } catch (error) {
-        if (isUnauthorizedError(error)) {
+        if (isUnauthorizedError(error as Error)) {
           toast({
             title: "Non autorisé",
             description: "Vous êtes déconnecté. Reconnexion en cours...",
@@ -220,8 +216,8 @@ export function GitRepoModal({
             
             <div className="text-sm text-gray-600 dark:text-gray-400">
               <p><strong>Branche automatique:</strong> {automaticBranch}</p>
-              {version?.release?.releaseId && (
-                <p className="mt-1">Basée sur la release associée: {version.release.releaseId}</p>
+              {version?.releaseId && (
+                <p className="mt-1">Basée sur la release associée: {version.releaseId}</p>
               )}
             </div>
           </div>
@@ -262,28 +258,12 @@ export function GitRepoModal({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description (optionnel)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Description du repository..." 
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
 
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 <p><strong>Branche automatique:</strong> {automaticBranch}</p>
-                {version?.release?.releaseId && (
-                  <p className="mt-1">Basée sur la release associée: {version.release.releaseId}</p>
+                {version?.releaseId && (
+                  <p className="mt-1">Basée sur la release associée: {version.releaseId}</p>
                 )}
               </div>
 
