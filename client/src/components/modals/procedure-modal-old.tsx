@@ -12,6 +12,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +27,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { type Procedure } from "@shared/schema";
+import { insertProcedureSchema, type Procedure } from "@shared/schema";
 import { z } from "zod";
 import { useEffect } from "react";
 
@@ -60,8 +61,8 @@ export function ProcedureModal({
   gitRepoId, 
   projectId, 
   versionId, 
-  procedure, 
-  procedureType 
+  procedure,
+  procedureType
 }: ProcedureModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -70,7 +71,7 @@ export function ProcedureModal({
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      type: (procedure?.type as any) || (procedureType as any) || "environment_variables",
+      type: procedure?.type || procedureType || "environment_variables",
       content: typeof procedure?.content === "string" ? procedure.content : JSON.stringify(procedure?.content || ""),
     },
   });
@@ -83,7 +84,7 @@ export function ProcedureModal({
       });
     } else if (!isEditing) {
       form.reset({
-        type: (procedureType as any) || "environment_variables",
+        type: procedureType as any || "environment_variables",
         content: "",
       });
     }
@@ -105,18 +106,16 @@ export function ProcedureModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/git-repos/${gitRepoId}/procedures`] });
       toast({
         title: "Succès",
         description: isEditing ? "Procédure modifiée avec succès" : "Procédure ajoutée avec succès",
       });
       onOpenChange(false);
-      form.reset();
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast({
         title: "Erreur",
-        description: error.message || "Une erreur est survenue",
+        description: `Erreur lors de ${isEditing ? 'la modification' : 'l\'ajout'} de la procédure: ${error.message}`,
         variant: "destructive",
       });
     },
@@ -131,38 +130,36 @@ export function ProcedureModal({
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Modifier la procédure" : `Ajouter une procédure - ${procedureTypes.find(p => p.value === procedureType)?.label || 'Nouvelle procédure'}`}
+            {isEditing ? "Modifier la procédure" : "Ajouter une procédure"}
           </DialogTitle>
         </DialogHeader>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {!procedureType && (
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Type de procédure</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {procedureTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type de procédure</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {procedureTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
