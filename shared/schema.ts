@@ -89,6 +89,71 @@ export const releaseProjects = pgTable("release_projects", {
   addedAt: timestamp("added_at").defaultNow(),
 });
 
+// Project versions table for detailed version management
+export const projectVersions = pgTable("project_versions", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  version: varchar("version", { length: 50 }).notNull(),
+  description: text("description"),
+  status: varchar("status", { length: 50 }).notNull().default("development"), // development, testing, preproduction, production
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Git repositories for project versions
+export const gitRepos = pgTable("git_repos", {
+  id: serial("id").primaryKey(),
+  projectVersionId: integer("project_version_id").notNull().references(() => projectVersions.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  url: varchar("url", { length: 500 }),
+  branch: varchar("branch", { length: 100 }).notNull().default("main"),
+  lastCommitHash: varchar("last_commit_hash", { length: 40 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Commits for git repositories
+export const commits = pgTable("commits", {
+  id: serial("id").primaryKey(),
+  gitRepoId: integer("git_repo_id").notNull().references(() => gitRepos.id, { onDelete: "cascade" }),
+  hash: varchar("hash", { length: 40 }).notNull(),
+  message: text("message").notNull(),
+  author: varchar("author", { length: 255 }).notNull(),
+  authorEmail: varchar("author_email", { length: 255 }),
+  committedAt: timestamp("committed_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// CAB tickets for project versions
+export const cab = pgTable("cab", {
+  id: serial("id").primaryKey(),
+  projectVersionId: integer("project_version_id").notNull().references(() => projectVersions.id, { onDelete: "cascade" }),
+  ticketNumber: varchar("ticket_number", { length: 50 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  status: varchar("status", { length: 50 }).notNull().default("open"), // open, in_progress, approved, rejected, closed
+  priority: varchar("priority", { length: 20 }).notNull().default("medium"), // low, medium, high, critical
+  assigneeId: varchar("assignee_id").references(() => users.id),
+  dueDate: date("due_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Procedures organized by type and git repository
+export const procedures = pgTable("procedures", {
+  id: serial("id").primaryKey(),
+  gitRepoId: integer("git_repo_id").notNull().references(() => gitRepos.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 50 }).notNull(), // environment_variables, service_verification, command_execution, data_import
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  content: jsonb("content").notNull(), // Structured content based on type
+  order: integer("order").notNull().default(0),
+  isCompleted: boolean("is_completed").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ARB (Access/Responsibilities/Budgets) table
 export const arb = pgTable("arb", {
   id: serial("id").primaryKey(),
@@ -145,6 +210,50 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   }),
   releaseProjects: many(releaseProjects),
   arbs: many(arb),
+  versions: many(projectVersions),
+}));
+
+export const projectVersionsRelations = relations(projectVersions, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [projectVersions.projectId],
+    references: [projects.id],
+  }),
+  gitRepos: many(gitRepos),
+  cabs: many(cab),
+}));
+
+export const gitReposRelations = relations(gitRepos, ({ one, many }) => ({
+  projectVersion: one(projectVersions, {
+    fields: [gitRepos.projectVersionId],
+    references: [projectVersions.id],
+  }),
+  commits: many(commits),
+  procedures: many(procedures),
+}));
+
+export const commitsRelations = relations(commits, ({ one }) => ({
+  gitRepo: one(gitRepos, {
+    fields: [commits.gitRepoId],
+    references: [gitRepos.id],
+  }),
+}));
+
+export const cabRelations = relations(cab, ({ one }) => ({
+  projectVersion: one(projectVersions, {
+    fields: [cab.projectVersionId],
+    references: [projectVersions.id],
+  }),
+  assignee: one(users, {
+    fields: [cab.assigneeId],
+    references: [users.id],
+  }),
+}));
+
+export const proceduresRelations = relations(procedures, ({ one }) => ({
+  gitRepo: one(gitRepos, {
+    fields: [procedures.gitRepoId],
+    references: [gitRepos.id],
+  }),
 }));
 
 export const releasesRelations = relations(releases, ({ one, many }) => ({
@@ -223,6 +332,35 @@ export const insertReleaseProjectSchema = createInsertSchema(releaseProjects).om
   addedAt: true,
 });
 
+export const insertProjectVersionSchema = createInsertSchema(projectVersions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGitRepoSchema = createInsertSchema(gitRepos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCommitSchema = createInsertSchema(commits).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCabSchema = createInsertSchema(cab).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProcedureSchema = createInsertSchema(procedures).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertArbSchema = createInsertSchema(arb).omit({
   id: true,
   approvedAt: true,
@@ -239,6 +377,16 @@ export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;
+export type InsertProjectVersion = z.infer<typeof insertProjectVersionSchema>;
+export type ProjectVersion = typeof projectVersions.$inferSelect;
+export type InsertGitRepo = z.infer<typeof insertGitRepoSchema>;
+export type GitRepo = typeof gitRepos.$inferSelect;
+export type InsertCommit = z.infer<typeof insertCommitSchema>;
+export type Commit = typeof commits.$inferSelect;
+export type InsertCab = z.infer<typeof insertCabSchema>;
+export type Cab = typeof cab.$inferSelect;
+export type InsertProcedure = z.infer<typeof insertProcedureSchema>;
+export type Procedure = typeof procedures.$inferSelect;
 export type InsertRelease = z.infer<typeof insertReleaseSchema>;
 export type Release = typeof releases.$inferSelect;
 export type InsertReleaseProject = z.infer<typeof insertReleaseProjectSchema>;
