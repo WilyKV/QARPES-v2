@@ -98,15 +98,10 @@ export function GitRepoModal({
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const payload = {
-        ...data,
-        branch: automaticBranch, // Branche automatique basée sur la release
-      };
-
       if (isEditing) {
-        return await apiRequest("PATCH", `/api/git-repos/${gitRepo.id}`, payload);
+        return await apiRequest("PATCH", `/api/git-repos/${gitRepo.id}`, data);
       } else {
-        return await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, payload);
+        return await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, data);
       }
     },
     onSuccess: () => {

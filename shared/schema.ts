@@ -112,7 +112,6 @@ export const gitRepos = pgTable("git_repos", {
   projectVersionId: integer("project_version_id").notNull().references(() => projectVersions.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
   url: varchar("url", { length: 500 }),
-  branch: varchar("branch", { length: 100 }).notNull().default("main"),
   lastCommitHash: varchar("last_commit_hash", { length: 40 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

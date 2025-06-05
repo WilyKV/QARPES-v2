@@ -123,7 +123,7 @@ function GitRepoSection({ repo }: { repo: GitRepoWithDetails }) {
           <div className="flex items-center gap-2">
             <GitBranch className="w-4 h-4" />
             <CardTitle className="text-lg">{repo.name}</CardTitle>
-            <Badge variant="secondary">{repo.branch}</Badge>
+
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" className="p-1">

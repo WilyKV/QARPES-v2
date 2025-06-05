@@ -141,7 +141,7 @@ function GitRepoSection({ repo }: { repo: GitRepoWithDetails }) {
           <div>
             <CardTitle className="text-base">{repo.name}</CardTitle>
             <CardDescription>
-              Branche: {repo.branch} | Dernier commit: {repo.lastCommitHash ? repo.lastCommitHash.substring(0, 7) : 'N/A'}
+              Dernier commit: {repo.lastCommitHash ? repo.lastCommitHash.substring(0, 7) : 'N/A'}
             </CardDescription>
           </div>
           {repo.url && (
@@ -362,7 +362,7 @@ export default function VersionDetail() {
                         <div>
                           <CardTitle className="text-base">{repo.name}</CardTitle>
                           <CardDescription>
-                            Branche: {repo.branch} | Dernier commit: {repo.lastCommitHash ? repo.lastCommitHash.substring(0, 7) : 'N/A'}
+                            Dernier commit: {repo.lastCommitHash ? repo.lastCommitHash.substring(0, 7) : 'N/A'}
                           </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
