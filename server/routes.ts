@@ -359,6 +359,170 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Project Version routes
+  app.get('/api/projects/:projectId/versions', isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId);
+      const versions = await storage.getProjectVersions(projectId);
+      res.json(versions);
+    } catch (error) {
+      console.error("Error fetching project versions:", error);
+      res.status(500).json({ message: "Failed to fetch project versions" });
+    }
+  });
+
+  app.get('/api/project-versions/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const version = await storage.getProjectVersion(id);
+      if (!version) {
+        return res.status(404).json({ message: "Project version not found" });
+      }
+      res.json(version);
+    } catch (error) {
+      console.error("Error fetching project version:", error);
+      res.status(500).json({ message: "Failed to fetch project version" });
+    }
+  });
+
+  app.post('/api/project-versions', isAuthenticated, async (req, res) => {
+    try {
+      const versionData = insertProjectVersionSchema.parse(req.body);
+      const version = await storage.createProjectVersion(versionData);
+      res.status(201).json(version);
+    } catch (error) {
+      console.error("Error creating project version:", error);
+      res.status(400).json({ message: "Failed to create project version" });
+    }
+  });
+
+  // Git Repository routes
+  app.get('/api/project-versions/:versionId/git-repos', isAuthenticated, async (req, res) => {
+    try {
+      const versionId = parseInt(req.params.versionId);
+      const gitRepos = await storage.getGitRepos(versionId);
+      res.json(gitRepos);
+    } catch (error) {
+      console.error("Error fetching git repositories:", error);
+      res.status(500).json({ message: "Failed to fetch git repositories" });
+    }
+  });
+
+  app.post('/api/git-repos', isAuthenticated, async (req, res) => {
+    try {
+      const gitRepoData = insertGitRepoSchema.parse(req.body);
+      const gitRepo = await storage.createGitRepo(gitRepoData);
+      res.status(201).json(gitRepo);
+    } catch (error) {
+      console.error("Error creating git repository:", error);
+      res.status(400).json({ message: "Failed to create git repository" });
+    }
+  });
+
+  // Commit routes
+  app.get('/api/git-repos/:repoId/commits', isAuthenticated, async (req, res) => {
+    try {
+      const repoId = parseInt(req.params.repoId);
+      const commits = await storage.getCommits(repoId);
+      res.json(commits);
+    } catch (error) {
+      console.error("Error fetching commits:", error);
+      res.status(500).json({ message: "Failed to fetch commits" });
+    }
+  });
+
+  app.post('/api/commits', isAuthenticated, async (req, res) => {
+    try {
+      const commitData = insertCommitSchema.parse(req.body);
+      const commit = await storage.createCommit(commitData);
+      res.status(201).json(commit);
+    } catch (error) {
+      console.error("Error creating commit:", error);
+      res.status(400).json({ message: "Failed to create commit" });
+    }
+  });
+
+  // CAB routes
+  app.get('/api/project-versions/:versionId/cabs', isAuthenticated, async (req, res) => {
+    try {
+      const versionId = parseInt(req.params.versionId);
+      const cabs = await storage.getCabs(versionId);
+      res.json(cabs);
+    } catch (error) {
+      console.error("Error fetching CAB tickets:", error);
+      res.status(500).json({ message: "Failed to fetch CAB tickets" });
+    }
+  });
+
+  app.post('/api/cabs', isAuthenticated, async (req, res) => {
+    try {
+      const cabData = insertCabSchema.parse(req.body);
+      const cab = await storage.createCab(cabData);
+      res.status(201).json(cab);
+    } catch (error) {
+      console.error("Error creating CAB ticket:", error);
+      res.status(400).json({ message: "Failed to create CAB ticket" });
+    }
+  });
+
+  // Procedure routes (4 types organized by Git repository)
+  app.get('/api/git-repos/:repoId/procedures', isAuthenticated, async (req, res) => {
+    try {
+      const repoId = parseInt(req.params.repoId);
+      const procedures = await storage.getProcedures(repoId);
+      res.json(procedures);
+    } catch (error) {
+      console.error("Error fetching procedures:", error);
+      res.status(500).json({ message: "Failed to fetch procedures" });
+    }
+  });
+
+  app.get('/api/git-repos/:repoId/procedures/:type', isAuthenticated, async (req, res) => {
+    try {
+      const repoId = parseInt(req.params.repoId);
+      const type = req.params.type;
+      const procedures = await storage.getProceduresByType(repoId, type);
+      res.json(procedures);
+    } catch (error) {
+      console.error("Error fetching procedures by type:", error);
+      res.status(500).json({ message: "Failed to fetch procedures by type" });
+    }
+  });
+
+  app.post('/api/procedures', isAuthenticated, async (req, res) => {
+    try {
+      const procedureData = insertProcedureSchema.parse(req.body);
+      const procedure = await storage.createProcedure(procedureData);
+      res.status(201).json(procedure);
+    } catch (error) {
+      console.error("Error creating procedure:", error);
+      res.status(400).json({ message: "Failed to create procedure" });
+    }
+  });
+
+  app.patch('/api/procedures/:id/toggle', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const procedure = await storage.toggleProcedureCompletion(id);
+      res.json(procedure);
+    } catch (error) {
+      console.error("Error toggling procedure completion:", error);
+      res.status(500).json({ message: "Failed to toggle procedure completion" });
+    }
+  });
+
+  // Release procedures aggregation
+  app.get('/api/releases/:releaseId/procedures', isAuthenticated, async (req, res) => {
+    try {
+      const releaseId = parseInt(req.params.releaseId);
+      const procedures = await storage.getReleaseProcedures(releaseId);
+      res.json(procedures);
+    } catch (error) {
+      console.error("Error fetching release procedures:", error);
+      res.status(500).json({ message: "Failed to fetch release procedures" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
