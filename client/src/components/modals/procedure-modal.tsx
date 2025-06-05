@@ -13,6 +13,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -35,6 +37,23 @@ const procedureTypes = [
   { value: "service_verification", label: "Vérification des services" },
   { value: "command_execution", label: "Exécution de commandes" },
   { value: "data_import", label: "Import de données" },
+];
+
+// Configuration de la barre d'outils Quill
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'color': [] }, { 'background': [] }],
+    ['link', 'code-block'],
+    ['clean']
+  ],
+};
+
+const quillFormats = [
+  'header', 'bold', 'italic', 'underline', 'strike',
+  'list', 'bullet', 'color', 'background', 'link', 'code-block'
 ];
 
 const formSchema = z.object({
@@ -171,16 +190,21 @@ export function ProcedureModal({
                 <FormItem>
                   <FormLabel>Contenu de la procédure</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      placeholder="Décrivez la procédure avec du formatage (markdown supporté)..."
-                      rows={12}
-                      className="font-mono text-sm"
-                      {...field}
-                    />
+                    <div className="border rounded-md">
+                      <ReactQuill
+                        theme="snow"
+                        value={field.value}
+                        onChange={field.onChange}
+                        modules={quillModules}
+                        formats={quillFormats}
+                        placeholder="Décrivez la procédure avec la barre d'outils de formatage..."
+                        style={{ minHeight: '200px' }}
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Vous pouvez utiliser la syntaxe Markdown pour le formatage (gras: **texte**, italique: *texte*, listes: - item)
+                    Utilisez la barre d'outils ci-dessus pour formater votre texte (gras, italique, listes, couleurs, etc.)
                   </div>
                 </FormItem>
               )}
