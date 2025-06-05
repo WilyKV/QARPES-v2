@@ -48,7 +48,7 @@ import {
   type CabWithDetails,
   type ProceduresByType,
   type ReleaseProceduresAggregated,
-  type ReleaseWithTeamAndProjects,
+  type ReleaseWithProjects,
   type ArbWithDetails,
 } from "@shared/schema";
 import { db } from "./db";

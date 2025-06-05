@@ -71,12 +71,13 @@ export const projects = pgTable("projects", {
 // Releases table
 export const releases = pgTable("releases", {
   id: serial("id").primaryKey(),
-  releaseId: varchar("release_id", { length: 20 }).notNull().unique(), // Format: YYYYMM-NN
+  releaseId: varchar("release_id", { length: 20 }).notNull().unique(), // Format: YYYYMM-NN (auto-generated)
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  status: varchar("status").notNull().default("development"), // development, testing, preproduction, production
-  teamId: integer("team_id").references(() => teams.id),
-  releaseDate: date("release_date"),
+  status: varchar("status").notNull().default("testing"), // testing, preproduction, production
+  recetteDate: date("recette_date"), // Date de mise en recette
+  preprodDate: date("preprod_date"), // Date de mise en préprod
+  productionDate: date("production_date"), // Date de mise en production
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -95,7 +96,7 @@ export const projectVersions = pgTable("project_versions", {
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   version: varchar("version", { length: 50 }).notNull(),
   description: text("description"),
-  status: varchar("status", { length: 50 }).notNull().default("development"), // development, testing, preproduction, production
+  status: varchar("status", { length: 50 }).notNull().default("testing"), // testing, preproduction, production
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -209,7 +210,6 @@ export const teamsRelations = relations(teams, ({ one, many }) => ({
   }),
   members: many(teamMembers),
   projects: many(projects),
-  releases: many(releases),
   arbs: many(arb),
 }));
 
@@ -293,11 +293,7 @@ export const pvFilesRelations = relations(pvFiles, ({ one }) => ({
   }),
 }));
 
-export const releasesRelations = relations(releases, ({ one, many }) => ({
-  team: one(teams, {
-    fields: [releases.teamId],
-    references: [teams.id],
-  }),
+export const releasesRelations = relations(releases, ({ many }) => ({
   releaseProjects: many(releaseProjects),
 }));
 
@@ -358,10 +354,9 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
 
 export const insertReleaseSchema = createInsertSchema(releases).omit({
   id: true,
+  releaseId: true, // Auto-generated on server
   createdAt: true,
   updatedAt: true,
-}).extend({
-  releaseId: z.string().regex(/^\d{6}-\d{2}$/, "Format must be YYYYMM-NN"),
 });
 
 export const insertReleaseProjectSchema = createInsertSchema(releaseProjects).omit({
@@ -499,8 +494,7 @@ export type ReleaseProceduresAggregated = {
   }[];
 };
 
-export type ReleaseWithTeamAndProjects = Release & {
-  team?: Team;
+export type ReleaseWithProjects = Release & {
   releaseProjects?: (ReleaseProject & { project: Project })[];
 };
 
