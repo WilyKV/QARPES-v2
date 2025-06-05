@@ -11,6 +11,7 @@ import Releases from "@/pages/releases";
 import Projects from "@/pages/projects";
 import ProjectDetail from "@/pages/project-detail";
 import Teams from "@/pages/teams";
+import Members from "@/pages/members";
 import ARBPage from "@/pages/arb";
 
 function Router() {
@@ -27,6 +28,7 @@ function Router() {
           <Route path="/projects" component={Projects} />
           <Route path="/projects/:id" component={ProjectDetail} />
           <Route path="/teams" component={Teams} />
+          <Route path="/members" component={Members} />
           <Route path="/arb" component={ARBPage} />
         </>
       )}
