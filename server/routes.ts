@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth } from "./replitAuth";
 import { createFixtures } from "./fixtures";
 import {
   insertTeamSchema,
@@ -59,7 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard routes
-  app.get('/api/dashboard/stats', isAuthenticated, async (req, res) => {
+  app.get('/api/dashboard/stats', async (req, res) => {
     try {
       const stats = await storage.getDashboardStats();
       res.json(stats);
@@ -80,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/teams/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/teams/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const team = await storage.getTeam(id);
@@ -94,7 +94,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/teams', isAuthenticated, async (req, res) => {
+  app.post('/api/teams', async (req, res) => {
     try {
       const teamData = insertTeamSchema.parse(req.body);
       const team = await storage.createTeam(teamData);
@@ -105,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/teams/:id', isAuthenticated, async (req, res) => {
+  app.put('/api/teams/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const teamData = insertTeamSchema.partial().parse(req.body);
@@ -117,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/teams/:id', isAuthenticated, async (req, res) => {
+  app.delete('/api/teams/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteTeam(id);
@@ -129,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Team member routes
-  app.get('/api/teams/:id/members', isAuthenticated, async (req, res) => {
+  app.get('/api/teams/:id/members', async (req, res) => {
     try {
       const teamId = parseInt(req.params.id);
       const members = await storage.getTeamMembers(teamId);
@@ -140,7 +140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/teams/:id/members', isAuthenticated, async (req, res) => {
+  app.post('/api/teams/:id/members', async (req, res) => {
     try {
       const teamId = parseInt(req.params.id);
       const memberData = insertTeamMemberSchema.parse({ ...req.body, teamId });
@@ -152,7 +152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/teams/:teamId/members/:userId', isAuthenticated, async (req, res) => {
+  app.delete('/api/teams/:teamId/members/:userId', async (req, res) => {
     try {
       const teamId = parseInt(req.params.teamId);
       const userId = req.params.userId;
@@ -165,7 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project routes
-  app.get('/api/projects', isAuthenticated, async (req, res) => {
+  app.get('/api/projects', async (req, res) => {
     try {
       const projects = await storage.getProjects();
       res.json(projects);
@@ -175,7 +175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/projects/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/projects/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const project = await storage.getProject(id);
@@ -189,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/projects', isAuthenticated, async (req, res) => {
+  app.post('/api/projects', async (req, res) => {
     try {
       const projectData = insertProjectSchema.parse(req.body);
       const project = await storage.createProject(projectData);
@@ -200,7 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/projects/:id', isAuthenticated, async (req, res) => {
+  app.put('/api/projects/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const projectData = insertProjectSchema.partial().parse(req.body);
@@ -212,7 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/projects/:id', isAuthenticated, async (req, res) => {
+  app.delete('/api/projects/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteProject(id);
@@ -224,7 +224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Release routes
-  app.get('/api/releases', isAuthenticated, async (req, res) => {
+  app.get('/api/releases', async (req, res) => {
     try {
       const releases = await storage.getReleases();
       res.json(releases);
@@ -234,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/releases/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/releases/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const release = await storage.getRelease(id);
@@ -248,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/releases', isAuthenticated, async (req, res) => {
+  app.post('/api/releases', async (req, res) => {
     try {
       const releaseData = insertReleaseSchema.parse(req.body);
       const release = await storage.createRelease(releaseData);
@@ -259,7 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/releases/:id', isAuthenticated, async (req, res) => {
+  app.put('/api/releases/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const releaseData = insertReleaseSchema.partial().parse(req.body);
@@ -271,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/releases/:id', isAuthenticated, async (req, res) => {
+  app.delete('/api/releases/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteRelease(id);
@@ -283,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Release-Project routes
-  app.post('/api/releases/:releaseId/projects', isAuthenticated, async (req, res) => {
+  app.post('/api/releases/:releaseId/projects', async (req, res) => {
     try {
       const releaseId = parseInt(req.params.releaseId);
       const releaseProjectData = insertReleaseProjectSchema.parse({ ...req.body, releaseId });
@@ -295,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/releases/:releaseId/projects/:projectId', isAuthenticated, async (req, res) => {
+  app.delete('/api/releases/:releaseId/projects/:projectId', async (req, res) => {
     try {
       const releaseId = parseInt(req.params.releaseId);
       const projectId = parseInt(req.params.projectId);
@@ -308,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project version routes
-  app.get('/api/projects/:id/versions', isAuthenticated, async (req, res) => {
+  app.get('/api/projects/:id/versions', async (req, res) => {
     try {
       const projectId = parseInt(req.params.id);
       const versions = await storage.getProjectVersions(projectId);
@@ -319,7 +319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/projects/:id/versions', isAuthenticated, async (req, res) => {
+  app.post('/api/projects/:id/versions', async (req, res) => {
     try {
       const projectId = parseInt(req.params.id);
       const versionData = { ...req.body, projectId };
@@ -342,7 +342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/users', isAuthenticated, async (req, res) => {
+  app.post('/api/users', async (req, res) => {
     try {
       const userData = req.body;
       const user = await storage.createUser(userData);
@@ -354,7 +354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ARB routes
-  app.get('/api/arb', isAuthenticated, async (req, res) => {
+  app.get('/api/arb', async (req, res) => {
     try {
       const arbs = await storage.getArbs();
       res.json(arbs);
@@ -364,7 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/arb/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/arb/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const arbItem = await storage.getArb(id);
@@ -378,7 +378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/arb', isAuthenticated, async (req: any, res) => {
+  app.post('/api/arb', async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const arbData = insertArbSchema.parse({ ...req.body, requesterId: userId });
@@ -390,7 +390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/arb/:id', isAuthenticated, async (req, res) => {
+  app.put('/api/arb/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const arbData = insertArbSchema.partial().parse(req.body);
@@ -402,7 +402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/arb/:id', isAuthenticated, async (req, res) => {
+  app.delete('/api/arb/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteArb(id);
@@ -414,7 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project Version routes
-  app.get('/api/projects/:projectId/versions', isAuthenticated, async (req, res) => {
+  app.get('/api/projects/:projectId/versions', async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId);
       const versions = await storage.getProjectVersions(projectId);
@@ -425,7 +425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/project-versions/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/project-versions/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const version = await storage.getProjectVersion(id);
@@ -439,7 +439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/project-versions', isAuthenticated, async (req, res) => {
+  app.post('/api/project-versions', async (req, res) => {
     try {
       const versionData = insertProjectVersionSchema.parse(req.body);
       const version = await storage.createProjectVersion(versionData);
@@ -451,7 +451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Git Repository routes
-  app.get('/api/project-versions/:versionId/git-repos', isAuthenticated, async (req, res) => {
+  app.get('/api/project-versions/:versionId/git-repos', async (req, res) => {
     try {
       const versionId = parseInt(req.params.versionId);
       const gitRepos = await storage.getGitRepos(versionId);
@@ -462,7 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/git-repos', isAuthenticated, async (req, res) => {
+  app.post('/api/git-repos', async (req, res) => {
     try {
       const gitRepoData = insertGitRepoSchema.parse(req.body);
       const gitRepo = await storage.createGitRepo(gitRepoData);
@@ -474,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Commit routes
-  app.get('/api/git-repos/:repoId/commits', isAuthenticated, async (req, res) => {
+  app.get('/api/git-repos/:repoId/commits', async (req, res) => {
     try {
       const repoId = parseInt(req.params.repoId);
       const commits = await storage.getCommits(repoId);
@@ -485,7 +485,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/commits', isAuthenticated, async (req, res) => {
+  app.post('/api/commits', async (req, res) => {
     try {
       const commitData = insertCommitSchema.parse(req.body);
       const commit = await storage.createCommit(commitData);
@@ -497,7 +497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // CAB routes
-  app.get('/api/project-versions/:versionId/cabs', isAuthenticated, async (req, res) => {
+  app.get('/api/project-versions/:versionId/cabs', async (req, res) => {
     try {
       const versionId = parseInt(req.params.versionId);
       const cabs = await storage.getCabs(versionId);
@@ -508,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/cabs', isAuthenticated, async (req, res) => {
+  app.post('/api/cabs', async (req, res) => {
     try {
       const cabData = insertCabSchema.parse(req.body);
       const cab = await storage.createCab(cabData);
@@ -520,7 +520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Procedure routes (4 types organized by Git repository)
-  app.get('/api/git-repos/:repoId/procedures', isAuthenticated, async (req, res) => {
+  app.get('/api/git-repos/:repoId/procedures', async (req, res) => {
     try {
       const repoId = parseInt(req.params.repoId);
       const procedures = await storage.getProcedures(repoId);
@@ -531,7 +531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/git-repos/:repoId/procedures/:type', isAuthenticated, async (req, res) => {
+  app.get('/api/git-repos/:repoId/procedures/:type', async (req, res) => {
     try {
       const repoId = parseInt(req.params.repoId);
       const type = req.params.type;
@@ -543,7 +543,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/procedures', isAuthenticated, async (req, res) => {
+  app.post('/api/procedures', async (req, res) => {
     try {
       const procedureData = insertProcedureSchema.parse(req.body);
       const procedure = await storage.createProcedure(procedureData);
@@ -554,7 +554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/procedures/:id/toggle', isAuthenticated, async (req, res) => {
+  app.patch('/api/procedures/:id/toggle', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const procedure = await storage.toggleProcedureCompletion(id);
@@ -566,7 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Release procedures aggregation
-  app.get('/api/releases/:releaseId/procedures', isAuthenticated, async (req, res) => {
+  app.get('/api/releases/:releaseId/procedures', async (req, res) => {
     try {
       const releaseId = parseInt(req.params.releaseId);
       const procedures = await storage.getReleaseProcedures(releaseId);

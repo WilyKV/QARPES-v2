@@ -43,7 +43,7 @@ export function VersionModal({ projectId, onSuccess }: VersionModalProps) {
 
   const createVersionMutation = useMutation({
     mutationFn: async (data: VersionFormData) => {
-      return await apiRequest(`/api/projects/${projectId}/versions`, "POST", {
+      return await apiRequest("POST", `/api/projects/${projectId}/versions`, {
         projectId,
         version: data.version,
         description: data.description,
