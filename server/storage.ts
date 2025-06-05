@@ -81,8 +81,8 @@ export interface IStorage {
   deleteProject(id: number): Promise<void>;
   
   // Release operations
-  getReleases(): Promise<ReleaseWithTeamAndProjects[]>;
-  getRelease(id: number): Promise<ReleaseWithTeamAndProjects | undefined>;
+  getReleases(): Promise<ReleaseWithProjects[]>;
+  getRelease(id: number): Promise<ReleaseWithProjects | undefined>;
   createRelease(release: InsertRelease): Promise<Release>;
   updateRelease(id: number, release: Partial<InsertRelease>): Promise<Release>;
   deleteRelease(id: number): Promise<void>;
@@ -331,18 +331,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Release operations
-  async getReleases(): Promise<ReleaseWithTeamAndProjects[]> {
-    const releasesWithDetails = await db
-      .select({
-        release: releases,
-        team: teams,
-      })
+  async getReleases(): Promise<ReleaseWithProjects[]> {
+    const releasesData = await db
+      .select()
       .from(releases)
-      .leftJoin(teams, eq(releases.teamId, teams.id))
       .orderBy(desc(releases.createdAt));
 
     const releasesWithProjects = await Promise.all(
-      releasesWithDetails.map(async (row) => {
+      releasesData.map(async (release) => {
         const releaseProjectsData = await db
           .select({
             releaseProject: releaseProjects,
@@ -350,11 +346,10 @@ export class DatabaseStorage implements IStorage {
           })
           .from(releaseProjects)
           .innerJoin(projects, eq(releaseProjects.projectId, projects.id))
-          .where(eq(releaseProjects.releaseId, row.release.id));
+          .where(eq(releaseProjects.releaseId, release.id));
 
         return {
-          ...row.release,
-          team: row.team || undefined,
+          ...release,
           releaseProjects: releaseProjectsData.map((rp) => ({
             ...rp.releaseProject,
             project: rp.project,
@@ -366,14 +361,10 @@ export class DatabaseStorage implements IStorage {
     return releasesWithProjects;
   }
 
-  async getRelease(id: number): Promise<ReleaseWithTeamAndProjects | undefined> {
+  async getRelease(id: number): Promise<ReleaseWithProjects | undefined> {
     const [release] = await db
-      .select({
-        release: releases,
-        team: teams,
-      })
+      .select()
       .from(releases)
-      .leftJoin(teams, eq(releases.teamId, teams.id))
       .where(eq(releases.id, id));
 
     if (!release) return undefined;
@@ -388,8 +379,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(releaseProjects.releaseId, id));
 
     return {
-      ...release.release,
-      team: release.team || undefined,
+      ...release,
       releaseProjects: releaseProjectsData.map((rp) => ({
         ...rp.releaseProject,
         project: rp.project,
@@ -398,7 +388,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createRelease(release: InsertRelease): Promise<Release> {
-    const [newRelease] = await db.insert(releases).values(release).returning();
+    // Generate automatic release ID in YYYYMM-NN format
+    const now = new Date();
+    const yearMonth = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+    
+    // Find the latest release for this month
+    const latestRelease = await db
+      .select()
+      .from(releases)
+      .where(sql`release_id LIKE ${yearMonth + '-%'}`)
+      .orderBy(desc(releases.releaseId))
+      .limit(1);
+    
+    let nextNumber = 1;
+    if (latestRelease.length > 0) {
+      const lastReleaseId = latestRelease[0].releaseId;
+      const lastNumber = parseInt(lastReleaseId.split('-')[1]);
+      nextNumber = lastNumber + 1;
+    }
+    
+    const releaseId = `${yearMonth}-${nextNumber.toString().padStart(2, '0')}`;
+    
+    const [newRelease] = await db.insert(releases).values({
+      ...release,
+      releaseId
+    }).returning();
     return newRelease;
   }
 
