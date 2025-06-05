@@ -16,6 +16,8 @@ import { VersionReleaseModal } from "@/components/modals/version-release-modal";
 import { GitRepoModal } from "@/components/modals/git-repo-modal";
 import { PvModal } from "@/components/modals/pv-modal";
 import { CabModal } from "@/components/modals/cab-modal";
+import { CommitModal } from "@/components/modals/commit-modal";
+import { ProcedureModal } from "@/components/modals/procedure-modal";
 import type { 
   ProjectVersionWithDetails, 
   GitRepoWithDetails, 
@@ -204,6 +206,17 @@ export default function VersionDetail() {
   // CAB modal states
   const [cabModalOpen, setCabModalOpen] = useState(false);
   const [selectedCab, setSelectedCab] = useState<any>(null);
+  
+  // Commit modal states
+  const [commitModalOpen, setCommitModalOpen] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<any>(null);
+  const [selectedGitRepoForCommit, setSelectedGitRepoForCommit] = useState<number>(0);
+  
+  // Procedure modal states
+  const [procedureModalOpen, setProcedureModalOpen] = useState(false);
+  const [selectedProcedure, setSelectedProcedure] = useState<any>(null);
+  const [selectedGitRepoForProcedure, setSelectedGitRepoForProcedure] = useState<number>(0);
+  const [selectedProcedureType, setSelectedProcedureType] = useState<string>("");
 
   const { data: version, isLoading: versionLoading } = useQuery<ProjectVersionWithDetails>({
     queryKey: [`/api/projects/${projectId}/versions/${versionId}`],

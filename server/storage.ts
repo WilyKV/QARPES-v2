@@ -107,6 +107,8 @@ export interface IStorage {
   // Commit operations
   getCommits(gitRepoId: number): Promise<Commit[]>;
   createCommit(commit: InsertCommit): Promise<Commit>;
+  updateCommit(id: number, commit: Partial<InsertCommit>): Promise<Commit>;
+  deleteCommit(id: number): Promise<void>;
   
   // CAB operations
   getCabs(projectVersionId: number): Promise<CabWithDetails[]>;
@@ -1007,12 +1009,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // Commit operations
-  async createCommit(commit: InsertCommit): Promise<Commit> {
-    const [newCommit] = await db.insert(commits).values(commit).returning();
-    return newCommit;
-  }
-
+  // Commit operations (merged with existing implementation)
   async updateCommit(id: number, commit: Partial<InsertCommit>): Promise<Commit> {
     const [updatedCommit] = await db
       .update(commits)
@@ -1024,14 +1021,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCommit(id: number): Promise<void> {
     await db.delete(commits).where(eq(commits.id, id));
-  }
-
-  async getCommitsByGitRepo(gitRepoId: number): Promise<Commit[]> {
-    return await db
-      .select()
-      .from(commits)
-      .where(eq(commits.gitRepoId, gitRepoId))
-      .orderBy(desc(commits.committedAt));
   }
 }
 
