@@ -34,28 +34,338 @@ export async function createFixtures() {
   await db.delete(teamMembers);
   await db.delete(teams);
 
-  // Create demo users
+  // Create authentic users based on your screenshots
   const demoUsers = await db.insert(users).values([
+    // Équipe Développement - Responsables
     {
-      id: "demo-user-id",
-      email: "demo.user@omneseducation.com",
-      firstName: "Demo",
-      lastName: "User",
-      profileImageUrl: "https://replit.com/public/images/mark.png"
+      id: "kevin.nicol",
+      email: "kevin.nicol@omneseducation.com",
+      firstName: "Kevin",
+      lastName: "NICOL"
     },
     {
-      id: "lead-dev-id",
-      email: "lead.dev@omneseducation.com",
-      firstName: "Pierre",
-      lastName: "Martin",
-      profileImageUrl: "https://replit.com/public/images/mark.png"
+      id: "ivana.lackovic",
+      email: "ivana.lackovic@omneseducation.com",
+      firstName: "Ivana",
+      lastName: "LACKOVIC"
+    },
+    
+    // Domaine 1 - GASTELLIER Florence
+    {
+      id: "florence.gastellier",
+      email: "fgastellier@omneseducation.com",
+      firstName: "Florence",
+      lastName: "GASTELLIER"
     },
     {
-      id: "qa-engineer-id",
-      email: "qa.engineer@omneseducation.com",
-      firstName: "Sophie",
-      lastName: "Dubois",
-      profileImageUrl: "https://replit.com/public/images/mark.png"
+      id: "guillaume.zavan",
+      email: "guillaume.zavan@omneseducation.com",
+      firstName: "Guillaume",
+      lastName: "ZAVAN"
+    },
+    {
+      id: "sophea.thong",
+      email: "sophea.thong@omneseducation.com",
+      firstName: "Sophéa",
+      lastName: "THONG"
+    },
+    {
+      id: "anas.mersoul",
+      email: "anas.mersoul@omneseducation.com",
+      firstName: "Anas",
+      lastName: "MERSOUL"
+    },
+    {
+      id: "guillaume.ulrich",
+      email: "guillaume.ulrich@omneseducation.com",
+      firstName: "Guillaume",
+      lastName: "ULRICH"
+    },
+    {
+      id: "adrian.gallet",
+      email: "adrian.gallet@omneseducation.com",
+      firstName: "Adrian",
+      lastName: "GALLET"
+    },
+    {
+      id: "mohammed.hazzez",
+      email: "mohammed.hazzez@omneseducation.com",
+      firstName: "Mohammed",
+      lastName: "HAZZEZ"
+    },
+    {
+      id: "lionel.mollard",
+      email: "lionel.mollard@omneseducation.com",
+      firstName: "Lionel",
+      lastName: "MOLLARD"
+    },
+    {
+      id: "nourreddine.berjaoui",
+      email: "nourreddine.berjaoui@omneseducation.com",
+      firstName: "Nourreddine",
+      lastName: "BERJAOUI"
+    },
+    {
+      id: "mohamed.sahraoui",
+      email: "mohamed.sahraoui@omneseducation.com",
+      firstName: "Mohamed",
+      lastName: "SAHRAOUI"
+    },
+    {
+      id: "mehdi.fadili",
+      email: "mehdi.fadili@omneseducation.com",
+      firstName: "Mehdi",
+      lastName: "FADILI"
+    },
+    
+    // Domaine 2 - HOUDEBINE Stéphanie
+    {
+      id: "stephanie.houdebine",
+      email: "shoudebine@omneseducation.com",
+      firstName: "Stéphanie",
+      lastName: "HOUDEBINE"
+    },
+    {
+      id: "yannick.meunier",
+      email: "yannick.meunier@omneseducation.com",
+      firstName: "Yannick",
+      lastName: "MEUNIER"
+    },
+    {
+      id: "bertrand.berthomieu",
+      email: "bertrand.berthomieu@omneseducation.com",
+      firstName: "Bertrand",
+      lastName: "BERTHOMIEU"
+    },
+    {
+      id: "hachmi.halfaoui",
+      email: "hachmi.halfaoui@omneseducation.com",
+      firstName: "Hachmi",
+      lastName: "HALFAOUI"
+    },
+    {
+      id: "carole.helene",
+      email: "carole.helene@omneseducation.com",
+      firstName: "Carole",
+      lastName: "HELENE"
+    },
+    {
+      id: "julie.ramadanoski",
+      email: "julie.ramadanoski@omneseducation.com",
+      firstName: "Julie",
+      lastName: "RAMADANOSKI"
+    },
+    {
+      id: "patrick.lopez",
+      email: "patrick.lopez@omneseducation.com",
+      firstName: "Patrick",
+      lastName: "LOPEZ"
+    },
+    {
+      id: "alain.kizil",
+      email: "alain.kizil@omneseducation.com",
+      firstName: "Alain",
+      lastName: "KIZIL"
+    },
+    {
+      id: "frederic.medrano",
+      email: "frederic.medrano@omneseducation.com",
+      firstName: "Frederic",
+      lastName: "MEDRANO"
+    },
+    {
+      id: "steeven.achi",
+      email: "steeven.achi@omneseducation.com",
+      firstName: "Steeven",
+      lastName: "ACHI"
+    },
+    {
+      id: "mohamed.drine",
+      email: "mohamed.drine@omneseducation.com",
+      firstName: "Mohamed",
+      lastName: "DRINE"
+    },
+    {
+      id: "sofiaa.faddi",
+      email: "sofiaa.faddi@omneseducation.com",
+      firstName: "Sofiaa",
+      lastName: "FADDI"
+    },
+    {
+      id: "karim.amdouni",
+      email: "karim.amdouni@omneseducation.com",
+      firstName: "Karim",
+      lastName: "AMDOUNI"
+    },
+    {
+      id: "mody.kane",
+      email: "mody.kane@omneseducation.com",
+      firstName: "Mody",
+      lastName: "KANE"
+    },
+    {
+      id: "mohamed.ali.ksouri",
+      email: "mohamed.ali.ksouri@omneseducation.com",
+      firstName: "Mohamed Ali",
+      lastName: "KSOURI"
+    },
+    {
+      id: "cyrille.satge",
+      email: "cyrille.satge@omneseducation.com",
+      firstName: "Cyrille",
+      lastName: "SATGE"
+    },
+    
+    // Domaine 3 - BILLON Laurent
+    {
+      id: "laurent.billon",
+      email: "lbillon@omneseducation.com",
+      firstName: "Laurent",
+      lastName: "BILLON"
+    },
+    {
+      id: "julien.francisco",
+      email: "julien.francisco@omneseducation.com",
+      firstName: "Julien",
+      lastName: "FRANCISCO"
+    },
+    {
+      id: "hajer.saffar",
+      email: "hajer.saffar@omneseducation.com",
+      firstName: "Hajer",
+      lastName: "SAFFAR"
+    },
+    {
+      id: "nicolas.chambaz",
+      email: "nicolas.chambaz@omneseducation.com",
+      firstName: "Nicolas",
+      lastName: "CHAMBAZ"
+    },
+    {
+      id: "camille.camara",
+      email: "camille.camara@omneseducation.com",
+      firstName: "Camille",
+      lastName: "CAMARA"
+    },
+    {
+      id: "amar.bouabbache",
+      email: "amar.bouabbache@omneseducation.com",
+      firstName: "Amar",
+      lastName: "BOUABBACHE"
+    },
+    
+    // Domaine 4 - CHIOUCHIOU Walid
+    {
+      id: "walid.chiouchiou",
+      email: "wchiouchiou@omneseducation.com",
+      firstName: "Walid",
+      lastName: "CHIOUCHIOU"
+    },
+    {
+      id: "abdessamad.elouarti",
+      email: "abdessamad.elouarti@omneseducation.com",
+      firstName: "Abdessamad",
+      lastName: "EL OUARTI"
+    },
+    {
+      id: "sebastien.excoffon",
+      email: "sebastien.excoffon@omneseducation.com",
+      firstName: "Sebastien",
+      lastName: "EXCOFFON"
+    },
+    {
+      id: "yacine.mennaa",
+      email: "yacine.mennaa@omneseducation.com",
+      firstName: "Yacine",
+      lastName: "MENNAA"
+    },
+    {
+      id: "vincent.ravanel",
+      email: "vincent.ravanel@omneseducation.com",
+      firstName: "Vincent",
+      lastName: "RAVANEL"
+    },
+    
+    // Équipe DevSecOps/Transverse
+    {
+      id: "jacques.roubault",
+      email: "jacques.roubault@omneseducation.com",
+      firstName: "Jacques",
+      lastName: "ROUBAULT"
+    },
+    {
+      id: "thomas.prelot",
+      email: "thomas.prelot@omneseducation.com",
+      firstName: "Thomas",
+      lastName: "PRELOT"
+    },
+    {
+      id: "cyril.chalaux",
+      email: "cyril.chalaux@omneseducation.com",
+      firstName: "Cyril",
+      lastName: "CHALAUX"
+    },
+    {
+      id: "kim.hung",
+      email: "kim.hung@omneseducation.com",
+      firstName: "Kim",
+      lastName: "HUNG"
+    },
+    {
+      id: "arnaud.damme",
+      email: "arnaud.damme@omneseducation.com",
+      firstName: "Arnaud",
+      lastName: "DAMME"
+    },
+    
+    // Équipe Opérationnelle
+    {
+      id: "laouni.zergaoui",
+      email: "laouni.zergaoui@omneseducation.com",
+      firstName: "Laouni",
+      lastName: "ZERGAOUI"
+    },
+    {
+      id: "vincent.doyelle",
+      email: "vincent.doyelle@omneseducation.com",
+      firstName: "Vincent",
+      lastName: "DOYELLE"
+    },
+    {
+      id: "tahar.djemaa",
+      email: "tahar.djemaa@omneseducation.com",
+      firstName: "Tahar",
+      lastName: "DJEMAA"
+    },
+    {
+      id: "babacar.leye",
+      email: "babacar.leye@omneseducation.com",
+      firstName: "Babacar",
+      lastName: "LEYE"
+    },
+    {
+      id: "francois.gille",
+      email: "francois.gille@omneseducation.com",
+      firstName: "François",
+      lastName: "GILLE"
+    },
+    {
+      id: "aurelia.leger",
+      email: "aurelia.leger@omneseducation.com",
+      firstName: "Aurelia",
+      lastName: "LEGER"
+    },
+    {
+      id: "olivier.nerrand",
+      email: "olivier.nerrand@omneseducation.com",
+      firstName: "Olivier",
+      lastName: "NERRAND"
+    },
+    {
+      id: "muzamil.adigun",
+      email: "muzamil.adigun@omneseducation.com",
+      firstName: "Muzamil",
+      lastName: "ADIGUN"
     }
   ]).returning();
 
