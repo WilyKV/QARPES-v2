@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { DataTable } from "@/components/ui/data-table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProjectModal } from "@/components/modals/project-modal";
-import { Plus, Search, Edit, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ExternalLink, MoreHorizontal, Users, Calendar } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import type { ProjectWithTeam } from "@shared/schema";
@@ -102,11 +104,11 @@ export default function Projects() {
     setEditingProject(null);
   };
 
-  const filteredProjects = projects?.filter((project: ProjectWithTeam) =>
+  const filteredProjects = Array.isArray(projects) ? projects.filter((project: ProjectWithTeam) =>
     project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     project.team?.name.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  ) : [];
 
   const columns = [
     {
@@ -236,13 +238,125 @@ export default function Projects() {
             </div>
           </div>
 
-          {/* Data Table */}
-          <DataTable
-            columns={columns}
-            data={filteredProjects}
-            loading={projectsLoading}
-            emptyMessage="Aucun projet trouvé"
-          />
+          {/* Projects Grid */}
+          {projectsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i} className="animate-pulse">
+                  <CardHeader>
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <ExternalLink className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                Aucun projet trouvé
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
+                {searchTerm ? "Aucun projet ne correspond à votre recherche." : "Commencez par créer votre premier projet."}
+              </p>
+              {!searchTerm && (
+                <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Créer un projet
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredProjects.map((project: ProjectWithTeam) => (
+                <Card key={project.id} className="hover:shadow-lg transition-shadow cursor-pointer group"
+                      onClick={() => window.location.href = `/projects/${project.id}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          {project.name}
+                        </CardTitle>
+                        {project.team && (
+                          <CardDescription className="flex items-center mt-1">
+                            <Users className="w-3 h-3 mr-1" />
+                            {project.team.name}
+                          </CardDescription>
+                        )}
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(project);
+                          }}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Modifier
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(project.id);
+                            }}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Supprimer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {project.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-3 line-clamp-2">
+                        {project.description}
+                      </p>
+                    )}
+                    
+                    <div className="flex items-center justify-between">
+                      <Badge 
+                        className={statusColors[project.status as keyof typeof statusColors] || statusColors.development}
+                      >
+                        {statusLabels[project.status as keyof typeof statusLabels] || project.status}
+                      </Badge>
+                      
+                      <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                        <Calendar className="w-3 h-3 mr-1" />
+                        {new Date(project.createdAt).toLocaleDateString('fr-FR')}
+                      </div>
+                    </div>
+                    
+                    {project.repositoryUrl && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(project.repositoryUrl, '_blank');
+                          }}
+                          className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          Repository
+                        </button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 
