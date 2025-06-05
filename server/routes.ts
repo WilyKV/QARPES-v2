@@ -334,7 +334,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         targetReleaseId = newRelease.id;
       }
       
-      // Associate project to release
+      // Associate version to release directly
+      await storage.updateProjectVersion(versionId, { releaseId: targetReleaseId });
+      
+      // Also associate project to release if not already associated
       await storage.addProjectToRelease({ releaseId: targetReleaseId, projectId });
       
       res.status(201).json({ 

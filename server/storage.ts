@@ -580,6 +580,10 @@ export class DatabaseStorage implements IStorage {
 
   async createProjectVersion(version: InsertProjectVersion): Promise<ProjectVersion> {
     const [newVersion] = await db.insert(projectVersions).values(version).returning();
+    
+    // Update project status automatically based on version status
+    await this.updateProjectStatusFromVersions(newVersion.projectId);
+    
     return newVersion;
   }
 
@@ -589,7 +593,86 @@ export class DatabaseStorage implements IStorage {
       .set({ ...version, updatedAt: new Date() })
       .where(eq(projectVersions.id, id))
       .returning();
+    
+    // Update project status automatically based on version status
+    await this.updateProjectStatusFromVersions(updatedVersion.projectId);
+    
     return updatedVersion;
+  }
+
+  // Update project status based on highest version status (never downgrade)
+  private async updateProjectStatusFromVersions(projectId: number): Promise<void> {
+    const versions = await db
+      .select()
+      .from(projectVersions)
+      .where(eq(projectVersions.projectId, projectId));
+
+    if (!versions.length) return;
+
+    // Status hierarchy (higher numbers are more advanced)
+    const statusHierarchy = {
+      'en_developpement': 1,
+      'en_cours_arb': 2,
+      'a_deployer_recette': 3,
+      'recette_en_cours': 4,
+      'a_deployer_preprod': 5,
+      'preprod_en_cours': 6,
+      'a_deployer_production': 7,
+      'merge_git_a_faire': 8,
+      'termine': 9,
+      'annule': 0,
+      'hotfix_a_prevoir': 5, // Same level as preprod
+    };
+
+    // Find the highest status among all versions
+    const highestVersionStatus = versions.reduce((highest, version) => {
+      const currentLevel = statusHierarchy[version.status as keyof typeof statusHierarchy] || 0;
+      const highestLevel = statusHierarchy[highest as keyof typeof statusHierarchy] || 0;
+      return currentLevel > highestLevel ? version.status : highest;
+    }, 'en_developpement');
+
+    // Map version status to project status
+    const versionToProjectStatus = {
+      'en_developpement': 'development',
+      'en_cours_arb': 'development',
+      'a_deployer_recette': 'testing',
+      'recette_en_cours': 'testing',
+      'a_deployer_preprod': 'preproduction',
+      'preprod_en_cours': 'preproduction',
+      'a_deployer_production': 'production',
+      'merge_git_a_faire': 'production',
+      'termine': 'production',
+      'annule': 'development',
+      'hotfix_a_prevoir': 'preproduction',
+    };
+
+    const newProjectStatus = versionToProjectStatus[highestVersionStatus as keyof typeof versionToProjectStatus] || 'development';
+
+    // Get current project status to ensure we never downgrade
+    const [currentProject] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId));
+
+    if (!currentProject) return;
+
+    const projectStatusHierarchy = {
+      'development': 1,
+      'testing': 2,
+      'preproduction': 3,
+      'production': 4,
+    };
+
+    const currentLevel = projectStatusHierarchy[currentProject.status as keyof typeof projectStatusHierarchy] || 0;
+    const newLevel = projectStatusHierarchy[newProjectStatus as keyof typeof projectStatusHierarchy] || 0;
+
+    // Only update if new status is higher than current
+    if (newLevel > currentLevel) {
+      await db
+        .update(projects)
+        .set({ status: newProjectStatus, updatedAt: new Date() })
+        .where(eq(projects.id, projectId));
+    }
   }
 
   async deleteProjectVersion(id: number): Promise<void> {

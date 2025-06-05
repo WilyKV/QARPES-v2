@@ -205,6 +205,10 @@ export default function ProjectDetail() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const projectId = parseInt(params.id || "0");
+  const [versionModalOpen, setVersionModalOpen] = useState(false);
+  const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
+  const [selectedVersionName, setSelectedVersionName] = useState<string>("");
 
   const { data: project, isLoading: projectLoading } = useQuery<ProjectWithTeam>({
     queryKey: [`/api/projects/${projectId}`],
@@ -341,7 +345,10 @@ export default function ProjectDetail() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Versions du projet</h2>
-              <VersionModal projectId={project.id} />
+              <Button onClick={() => setVersionModalOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Nouvelle version
+              </Button>
             </div>
             
             {versions && versions.length > 0 ? (
@@ -354,11 +361,23 @@ export default function ProjectDetail() {
                         <CardDescription>{version.description}</CardDescription>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedVersionId(version.id);
+                            setSelectedVersionName(version.version);
+                            setReleaseModalOpen(true);
+                          }}
+                        >
+                          <LinkIcon className="w-4 h-4 mr-2" />
+                          Associer à une release
+                        </Button>
                         <Badge className={statusColors[version.status as keyof typeof statusColors] || statusColors.development}>
                           {statusLabels[version.status as keyof typeof statusLabels] || version.status}
                         </Badge>
                         <span className="text-xs text-gray-500">
-                          {formatDate(version.createdAt)}
+                          {version.createdAt ? formatDate(version.createdAt) : 'Date inconnue'}
                         </span>
                       </div>
                     </div>
