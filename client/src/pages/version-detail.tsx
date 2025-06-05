@@ -640,13 +640,40 @@ export default function VersionDetail() {
         </div>
       </main>
 
-      {/* Modals */}
+      {/* All Modals */}
       <VersionReleaseModal
         open={releaseModalOpen}
         onOpenChange={setReleaseModalOpen}
         projectId={projectId}
         versionId={versionId}
-        versionName={version.version}
+        versionName={version?.version || ""}
+      />
+      
+      <GitRepoModal
+        open={gitRepoModalOpen}
+        onOpenChange={setGitRepoModalOpen}
+        projectVersionId={versionId}
+        projectId={projectId}
+        versionId={versionId}
+        gitRepo={selectedGitRepo}
+      />
+      
+      <PvModal
+        open={pvModalOpen}
+        onOpenChange={setPvModalOpen}
+        projectVersionId={versionId}
+        projectId={projectId}
+        versionId={versionId}
+        pv={selectedPv}
+      />
+      
+      <CabModal
+        open={cabModalOpen}
+        onOpenChange={setCabModalOpen}
+        projectVersionId={versionId}
+        projectId={projectId}
+        versionId={versionId}
+        cab={selectedCab}
       />
     </div>
   );
