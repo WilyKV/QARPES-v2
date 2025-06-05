@@ -31,7 +31,10 @@ import { insertGitRepoSchema, type GitRepo, type GitRepoWithDetails, type Projec
 import { z } from "zod";
 import { useState, useEffect } from "react";
 
-const formSchema = insertGitRepoSchema.extend({
+const formSchema = insertGitRepoSchema.pick({
+  name: true,
+  url: true,
+}).extend({
   name: z.string().min(1, "Le nom est requis"),
 });
 
@@ -71,8 +74,7 @@ export function GitRepoModal({
     enabled: open && !isEditing,
   });
 
-  // Calculer la branche automatiquement basée sur la release associée
-  const automaticBranch = version?.releaseId ? `release/${version.releaseId}` : "main";
+
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -147,7 +149,6 @@ export function GitRepoModal({
         await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, {
           name: selectedRepo.name,
           url: selectedRepo.url,
-          branch: automaticBranch, // Branche automatique basée sur la release
         });
         
         queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
@@ -209,12 +210,12 @@ export function GitRepoModal({
               </Select>
             </div>
             
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              <p><strong>Branche automatique:</strong> {automaticBranch}</p>
-              {version?.releaseId && (
-                <p className="mt-1">Basée sur la release associée: {version.releaseId}</p>
-              )}
-            </div>
+            {version?.releaseId && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                <p><strong>Release associée:</strong> {version.releaseId}</p>
+                <p className="text-xs mt-1">La branche sera automatiquement générée: release/{version.releaseId}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -255,12 +256,12 @@ export function GitRepoModal({
 
 
 
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                <p><strong>Branche automatique:</strong> {automaticBranch}</p>
-                {version?.releaseId && (
-                  <p className="mt-1">Basée sur la release associée: {version.releaseId}</p>
-                )}
-              </div>
+              {version?.releaseId && (
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <p><strong>Release associée:</strong> {version.releaseId}</p>
+                  <p className="text-xs mt-1">La branche sera automatiquement générée: release/{version.releaseId}</p>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2">
                 <Button 
