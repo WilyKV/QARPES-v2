@@ -679,10 +679,10 @@ export async function createFixtures() {
     },
     {
       releaseId: "202506-05",
-      name: "Release 202506-05 - Matchup",
+      name: "Release 202506-05 - Matchup", 
       description: "Release Matchup juin 2025",
       status: "deployed",
-      teamId: createdTeams[8].id,
+      teamId: createdTeams[2].id,
       plannedDate: new Date("2025-06-05"),
       releaseDate: "2025-06-05"
     }
