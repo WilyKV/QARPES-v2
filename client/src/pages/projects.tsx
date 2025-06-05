@@ -32,17 +32,25 @@ const statusLabels = {
 
 // Composant pour afficher et naviguer vers la dernière version d'un projet
 function ProjectVersionBadge({ projectId }: { projectId: number }) {
-  const { data: versions, isLoading } = useQuery({
-    queryKey: ['/api/projects', projectId, 'versions'],
+  const { data: versions, isLoading, error } = useQuery({
+    queryKey: [`/api/projects/${projectId}/versions`],
     enabled: !!projectId,
+    staleTime: 30000,
   });
+
+  console.log('ProjectVersionBadge - projectId:', projectId, 'versions:', versions, 'isLoading:', isLoading, 'error:', error);
 
   if (isLoading) {
     return (
       <Badge variant="secondary" className="text-xs">
-        Loading...
+        ...
       </Badge>
     );
+  }
+
+  if (error) {
+    console.error('Error loading versions:', error);
+    return null;
   }
 
   const latestVersion = Array.isArray(versions) && versions.length > 0 ? versions[0] : null;
@@ -57,8 +65,8 @@ function ProjectVersionBadge({ projectId }: { projectId: number }) {
 
   return (
     <Badge
-      variant="default"
-      className="text-xs cursor-pointer hover:bg-blue-700 bg-blue-600 text-white"
+      variant="default" 
+      className="text-xs cursor-pointer hover:bg-blue-700 bg-blue-600 text-white transition-colors"
       onClick={(e) => {
         e.stopPropagation();
         window.location.href = `/projects/${projectId}/versions/${latestVersion.id}`;
