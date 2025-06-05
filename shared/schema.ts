@@ -154,6 +154,27 @@ export const procedures = pgTable("procedures", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Process Verbals (PVs) - 4 types per project version
+export const projectPvs = pgTable("project_pvs", {
+  id: serial("id").primaryKey(),
+  projectVersionId: integer("project_version_id").notNull().references(() => projectVersions.id, { onDelete: 'cascade' }),
+  type: varchar("type", { length: 100 }).notNull(), // pv_fonctionnel_recette, pv_metier_recette, pv_conformite_preprod, pv_tests_homologation_preprod
+  status: varchar("status", { length: 50 }).default("draft"), // draft, completed, approved
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Files for PVs
+export const pvFiles = pgTable("pv_files", {
+  id: serial("id").primaryKey(),
+  pvId: integer("pv_id").notNull().references(() => projectPvs.id, { onDelete: 'cascade' }),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  filePath: varchar("file_path", { length: 500 }).notNull(),
+  fileSize: integer("file_size"),
+  mimeType: varchar("mime_type", { length: 100 }),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
 // ARB (Access/Responsibilities/Budgets) table
 export const arb = pgTable("arb", {
   id: serial("id").primaryKey(),
@@ -220,6 +241,7 @@ export const projectVersionsRelations = relations(projectVersions, ({ one, many 
   }),
   gitRepos: many(gitRepos),
   cabs: many(cab),
+  pvs: many(projectPvs),
 }));
 
 export const gitReposRelations = relations(gitRepos, ({ one, many }) => ({
@@ -253,6 +275,21 @@ export const proceduresRelations = relations(procedures, ({ one }) => ({
   gitRepo: one(gitRepos, {
     fields: [procedures.gitRepoId],
     references: [gitRepos.id],
+  }),
+}));
+
+export const projectPvsRelations = relations(projectPvs, ({ one, many }) => ({
+  projectVersion: one(projectVersions, {
+    fields: [projectPvs.projectVersionId],
+    references: [projectVersions.id],
+  }),
+  files: many(pvFiles),
+}));
+
+export const pvFilesRelations = relations(pvFiles, ({ one }) => ({
+  pv: one(projectPvs, {
+    fields: [pvFiles.pvId],
+    references: [projectPvs.id],
   }),
 }));
 
@@ -361,6 +398,17 @@ export const insertProcedureSchema = createInsertSchema(procedures).omit({
   updatedAt: true,
 });
 
+export const insertProjectPvSchema = createInsertSchema(projectPvs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPvFileSchema = createInsertSchema(pvFiles).omit({
+  id: true,
+  uploadedAt: true,
+});
+
 export const insertArbSchema = createInsertSchema(arb).omit({
   id: true,
   approvedAt: true,
@@ -391,6 +439,10 @@ export type InsertRelease = z.infer<typeof insertReleaseSchema>;
 export type Release = typeof releases.$inferSelect;
 export type InsertReleaseProject = z.infer<typeof insertReleaseProjectSchema>;
 export type ReleaseProject = typeof releaseProjects.$inferSelect;
+export type InsertProjectPv = z.infer<typeof insertProjectPvSchema>;
+export type ProjectPv = typeof projectPvs.$inferSelect;
+export type InsertPvFile = z.infer<typeof insertPvFileSchema>;
+export type PvFile = typeof pvFiles.$inferSelect;
 export type InsertArb = z.infer<typeof insertArbSchema>;
 export type Arb = typeof arb.$inferSelect;
 
