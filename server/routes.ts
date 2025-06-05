@@ -10,6 +10,11 @@ import {
   insertArbSchema,
   insertTeamMemberSchema,
   insertReleaseProjectSchema,
+  insertProjectVersionSchema,
+  insertGitRepoSchema,
+  insertCommitSchema,
+  insertCabSchema,
+  insertProcedureSchema,
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {

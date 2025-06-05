@@ -403,6 +403,47 @@ export type TeamWithMembers = Team & {
 
 export type ProjectWithTeam = Project & {
   team?: Team;
+  versions?: ProjectVersion[];
+};
+
+export type ProjectVersionWithDetails = ProjectVersion & {
+  project?: Project & { team?: Team };
+  gitRepos?: GitRepoWithDetails[];
+  cabs?: CabWithDetails[];
+};
+
+export type GitRepoWithDetails = GitRepo & {
+  commits?: Commit[];
+  procedures?: Procedure[];
+  proceduresByType?: ProceduresByType;
+};
+
+export type CabWithDetails = Cab & {
+  assignee?: User;
+};
+
+export type ProceduresByType = {
+  environment_variables: Procedure[];
+  service_verification: Procedure[];
+  command_execution: Procedure[];
+  data_import: Procedure[];
+};
+
+export type ReleaseProceduresAggregated = {
+  releaseId: number;
+  projects: {
+    projectId: number;
+    projectName: string;
+    versions: {
+      versionId: number;
+      version: string;
+      gitRepos: {
+        repoId: number;
+        repoName: string;
+        procedures: ProceduresByType;
+      }[];
+    }[];
+  }[];
 };
 
 export type ReleaseWithTeamAndProjects = Release & {

@@ -37,6 +37,11 @@ import {
   type InsertProcedure,
   type TeamWithMembers,
   type ProjectWithTeam,
+  type ProjectVersionWithDetails,
+  type GitRepoWithDetails,
+  type CabWithDetails,
+  type ProceduresByType,
+  type ReleaseProceduresAggregated,
   type ReleaseWithTeamAndProjects,
   type ArbWithDetails,
 } from "@shared/schema";
@@ -472,9 +477,6 @@ export class DatabaseStorage implements IStorage {
 
   async updateArb(id: number, arbData: Partial<InsertArb>): Promise<Arb> {
     const updateData = { ...arbData, updatedAt: new Date() };
-    if (arbData.status === "approved") {
-      updateData.approvedAt = new Date();
-    }
     
     const [updatedArb] = await db
       .update(arb)
@@ -486,6 +488,263 @@ export class DatabaseStorage implements IStorage {
 
   async deleteArb(id: number): Promise<void> {
     await db.delete(arb).where(eq(arb.id, id));
+  }
+
+  // Project Version operations
+  async getProjectVersions(projectId: number): Promise<ProjectVersionWithDetails[]> {
+    const versions = await db
+      .select()
+      .from(projectVersions)
+      .where(eq(projectVersions.projectId, projectId))
+      .orderBy(desc(projectVersions.createdAt));
+
+    const versionsWithDetails = await Promise.all(
+      versions.map(async (version) => {
+        const gitReposData = await this.getGitRepos(version.id);
+        const cabsData = await this.getCabs(version.id);
+        
+        return {
+          ...version,
+          gitRepos: gitReposData,
+          cabs: cabsData,
+        };
+      })
+    );
+
+    return versionsWithDetails;
+  }
+
+  async getProjectVersion(id: number): Promise<ProjectVersionWithDetails | undefined> {
+    const [version] = await db
+      .select()
+      .from(projectVersions)
+      .where(eq(projectVersions.id, id));
+
+    if (!version) return undefined;
+
+    const gitReposData = await this.getGitRepos(version.id);
+    const cabsData = await this.getCabs(version.id);
+
+    return {
+      ...version,
+      gitRepos: gitReposData,
+      cabs: cabsData,
+    };
+  }
+
+  async createProjectVersion(version: InsertProjectVersion): Promise<ProjectVersion> {
+    const [newVersion] = await db.insert(projectVersions).values(version).returning();
+    return newVersion;
+  }
+
+  async updateProjectVersion(id: number, version: Partial<InsertProjectVersion>): Promise<ProjectVersion> {
+    const [updatedVersion] = await db
+      .update(projectVersions)
+      .set({ ...version, updatedAt: new Date() })
+      .where(eq(projectVersions.id, id))
+      .returning();
+    return updatedVersion;
+  }
+
+  async deleteProjectVersion(id: number): Promise<void> {
+    await db.delete(projectVersions).where(eq(projectVersions.id, id));
+  }
+
+  // Git Repository operations
+  async getGitRepos(projectVersionId: number): Promise<GitRepoWithDetails[]> {
+    const repos = await db
+      .select()
+      .from(gitRepos)
+      .where(eq(gitRepos.projectVersionId, projectVersionId));
+
+    const reposWithDetails = await Promise.all(
+      repos.map(async (repo) => {
+        const commitsData = await this.getCommits(repo.id);
+        const proceduresData = await this.getProcedures(repo.id);
+        
+        return {
+          ...repo,
+          commits: commitsData,
+          proceduresByType: proceduresData,
+        };
+      })
+    );
+
+    return reposWithDetails;
+  }
+
+  async createGitRepo(gitRepo: InsertGitRepo): Promise<GitRepo> {
+    const [newRepo] = await db.insert(gitRepos).values(gitRepo).returning();
+    return newRepo;
+  }
+
+  async updateGitRepo(id: number, gitRepo: Partial<InsertGitRepo>): Promise<GitRepo> {
+    const [updatedRepo] = await db
+      .update(gitRepos)
+      .set({ ...gitRepo, updatedAt: new Date() })
+      .where(eq(gitRepos.id, id))
+      .returning();
+    return updatedRepo;
+  }
+
+  async deleteGitRepo(id: number): Promise<void> {
+    await db.delete(gitRepos).where(eq(gitRepos.id, id));
+  }
+
+  // Commit operations
+  async getCommits(gitRepoId: number): Promise<Commit[]> {
+    return await db
+      .select()
+      .from(commits)
+      .where(eq(commits.gitRepoId, gitRepoId))
+      .orderBy(desc(commits.committedAt));
+  }
+
+  async createCommit(commit: InsertCommit): Promise<Commit> {
+    const [newCommit] = await db.insert(commits).values(commit).returning();
+    return newCommit;
+  }
+
+  // CAB operations
+  async getCabs(projectVersionId: number): Promise<CabWithDetails[]> {
+    const cabResults = await db
+      .select({
+        cab: cab,
+        assignee: users,
+      })
+      .from(cab)
+      .leftJoin(users, eq(cab.assigneeId, users.id))
+      .where(eq(cab.projectVersionId, projectVersionId))
+      .orderBy(desc(cab.createdAt));
+
+    return cabResults.map((result) => ({
+      ...result.cab,
+      assignee: result.assignee || undefined,
+    }));
+  }
+
+  async createCab(cabData: InsertCab): Promise<Cab> {
+    const [newCab] = await db.insert(cab).values(cabData).returning();
+    return newCab;
+  }
+
+  async updateCab(id: number, cabData: Partial<InsertCab>): Promise<Cab> {
+    const [updatedCab] = await db
+      .update(cab)
+      .set({ ...cabData, updatedAt: new Date() })
+      .where(eq(cab.id, id))
+      .returning();
+    return updatedCab;
+  }
+
+  async deleteCab(id: number): Promise<void> {
+    await db.delete(cab).where(eq(cab.id, id));
+  }
+
+  // Procedure operations (4 types organized by Git repository)
+  async getProcedures(gitRepoId: number): Promise<ProceduresByType> {
+    const allProcedures = await db
+      .select()
+      .from(procedures)
+      .where(eq(procedures.gitRepoId, gitRepoId))
+      .orderBy(procedures.order);
+
+    return {
+      environment_variables: allProcedures.filter(p => p.type === 'environment_variables'),
+      service_verification: allProcedures.filter(p => p.type === 'service_verification'),
+      command_execution: allProcedures.filter(p => p.type === 'command_execution'),
+      data_import: allProcedures.filter(p => p.type === 'data_import'),
+    };
+  }
+
+  async getProceduresByType(gitRepoId: number, type: string): Promise<Procedure[]> {
+    return await db
+      .select()
+      .from(procedures)
+      .where(and(eq(procedures.gitRepoId, gitRepoId), eq(procedures.type, type)))
+      .orderBy(procedures.order);
+  }
+
+  async createProcedure(procedure: InsertProcedure): Promise<Procedure> {
+    const [newProcedure] = await db.insert(procedures).values(procedure).returning();
+    return newProcedure;
+  }
+
+  async updateProcedure(id: number, procedure: Partial<InsertProcedure>): Promise<Procedure> {
+    const [updatedProcedure] = await db
+      .update(procedures)
+      .set({ ...procedure, updatedAt: new Date() })
+      .where(eq(procedures.id, id))
+      .returning();
+    return updatedProcedure;
+  }
+
+  async deleteProcedure(id: number): Promise<void> {
+    await db.delete(procedures).where(eq(procedures.id, id));
+  }
+
+  async toggleProcedureCompletion(id: number): Promise<Procedure> {
+    const [procedure] = await db
+      .select()
+      .from(procedures)
+      .where(eq(procedures.id, id));
+
+    const [updatedProcedure] = await db
+      .update(procedures)
+      .set({ 
+        isCompleted: !procedure.isCompleted,
+        updatedAt: new Date()
+      })
+      .where(eq(procedures.id, id))
+      .returning();
+
+    return updatedProcedure;
+  }
+
+  // Release procedures aggregation
+  async getReleaseProcedures(releaseId: number): Promise<ReleaseProceduresAggregated> {
+    const releaseProjectsData = await db
+      .select({
+        project: projects,
+        releaseProject: releaseProjects,
+      })
+      .from(releaseProjects)
+      .innerJoin(projects, eq(releaseProjects.projectId, projects.id))
+      .where(eq(releaseProjects.releaseId, releaseId));
+
+    const projectsWithVersions = await Promise.all(
+      releaseProjectsData.map(async (item) => {
+        const versions = await this.getProjectVersions(item.project.id);
+        
+        const versionsWithRepos = await Promise.all(
+          versions.map(async (version) => ({
+            versionId: version.id,
+            version: version.version,
+            gitRepos: (version.gitRepos || []).map(repo => ({
+              repoId: repo.id,
+              repoName: repo.name,
+              procedures: repo.proceduresByType || {
+                environment_variables: [],
+                service_verification: [],
+                command_execution: [],
+                data_import: [],
+              },
+            })),
+          }))
+        );
+
+        return {
+          projectId: item.project.id,
+          projectName: item.project.name,
+          versions: versionsWithRepos,
+        };
+      })
+    );
+
+    return {
+      releaseId,
+      projects: projectsWithVersions,
+    };
   }
 
   // Dashboard stats
