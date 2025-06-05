@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { createFixtures } from "./fixtures";
 import {
   insertTeamSchema,
   insertProjectSchema,
@@ -30,6 +31,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Fixtures route for demo data
+  app.post('/api/fixtures/create', async (req, res) => {
+    try {
+      await createFixtures();
+      res.json({ message: "Fixtures created successfully" });
+    } catch (error) {
+      console.error("Error creating fixtures:", error);
+      res.status(500).json({ message: "Failed to create fixtures" });
     }
   });
 
