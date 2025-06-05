@@ -185,3 +185,19 @@
 .dark .ql-toolbar button.ql-active {
   background: hsl(var(--accent)) !important;
 }
+
+/* Bouton personnalisé pour les tableaux */
+.ql-toolbar button.ql-table-insert {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.ql-toolbar button.ql-table-insert:before {
+  content: "⊞" !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+}
+
+.ql-toolbar button.ql-table-insert:hover {
+  background: hsl(var(--accent)) !important;
+}

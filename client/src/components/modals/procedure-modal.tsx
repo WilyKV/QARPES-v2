@@ -15,8 +15,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import QuillBetterTable from 'quill-better-table';
-import 'quill-better-table/dist/quill-better-table.css';
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -34,12 +32,6 @@ import { type Procedure } from "@shared/schema";
 import { z } from "zod";
 import { useEffect } from "react";
 
-// Enregistrement du module table pour Quill
-if (typeof window !== 'undefined') {
-  const Quill = ReactQuill.Quill;
-  Quill.register('modules/better-table', QuillBetterTable);
-}
-
 const procedureTypes = [
   { value: "environment_variables", label: "Variables d'environnement" },
   { value: "service_verification", label: "Vérification des services" },
@@ -47,7 +39,7 @@ const procedureTypes = [
   { value: "data_import", label: "Import de données" },
 ];
 
-// Configuration de la barre d'outils Quill avec tableaux
+// Configuration de la barre d'outils Quill enrichie
 const quillModules = {
   toolbar: [
     [{ 'header': [1, 2, 3, false] }],
@@ -58,49 +50,14 @@ const quillModules = {
     [{ 'align': [] }],
     ['link', 'image', 'code-block'],
     ['blockquote'],
-    ['better-table'],
     ['clean']
-  ],
-  'better-table': {
-    operationMenu: {
-      items: {
-        unmergeCells: {
-          text: 'Séparer les cellules'
-        },
-        insertColumnRight: {
-          text: 'Insérer colonne à droite'
-        },
-        insertColumnLeft: {
-          text: 'Insérer colonne à gauche'
-        },
-        insertRowUp: {
-          text: 'Insérer ligne au-dessus'
-        },
-        insertRowDown: {
-          text: 'Insérer ligne en-dessous'
-        },
-        mergeCells: {
-          text: 'Fusionner les cellules'
-        },
-        deleteColumn: {
-          text: 'Supprimer la colonne'
-        },
-        deleteRow: {
-          text: 'Supprimer la ligne'
-        },
-        deleteTable: {
-          text: 'Supprimer le tableau'
-        }
-      }
-    }
-  }
+  ]
 };
 
 const quillFormats = [
   'header', 'bold', 'italic', 'underline', 'strike',
   'list', 'bullet', 'indent', 'color', 'background', 
-  'align', 'link', 'image', 'code-block', 'blockquote',
-  'better-table', 'table', 'table-col', 'table-cell', 'table-cell-line'
+  'align', 'link', 'image', 'code-block', 'blockquote'
 ];
 
 const formSchema = z.object({
@@ -251,7 +208,7 @@ export function ProcedureModal({
                   </FormControl>
                   <FormMessage />
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Utilisez la barre d'outils ci-dessus pour formater votre texte (gras, italique, listes, couleurs, etc.)
+                    Utilisez la barre d'outils pour formater votre texte. Pour les tableaux, vous pouvez copier-coller depuis Excel/Word ou saisir du HTML directement.
                   </div>
                 </FormItem>
               )}
