@@ -9,6 +9,7 @@ import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Releases from "@/pages/releases";
 import Projects from "@/pages/projects";
+import ProjectDetail from "@/pages/project-detail";
 import Teams from "@/pages/teams";
 import ARBPage from "@/pages/arb";
 
@@ -24,6 +25,7 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/releases" component={Releases} />
           <Route path="/projects" component={Projects} />
+          <Route path="/projects/:id" component={ProjectDetail} />
           <Route path="/teams" component={Teams} />
           <Route path="/arb" component={ARBPage} />
         </>
