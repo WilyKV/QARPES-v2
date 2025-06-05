@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { formatDate } from "@/lib/constants";
+import { VersionModal } from "@/components/modals/version-modal";
 import type { 
   ProjectWithTeam, 
   ProjectVersionWithDetails, 
@@ -337,7 +338,10 @@ export default function ProjectDetail() {
 
           {/* Project Versions */}
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Versions du projet</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Versions du projet</h2>
+              <VersionModal projectId={project.id} />
+            </div>
             
             {versions && versions.length > 0 ? (
               versions.map((version) => (
