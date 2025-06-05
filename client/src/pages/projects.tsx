@@ -45,7 +45,7 @@ function ProjectVersionButton({ projectId }: { projectId: number }) {
     );
   }
 
-  const latestVersion = versions && versions.length > 0 ? versions[0] : null;
+  const latestVersion = Array.isArray(versions) && versions.length > 0 ? versions[0] : null;
 
   if (!latestVersion) {
     return null;
@@ -394,7 +394,9 @@ export default function Projects() {
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open(project.repositoryUrl, '_blank');
+                            if (project.repositoryUrl) {
+                              window.open(project.repositoryUrl, '_blank');
+                            }
                           }}
                           className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                         >
