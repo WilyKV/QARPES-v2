@@ -648,6 +648,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Commits for Git repositories
+  app.post('/api/git-repos/:gitRepoId/commits', async (req, res) => {
+    try {
+      const gitRepoId = parseInt(req.params.gitRepoId);
+      const commitData = insertCommitSchema.parse({ ...req.body, gitRepoId });
+      const commit = await storage.createCommit(commitData);
+      res.status(201).json(commit);
+    } catch (error) {
+      console.error("Error creating commit:", error);
+      res.status(400).json({ message: "Failed to create commit" });
+    }
+  });
+
+  app.patch('/api/commits/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const commitData = insertCommitSchema.partial().parse(req.body);
+      const commit = await storage.updateCommit(id, commitData);
+      res.json(commit);
+    } catch (error) {
+      console.error("Error updating commit:", error);
+      res.status(400).json({ message: "Failed to update commit" });
+    }
+  });
+
+  app.delete('/api/commits/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteCommit(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting commit:", error);
+      res.status(500).json({ message: "Failed to delete commit" });
+    }
+  });
+
+  // Procedures for Git repositories
+  app.post('/api/git-repos/:gitRepoId/procedures', async (req, res) => {
+    try {
+      const gitRepoId = parseInt(req.params.gitRepoId);
+      const procedureData = insertProcedureSchema.parse({ ...req.body, gitRepoId });
+      const procedure = await storage.createProcedure(procedureData);
+      res.status(201).json(procedure);
+    } catch (error) {
+      console.error("Error creating procedure:", error);
+      res.status(400).json({ message: "Failed to create procedure" });
+    }
+  });
+
+  app.patch('/api/procedures/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const procedureData = insertProcedureSchema.partial().parse(req.body);
+      const procedure = await storage.updateProcedure(id, procedureData);
+      res.json(procedure);
+    } catch (error) {
+      console.error("Error updating procedure:", error);
+      res.status(400).json({ message: "Failed to update procedure" });
+    }
+  });
+
+  app.delete('/api/procedures/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteProcedure(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting procedure:", error);
+      res.status(500).json({ message: "Failed to delete procedure" });
+    }
+  });
+
   app.post('/api/project-versions/:id/git-repos', async (req, res) => {
     try {
       const projectVersionId = parseInt(req.params.id);

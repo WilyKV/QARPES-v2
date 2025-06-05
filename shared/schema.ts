@@ -117,7 +117,7 @@ export const gitRepos = pgTable("git_repos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Commits for git repositories
+// Commits for git repositories (specific to project version)
 export const commits = pgTable("commits", {
   id: serial("id").primaryKey(),
   gitRepoId: integer("git_repo_id").notNull().references(() => gitRepos.id, { onDelete: "cascade" }),

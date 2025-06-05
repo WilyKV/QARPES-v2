@@ -1006,6 +1006,33 @@ export class DatabaseStorage implements IStorage {
       })),
     };
   }
+
+  // Commit operations
+  async createCommit(commit: InsertCommit): Promise<Commit> {
+    const [newCommit] = await db.insert(commits).values(commit).returning();
+    return newCommit;
+  }
+
+  async updateCommit(id: number, commit: Partial<InsertCommit>): Promise<Commit> {
+    const [updatedCommit] = await db
+      .update(commits)
+      .set({ ...commit, createdAt: new Date() })
+      .where(eq(commits.id, id))
+      .returning();
+    return updatedCommit;
+  }
+
+  async deleteCommit(id: number): Promise<void> {
+    await db.delete(commits).where(eq(commits.id, id));
+  }
+
+  async getCommitsByGitRepo(gitRepoId: number): Promise<Commit[]> {
+    return await db
+      .select()
+      .from(commits)
+      .where(eq(commits.gitRepoId, gitRepoId))
+      .orderBy(desc(commits.committedAt));
+  }
 }
 
 export const storage = new DatabaseStorage();
