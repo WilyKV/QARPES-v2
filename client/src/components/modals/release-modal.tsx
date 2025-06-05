@@ -231,8 +231,8 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
                   <FormItem>
                     <FormLabel>Équipe Assignée</FormLabel>
                     <Select 
-                      onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} 
-                      defaultValue={field.value?.toString()}
+                      onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))} 
+                      defaultValue={field.value?.toString() || "none"}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -240,7 +240,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Aucune équipe</SelectItem>
+                        <SelectItem value="none">Aucune équipe</SelectItem>
                         {teams?.map((team: any) => (
                           <SelectItem key={team.id} value={team.id.toString()}>
                             {team.name}
