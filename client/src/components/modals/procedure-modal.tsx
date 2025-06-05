@@ -38,18 +38,9 @@ const procedureTypes = [
   { value: "data_import", label: "Import de données" },
 ];
 
-const formSchema = insertProcedureSchema.pick({
-  type: true,
-  title: true,
-  description: true,
-  content: true,
-  order: true,
-}).extend({
+const formSchema = z.object({
   type: z.enum(["environment_variables", "service_verification", "command_execution", "data_import"]),
-  title: z.string().min(1, "Le titre est requis"),
-  description: z.string().optional(),
   content: z.string().min(1, "Le contenu est requis"),
-  order: z.number().int().min(0, "L'ordre doit être positif"),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -81,10 +72,7 @@ export function ProcedureModal({
     resolver: zodResolver(formSchema),
     defaultValues: {
       type: procedure?.type || procedureType || "environment_variables",
-      title: procedure?.title || "",
-      description: procedure?.description || "",
-      content: typeof procedure?.content === "string" ? procedure.content : JSON.stringify(procedure?.content || {}),
-      order: procedure?.order || 0,
+      content: typeof procedure?.content === "string" ? procedure.content : JSON.stringify(procedure?.content || ""),
     },
   });
 
@@ -92,34 +80,22 @@ export function ProcedureModal({
     if (isEditing && procedure) {
       form.reset({
         type: procedure.type as any,
-        title: procedure.title,
-        description: procedure.description || "",
         content: typeof procedure.content === "string" ? procedure.content : JSON.stringify(procedure.content),
-        order: procedure.order,
       });
     } else if (!isEditing) {
       form.reset({
         type: procedureType as any || "environment_variables",
-        title: "",
-        description: "",
         content: "",
-        order: 0,
       });
     }
   }, [procedure, isEditing, procedureType, form]);
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      let content;
-      try {
-        content = JSON.parse(data.content);
-      } catch {
-        content = { text: data.content };
-      }
-
       const payload = {
         ...data,
-        content,
+        title: procedureTypes.find(p => p.value === data.type)?.label || data.type,
+        order: 1,
       };
 
       if (isEditing) {
@@ -187,72 +163,22 @@ export function ProcedureModal({
 
             <FormField
               control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Titre</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="Titre de la procédure"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description (optionnel)</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Description de la procédure..."
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name="content"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Contenu</FormLabel>
+                  <FormLabel>Contenu de la procédure</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Contenu de la procédure (JSON ou texte)..."
-                      rows={6}
+                      placeholder="Décrivez la procédure avec du formatage (markdown supporté)..."
+                      rows={12}
+                      className="font-mono text-sm"
                       {...field}
                     />
                   </FormControl>
                   <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="order"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Ordre</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      {...field}
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                    />
-                  </FormControl>
-                  <FormMessage />
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Vous pouvez utiliser la syntaxe Markdown pour le formatage (gras: **texte**, italique: *texte*, listes: - item)
+                  </div>
                 </FormItem>
               )}
             />
