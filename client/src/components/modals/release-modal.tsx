@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -29,12 +29,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertReleaseSchema, type ReleaseWithTeamAndProjects } from "@shared/schema";
-import { STATUS_OPTIONS } from "@/lib/constants";
+import { insertReleaseSchema, type ReleaseWithProjects } from "@shared/schema";
 import { z } from "zod";
 
 const formSchema = insertReleaseSchema.extend({
-  releaseDate: z.string().optional(),
+  recetteDate: z.string().optional(),
+  preprodDate: z.string().optional(), 
+  productionDate: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -42,7 +43,7 @@ type FormData = z.infer<typeof formSchema>;
 interface ReleaseModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  release?: ReleaseWithTeamAndProjects | null;
+  release?: ReleaseWithProjects | null;
 }
 
 export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps) {
@@ -53,38 +54,33 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      releaseId: "",
       name: "",
       description: "",
-      status: "development",
-      teamId: undefined,
-      releaseDate: "",
+      status: "testing",
+      recetteDate: "",
+      preprodDate: "",
+      productionDate: "",
     },
-  });
-
-  const { data: teams = [] } = useQuery({
-    queryKey: ["/api/teams"],
-    retry: false,
   });
 
   useEffect(() => {
     if (release) {
       form.reset({
-        releaseId: release.releaseId,
         name: release.name,
         description: release.description || "",
         status: release.status,
-        teamId: release.teamId || undefined,
-        releaseDate: release.releaseDate || "",
+        recetteDate: release.recetteDate || "",
+        preprodDate: release.preprodDate || "",
+        productionDate: release.productionDate || "",
       });
     } else {
       form.reset({
-        releaseId: "",
         name: "",
         description: "",
-        status: "development",
-        teamId: undefined,
-        releaseDate: "",
+        status: "testing",
+        recetteDate: "",
+        preprodDate: "",
+        productionDate: "",
       });
     }
   }, [release, form]);
@@ -93,8 +89,9 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
     mutationFn: async (data: FormData) => {
       const payload = {
         ...data,
-        teamId: data.teamId || null,
-        releaseDate: data.releaseDate || null,
+        recetteDate: data.recetteDate || null,
+        preprodDate: data.preprodDate || null,
+        productionDate: data.productionDate || null,
       };
 
       if (isEditing) {
@@ -108,7 +105,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       toast({
         title: "Succès",
-        description: `Release ${isEditing ? "modifiée" : "créée"} avec succès`,
+        description: `Release ${isEditing ? "modifiée" : "créée"} avec succès${!isEditing ? " - Version automatiquement générée" : ""}`,
       });
       onOpenChange(false);
     },
@@ -138,65 +135,25 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Modifier la Release" : "Nouvelle Release"}
+            {isEditing ? "Modifier la release" : "Créer une nouvelle release"}
           </DialogTitle>
+          {!isEditing && (
+            <p className="text-sm text-muted-foreground">
+              La version sera automatiquement générée au format YYYYMM-NN
+            </p>
+          )}
         </DialogHeader>
-
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="releaseId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ID Release</FormLabel>
-                    <FormControl>
-                      <Input placeholder="202501-01" {...field} />
-                    </FormControl>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Format: YYYYMM-NN
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Statut</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un statut" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {STATUS_OPTIONS.release.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nom de la Release</FormLabel>
+                  <FormLabel>Nom</FormLabel>
                   <FormControl>
                     <Input placeholder="Nom de la release" {...field} />
                   </FormControl>
@@ -204,7 +161,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
                 </FormItem>
               )}
             />
-
+            
             <FormField
               control={form.control}
               name="description"
@@ -213,10 +170,10 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
                   <FormLabel>Description</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Description de la release"
-                      rows={3}
-                      {...field}
-                      value={field.value || ""}
+                      placeholder="Description de la release..." 
+                      rows={3} 
+                      {...field} 
+                      value={field.value || ""} 
                     />
                   </FormControl>
                   <FormMessage />
@@ -224,64 +181,92 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
               )}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="teamId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Équipe Assignée</FormLabel>
-                    <Select 
-                      onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))} 
-                      defaultValue={field.value?.toString() || "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une équipe" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {Array.isArray(teams) && teams.map((team: any) => (
-                          <SelectItem key={team.id} value={team.id.toString()}>
-                            {team.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="releaseDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date de Release</FormLabel>
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Statut</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionnez un statut" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                    <SelectContent>
+                      <SelectItem value="testing">Tests</SelectItem>
+                      <SelectItem value="preproduction">Préprod</SelectItem>
+                      <SelectItem value="production">Production</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
+            <FormField
+              control={form.control}
+              name="recetteDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date de mise en recette</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="date" 
+                      {...field} 
+                      value={field.value || ""} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="preprodDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date de mise en préprod</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="date" 
+                      {...field} 
+                      value={field.value || ""} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="productionDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date de mise en production</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="date" 
+                      {...field} 
+                      value={field.value || ""} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Annuler
               </Button>
-              <Button
-                type="submit"
-                disabled={mutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {mutation.isPending ? "En cours..." : (isEditing ? "Modifier" : "Créer")}
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending 
+                  ? (isEditing ? "Modification..." : "Création...") 
+                  : (isEditing ? "Modifier" : "Créer")
+                }
               </Button>
             </div>
           </form>

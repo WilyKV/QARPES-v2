@@ -12,19 +12,17 @@ import { ReleaseModal } from "@/components/modals/release-modal";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import type { ReleaseWithTeamAndProjects } from "@shared/schema";
+import type { ReleaseWithProjects } from "@shared/schema";
 
 const statusColors = {
-  development: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
   testing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
   preproduction: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
   production: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
 };
 
 const statusLabels = {
-  development: "Développement",
   testing: "Recette",
-  preproduction: "Pré-production",
+  preproduction: "Préprod",
   production: "Production",
 };
 
@@ -33,7 +31,7 @@ export default function Releases() {
   const { isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRelease, setEditingRelease] = useState<ReleaseWithTeamAndProjects | null>(null);
+  const [editingRelease, setEditingRelease] = useState<ReleaseWithProjects | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
