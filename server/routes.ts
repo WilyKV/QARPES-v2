@@ -282,6 +282,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/releases/:id/procedures', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const procedures = await storage.getReleaseProcedures(id);
+      res.json(procedures);
+    } catch (error) {
+      console.error("Error fetching release procedures:", error);
+      res.status(500).json({ message: "Failed to fetch release procedures" });
+    }
+  });
+
   // Release-Project routes
   app.post('/api/releases/:releaseId/projects', async (req, res) => {
     try {
@@ -304,6 +315,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error removing project from release:", error);
       res.status(500).json({ message: "Failed to remove project from release" });
+    }
+  });
+
+  // Project version to release association
+  app.post('/api/projects/:projectId/versions/:versionId/release', async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId);
+      const versionId = parseInt(req.params.versionId);
+      const { releaseId, createRelease } = req.body;
+      
+      let targetReleaseId = releaseId;
+      
+      // If createRelease is provided, create a new release first
+      if (createRelease) {
+        const releaseData = insertReleaseSchema.parse(createRelease);
+        const newRelease = await storage.createRelease(releaseData);
+        targetReleaseId = newRelease.id;
+      }
+      
+      // Associate project to release
+      await storage.addProjectToRelease({ releaseId: targetReleaseId, projectId });
+      
+      res.status(201).json({ 
+        message: "Project version associated to release successfully",
+        releaseId: targetReleaseId 
+      });
+    } catch (error) {
+      console.error("Error associating project version to release:", error);
+      res.status(400).json({ message: "Failed to associate project version to release" });
     }
   });
 
