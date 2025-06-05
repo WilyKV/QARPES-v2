@@ -16,10 +16,10 @@ export function getSession() {
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       maxAge: sessionTtl,
     },
   });
@@ -184,6 +184,45 @@ export async function setupAuth(app: Express) {
     } catch (error) {
       console.error("Error during demo callback:", error);
       res.redirect("/api/login");
+    }
+  });
+
+  // Route de test pour bypass l'authentification Microsoft
+  app.get("/api/auth/demo", async (req, res) => {
+    try {
+      const demoEmail = "demo.user@omneseducation.com";
+      const demoId = "demo-user-id";
+
+      console.log("Demo auth: Creating demo user...");
+      
+      await storage.upsertUser({
+        id: demoId,
+        email: demoEmail,
+        firstName: "Demo",
+        lastName: "User",
+        profileImageUrl: null,
+      });
+
+      console.log("Demo auth: Setting session...");
+
+      (req.session as any).user = {
+        id: demoId,
+        email: demoEmail,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+      };
+
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve(null);
+        });
+      });
+
+      console.log("Demo auth: Session saved, redirecting...");
+      res.redirect("/");
+    } catch (error) {
+      console.error("Demo auth error:", error);
+      res.status(500).json({ error: "Demo auth failed" });
     }
   });
 

@@ -7,6 +7,10 @@ export default function Landing() {
     window.location.href = "/api/login";
   };
 
+  const handleDemoLogin = () => {
+    window.location.href = "/api/auth/demo";
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="container mx-auto px-4 py-16">
@@ -151,13 +155,23 @@ export default function Landing() {
               <p className="text-gray-600 dark:text-gray-300 mb-6">
                 Connectez-vous pour accéder à la plateforme de gestion des releases
               </p>
-              <Button 
-                onClick={handleLogin}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                size="lg"
-              >
-                Se connecter
-              </Button>
+              <div className="space-y-3">
+                <Button 
+                  onClick={handleLogin}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  size="lg"
+                >
+                  Se connecter avec Microsoft O365
+                </Button>
+                <Button 
+                  onClick={handleDemoLogin}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                >
+                  Connexion démo (temporaire)
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
