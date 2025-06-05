@@ -237,25 +237,144 @@ export async function createFixtures() {
     }
   ]).returning();
 
-  // Create releases
+  // Create releases based on the user's screenshot
   const createdReleases = await db.insert(releases).values([
+    // Active releases
     {
-      releaseId: "202506-01",
-      name: "Release Janvier 2025",
-      description: "Release de janvier avec les projets E2I et Nemo",
-      status: "planning",
-      teamId: createdTeams[0].id,
-      plannedDate: new Date("2025-01-15"),
-      releaseDate: "2025-01-15"
+      releaseId: "202504-01",
+      name: "Release 202504-01 - Techaway",
+      description: "Release Techaway avril 2025",
+      status: "in_progress",
+      teamId: createdTeams[6].id,
+      plannedDate: new Date("2025-04-15"),
+      releaseDate: "2025-04-15"
     },
     {
-      releaseId: "202506-02",
-      name: "Release Février 2025",
-      description: "Release de février avec IRIS et EUBS",
+      releaseId: "202505-01",
+      name: "Release 202505-01 - Calendriers-Assos",
+      description: "Release Calendriers-Assos mai 2025",
       status: "in_progress",
+      teamId: createdTeams[0].id,
+      plannedDate: new Date("2025-05-15"),
+      releaseDate: "2025-05-15"
+    },
+    {
+      releaseId: "202506-03",
+      name: "Release 202506-03 - Lot TreLot",
+      description: "Release Lot TreLot juin 2025",
+      status: "planning",
+      teamId: createdTeams[1].id,
+      plannedDate: new Date("2025-06-15"),
+      releaseDate: "2025-06-15"
+    },
+    {
+      releaseId: "202506-04",
+      name: "Release 202506-04 - Nemo",
+      description: "Release Nemo juin 2025",
+      status: "planning",
+      teamId: createdTeams[1].id,
+      plannedDate: new Date("2025-06-15"),
+      releaseDate: "2025-06-15"
+    },
+    // Deployed releases (historical)
+    {
+      releaseId: "202504-03",
+      name: "Release 202504-03 - Match'Up",
+      description: "Release Match'Up avril 2025",
+      status: "deployed",
+      teamId: createdTeams[8].id,
+      plannedDate: new Date("2025-04-03"),
+      releaseDate: "2025-04-03"
+    },
+    {
+      releaseId: "202505-06",
+      name: "Release 202505-06 - Match'Up",
+      description: "Release Match'Up mai 2025",
+      status: "deployed",
+      teamId: createdTeams[8].id,
+      plannedDate: new Date("2025-05-06"),
+      releaseDate: "2025-05-06"
+    },
+    {
+      releaseId: "202504-02",
+      name: "Release 202504-02 - Ypareo",
+      description: "Release Ypareo avril 2025",
+      status: "deployed",
+      teamId: createdTeams[7].id,
+      plannedDate: new Date("2025-04-02"),
+      releaseDate: "2025-04-02"
+    },
+    {
+      releaseId: "202505-12",
+      name: "Release 202505-12 - Match'Up",
+      description: "Release Match'Up mai 2025",
+      status: "deployed",
+      teamId: createdTeams[8].id,
+      plannedDate: new Date("2025-05-12"),
+      releaseDate: "2025-05-12"
+    },
+    {
+      releaseId: "202505-21",
+      name: "Release 202505-21 - Match'Up",
+      description: "Release Match'Up mai 2025",
+      status: "deployed",
+      teamId: createdTeams[8].id,
+      plannedDate: new Date("2025-05-21"),
+      releaseDate: "2025-05-21"
+    },
+    {
+      releaseId: "202505-27",
+      name: "Release 202505-27 - Matchup",
+      description: "Release Matchup mai 2025",
+      status: "deployed",
+      teamId: createdTeams[8].id,
+      plannedDate: new Date("2025-05-27"),
+      releaseDate: "2025-05-27"
+    },
+    {
+      releaseId: "202506-01",
+      name: "Release 202506-01 - Lot Egaronne",
+      description: "Release Lot Egaronne juin 2025",
+      status: "deployed",
       teamId: createdTeams[2].id,
-      plannedDate: new Date("2025-02-15"),
-      releaseDate: "2025-02-15"
+      plannedDate: new Date("2025-06-01"),
+      releaseDate: "2025-06-01"
+    },
+    {
+      releaseId: "202505-01",
+      name: "Release 202505-01 - Newform",
+      description: "Release Newform mai 2025",
+      status: "deployed",
+      teamId: createdTeams[9].id,
+      plannedDate: new Date("2025-05-01"),
+      releaseDate: "2025-05-01"
+    },
+    {
+      releaseId: "202505-02",
+      name: "Release 202505-02 - Nemo",
+      description: "Release Nemo mai 2025",
+      status: "deployed",
+      teamId: createdTeams[1].id,
+      plannedDate: new Date("2025-05-02"),
+      releaseDate: "2025-05-02"
+    },
+    {
+      releaseId: "202505-03",
+      name: "Release 202505-03 - Nemo [fix]",
+      description: "Release Nemo fix mai 2025",
+      status: "deployed",
+      teamId: createdTeams[1].id,
+      plannedDate: new Date("2025-05-03"),
+      releaseDate: "2025-05-03"
+    },
+    {
+      releaseId: "202506-05",
+      name: "Release 202506-05 - Matchup",
+      description: "Release Matchup juin 2025",
+      status: "deployed",
+      teamId: createdTeams[8].id,
+      plannedDate: new Date("2025-06-05"),
+      releaseDate: "2025-06-05"
     }
   ]).returning();
 
