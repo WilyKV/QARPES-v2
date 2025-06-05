@@ -1,0 +1,95 @@
+Member
+Un membre représente une personne de l’organisation.
+
+
+Attributs : prénom, nom, email professionnel, fonction, rôles.
+Relations :
+Plusieurs membres peuvent appartenir à plusieurs équipes (relation ManyToMany avec Equipe).
+<hr></hr> Equipe
+Une équipe regroupe plusieurs membres et gère plusieurs projets.
+
+
+Attributs : nom.
+Relations :
+Plusieurs membres (ManyToMany avec Member).
+Plusieurs projets (OneToMany avec Project).
+<hr></hr> Project
+Un projet appartient à une équipe et possède un nom.
+
+
+Attributs : aucun spécifique (le nom est une entité séparée).
+Relations :
+Appartient à une équipe (ManyToOne avec Equipe).
+Possède un nom (ManyToOne avec ProjectName).
+Possède plusieurs versions (OneToMany avec ProjectVersion).
+<hr></hr> ProjectName
+Représente le nom d’un projet.
+
+
+Attributs : nom (string).
+Relations :
+Utilisé par Project (ManyToOne).
+<hr></hr> ProjectVersion
+Représente une version d’un projet.
+
+
+Attributs : non détaillés ici.
+Relations :
+Appartient à un projet (ManyToOne avec Project).
+Peut être lié à plusieurs commits, CAB, GitRepo, Process, etc.
+<hr></hr> Commit
+Un commit représente une modification dans un projet versionné.
+
+
+Attributs : hash, message, auteur, date.
+Relations :
+Appartient à une version de projet (ManyToOne avec ProjectVersion).
+<hr></hr> CAB
+Représente un Change Advisory Board (CAB), c’est-à-dire une réunion ou un point de validation.
+
+
+Attributs : date, sujet, url.
+Relations :
+Peut être lié à une release (ManyToOne avec Release).
+Peut être lié à une version de projet (ManyToOne avec ProjectVersion).
+<hr></hr> GitRepo
+Représente un dépôt Git.
+
+
+Attributs : nom du projet, nom du repo, numéro de release, url.
+Relations :
+Peut être lié à plusieurs versions de projet (ManyToMany avec ProjectVersion).
+<hr></hr> Process
+Décrit un processus lié à un dépôt Git, un type de processus et une version de projet.
+
+
+Attributs : description.
+Relations :
+Lié à un dépôt Git (ManyToOne avec GitRepo).
+Lié à un type de processus (ManyToOne avec ProcessSection).
+Lié à une version de projet (ManyToOne avec ProjectVersion).
+<hr></hr> ProcessSection
+Décrit un type ou une section de processus.
+
+
+Attributs : titre.
+Relations :
+Utilisé par Process et GitAppProcess.
+<hr></hr> GitAppProcess
+Décrit un processus applicatif lié à un dépôt Git et à un type de processus.
+
+
+Attributs : id du repo, texte explicatif.
+Relations :
+Lié à un type de processus (ManyToOne avec ProcessSection).
+<hr></hr> Résumé des relations principales :
+
+
+Un membre peut appartenir à plusieurs équipes, une équipe a plusieurs membres.
+Une équipe a plusieurs projets, un projet appartient à une équipe.
+Un projet a plusieurs versions, une version appartient à un projet.
+Une version de projet peut avoir plusieurs commits, CAB, être liée à plusieurs dépôts Git, etc.
+Un dépôt Git peut être lié à plusieurs versions de projet.
+Un processus est lié à un dépôt Git, un type de processus et une version de projet.
+Un type de processus (ProcessSection) est utilisé pour catégoriser les processus.
+<hr></hr> Ce texte peut être donné à une autre IA pour compréhension ou génération de diagrammes.
