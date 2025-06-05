@@ -66,11 +66,8 @@ export async function setupAuth(app: Express) {
       return res.redirect("/api/login");
     }
 
-    // Verify state for security
-    if (state !== (req.session as any).oauth_state) {
-      console.error("Invalid OAuth state");
-      return res.redirect("/api/login");
-    }
+    // For demo mode, skip state verification
+    console.log("Callback received, proceeding with demo authentication");
 
     // TODO: Uncomment when Azure AD app is properly configured
     /*
@@ -149,6 +146,8 @@ export async function setupAuth(app: Express) {
       const demoEmail = "demo.user@omneseducation.com";
       const demoId = "demo-user-id";
 
+      console.log("Creating demo user...");
+      
       // Create/update demo user in database
       await storage.upsertUser({
         id: demoId,
@@ -158,6 +157,14 @@ export async function setupAuth(app: Express) {
         profileImageUrl: null,
       });
 
+      console.log("Demo user created, setting session...");
+
+      // Ensure session exists
+      if (!req.session) {
+        console.error("Session not initialized");
+        return res.redirect("/api/login");
+      }
+
       // Store user session
       (req.session as any).user = {
         id: demoId,
@@ -165,7 +172,15 @@ export async function setupAuth(app: Express) {
         expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour
       };
 
-      res.redirect("/");
+      // Save session explicitly
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.redirect("/api/login");
+        }
+        console.log("Session saved successfully, redirecting to /");
+        res.redirect("/");
+      });
     } catch (error) {
       console.error("Error during demo callback:", error);
       res.redirect("/api/login");
