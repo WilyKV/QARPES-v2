@@ -96,7 +96,11 @@ export const projectVersions = pgTable("project_versions", {
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   version: varchar("version", { length: 50 }).notNull(),
   description: text("description"),
-  status: varchar("status", { length: 50 }).notNull().default("testing"), // testing, preproduction, production
+  status: varchar("status", { length: 50 }).notNull().default("en_developpement"), 
+  // Statuts: en_cours_arb, en_developpement, a_deployer_recette, recette_en_cours, 
+  // a_deployer_preprod, preprod_en_cours, a_deployer_production, merge_git_a_faire, 
+  // annule, hotfix_a_prevoir, termine
+  releaseId: integer("release_id").references(() => releases.id, { onDelete: "set null" }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -239,6 +243,10 @@ export const projectVersionsRelations = relations(projectVersions, ({ one, many 
     fields: [projectVersions.projectId],
     references: [projects.id],
   }),
+  release: one(releases, {
+    fields: [projectVersions.releaseId],
+    references: [releases.id],
+  }),
   gitRepos: many(gitRepos),
   cabs: many(cab),
   pvs: many(projectPvs),
@@ -295,6 +303,7 @@ export const pvFilesRelations = relations(pvFiles, ({ one }) => ({
 
 export const releasesRelations = relations(releases, ({ many }) => ({
   releaseProjects: many(releaseProjects),
+  projectVersions: many(projectVersions),
 }));
 
 export const releaseProjectsRelations = relations(releaseProjects, ({ one }) => ({
