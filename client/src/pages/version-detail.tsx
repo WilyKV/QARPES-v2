@@ -728,13 +728,16 @@ export default function VersionDetail() {
       />
       
       <ProcedureModal
-        open={procedureModalOpen}
-        onOpenChange={setProcedureModalOpen}
+        isOpen={procedureModalOpen}
+        onClose={() => setProcedureModalOpen(false)}
         gitRepoId={selectedGitRepoForProcedure}
-        projectId={projectId}
-        versionId={versionId}
-        procedure={selectedProcedure}
-        procedureType={selectedProcedureType}
+        type={selectedProcedureType}
+        existingProcedure={selectedProcedure}
+        onSuccess={() => {
+          setProcedureModalOpen(false);
+          setSelectedProcedure(null);
+          setSelectedProcedureType('');
+        }}
       />
     </div>
   );
