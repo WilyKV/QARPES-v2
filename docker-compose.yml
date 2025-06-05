@@ -1,0 +1,58 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile-dev
+    container_name: qarpes-app-dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8083:8080"
+      - "5173:5173"
+      - "5555:5555"
+    depends_on:
+      - db
+    networks:
+      - qarpes-net
+    volumes:
+      - ./:/app
+      - /app/node_modules
+
+  db:
+    image: postgres:16-alpine
+    container_name: qarpes-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: qarpes
+      POSTGRES_USER: qarpes
+      POSTGRES_PASSWORD: qarpes
+    ports:
+      - "5432:5432"
+    volumes:
+      - qarpes-db-data:/var/lib/postgresql/data
+    networks:
+      - qarpes-net
+
+volumes:
+  qarpes-db-data:
+
+networks:
+  qarpes-net:
+    driver: bridge
+
+# Ajoute un service prod si besoin :
+#  app-prod:
+#    build:
+#      context: .
+#      dockerfile: .docker/Dockerfile.prod
+#    container_name: qarpes-app-prod
+#    restart: unless-stopped
+#    env_file:
+#      - .env
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      - db
+#    networks:
+#      - qarpes-net

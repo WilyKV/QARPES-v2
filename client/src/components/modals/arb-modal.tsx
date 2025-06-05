@@ -29,14 +29,41 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertArbSchema, type ArbWithDetails } from "@shared/schema";
+import { type ArbWithDetails } from "@shared/schema";
 import { STATUS_OPTIONS, ARB_TYPES, PRIORITY_OPTIONS } from "@/lib/constants";
 import { z } from "zod";
 
-const formSchema = insertArbSchema.omit({ requesterId: true }).extend({
-  dueDate: z.string().optional(),
-  budget: z.string().optional(),
-});
+const formSchema = z
+  .object({
+    title: z.string().min(1, "Titre requis"),
+    description: z.string().optional(),
+    type: z.enum(["access", "budget"]),
+    status: z.string().min(1, "Statut requis"),
+    priority: z.string().min(1, "Priorité requise"),
+    teamId: z.number().optional(),
+    projectId: z.number().optional(),
+    approverId: z.number().optional(),
+    budget: z.string().optional(),
+    dueDate: z.string().optional(),
+  })
+  .refine((data) => {
+    if (data.type === "budget") {
+      return data.budget !== undefined && data.budget !== "";
+    }
+    return true;
+  }, {
+    message: "Le budget est requis pour le type 'budget'",
+    path: ["budget"],
+  })
+  .refine((data) => {
+    if (data.type === "access") {
+      return data.teamId !== undefined || data.projectId !== undefined;
+    }
+    return true;
+  }, {
+    message: "L'équipe ou le projet est requis pour le type 'access'",
+    path: ["teamId", "projectId"],
+  });
 
 type FormData = z.infer<typeof formSchema>;
 

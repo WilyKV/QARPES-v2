@@ -1,28 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth } from "./replitAuth";
 import { createFixtures } from "./fixtures";
-import {
-  insertTeamSchema,
-  insertProjectSchema,
-  insertReleaseSchema,
-  insertArbSchema,
-  insertTeamMemberSchema,
-  insertReleaseProjectSchema,
-  insertProjectVersionSchema,
-  insertGitRepoSchema,
-  insertCommitSchema,
-  insertCabSchema,
-  insertProcedureSchema,
-  gitRepos,
-} from "@shared/schema";
-import { db } from "./db";
+import { gitRepos } from "@shared/schema";
+import { prisma } from "./db";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  await setupAuth(app);
-
   // Auth routes - Demo mode for testing
   app.get('/api/auth/user', async (req: any, res) => {
     try {
@@ -36,7 +19,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: "kevin.nicol@omneseducation.com", 
           firstName: "Kevin",
           lastName: "NICOL",
-          profileImageUrl: "https://replit.com/public/images/mark.png"
+          profileImageUrl: "https://ui-avatars.com/api/?name=Kevin+Nicol"
         };
         return res.json(demoUser);
       }
@@ -98,7 +81,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/teams', async (req, res) => {
     try {
-      const teamData = insertTeamSchema.parse(req.body);
+      const teamData = req.body;
       const team = await storage.createTeam(teamData);
       res.status(201).json(team);
     } catch (error) {
@@ -110,7 +93,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/teams/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const teamData = insertTeamSchema.partial().parse(req.body);
+      const teamData = req.body;
       const team = await storage.updateTeam(id, teamData);
       res.json(team);
     } catch (error) {
@@ -145,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/teams/:id/members', async (req, res) => {
     try {
       const teamId = parseInt(req.params.id);
-      const memberData = insertTeamMemberSchema.parse({ ...req.body, teamId });
+      const memberData = { ...req.body, teamId };
       const member = await storage.addTeamMember(memberData);
       res.status(201).json(member);
     } catch (error) {
@@ -193,7 +176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/projects', async (req, res) => {
     try {
-      const projectData = insertProjectSchema.parse(req.body);
+      const projectData = req.body;
       const project = await storage.createProject(projectData);
       res.status(201).json(project);
     } catch (error) {
@@ -205,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/projects/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const projectData = insertProjectSchema.partial().parse(req.body);
+      const projectData = req.body;
       const project = await storage.updateProject(id, projectData);
       res.json(project);
     } catch (error) {
@@ -252,19 +235,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/releases', async (req, res) => {
     try {
-      const releaseData = insertReleaseSchema.parse(req.body);
+      const releaseData = req.body;
       const release = await storage.createRelease(releaseData);
       res.status(201).json(release);
     } catch (error) {
       console.error("Error creating release:", error);
-      res.status(400).json({ message: "Failed to create release" });
+      let errorMessage: string;
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "object" && error !== null && "message" in error && typeof (error as any).message === "string") {
+        errorMessage = (error as any).message;
+      } else {
+        errorMessage = String(error);
+      }
+      res.status(400).json({ message: "Failed to create release : " + errorMessage });
     }
   });
 
   app.put('/api/releases/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const releaseData = insertReleaseSchema.partial().parse(req.body);
+      const releaseData = req.body;
       const release = await storage.updateRelease(id, releaseData);
       res.json(release);
     } catch (error) {
@@ -299,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/releases/:releaseId/projects', async (req, res) => {
     try {
       const releaseId = parseInt(req.params.releaseId);
-      const releaseProjectData = insertReleaseProjectSchema.parse({ ...req.body, releaseId });
+      const releaseProjectData = { ...req.body, releaseId };
       const releaseProject = await storage.addProjectToRelease(releaseProjectData);
       res.status(201).json(releaseProject);
     } catch (error) {
@@ -331,7 +322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If createRelease is provided, create a new release first
       if (createRelease) {
-        const releaseData = insertReleaseSchema.parse(createRelease);
+        const releaseData = req.body;
         const newRelease = await storage.createRelease(releaseData);
         targetReleaseId = newRelease.id;
       }
@@ -444,8 +435,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/arb', async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const arbData = insertArbSchema.parse({ ...req.body, requesterId: userId });
+      const userId = req.user?.claims?.sub || req.body.requesterId;
+      const arbData = { ...req.body, requesterId: userId };
       const arbItem = await storage.createArb(arbData);
       res.status(201).json(arbItem);
     } catch (error) {
@@ -457,300 +448,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/arb/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const arbData = insertArbSchema.partial().parse(req.body);
+      const arbData = req.body;
       const arbItem = await storage.updateArb(id, arbData);
       res.json(arbItem);
     } catch (error) {
       console.error("Error updating ARB:", error);
       res.status(400).json({ message: "Failed to update ARB" });
-    }
-  });
-
-  app.delete('/api/arb/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteArb(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting ARB:", error);
-      res.status(500).json({ message: "Failed to delete ARB" });
-    }
-  });
-
-  // Project Version routes
-  app.get('/api/projects/:projectId/versions', async (req, res) => {
-    try {
-      const projectId = parseInt(req.params.projectId);
-      const versions = await storage.getProjectVersions(projectId);
-      res.json(versions);
-    } catch (error) {
-      console.error("Error fetching project versions:", error);
-      res.status(500).json({ message: "Failed to fetch project versions" });
-    }
-  });
-
-  app.get('/api/project-versions/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const version = await storage.getProjectVersion(id);
-      if (!version) {
-        return res.status(404).json({ message: "Project version not found" });
-      }
-      res.json(version);
-    } catch (error) {
-      console.error("Error fetching project version:", error);
-      res.status(500).json({ message: "Failed to fetch project version" });
-    }
-  });
-
-  app.post('/api/project-versions', async (req, res) => {
-    try {
-      const versionData = insertProjectVersionSchema.parse(req.body);
-      const version = await storage.createProjectVersion(versionData);
-      res.status(201).json(version);
-    } catch (error) {
-      console.error("Error creating project version:", error);
-      res.status(400).json({ message: "Failed to create project version" });
-    }
-  });
-
-  // Git Repository routes
-  app.get('/api/project-versions/:versionId/git-repos', async (req, res) => {
-    try {
-      const versionId = parseInt(req.params.versionId);
-      const gitRepos = await storage.getGitRepos(versionId);
-      res.json(gitRepos);
-    } catch (error) {
-      console.error("Error fetching git repositories:", error);
-      res.status(500).json({ message: "Failed to fetch git repositories" });
-    }
-  });
-
-  app.post('/api/git-repos', async (req, res) => {
-    try {
-      const gitRepoData = insertGitRepoSchema.parse(req.body);
-      const gitRepo = await storage.createGitRepo(gitRepoData);
-      res.status(201).json(gitRepo);
-    } catch (error) {
-      console.error("Error creating git repository:", error);
-      res.status(400).json({ message: "Failed to create git repository" });
-    }
-  });
-
-  // Commit routes
-  app.get('/api/git-repos/:repoId/commits', async (req, res) => {
-    try {
-      const repoId = parseInt(req.params.repoId);
-      const commits = await storage.getCommits(repoId);
-      res.json(commits);
-    } catch (error) {
-      console.error("Error fetching commits:", error);
-      res.status(500).json({ message: "Failed to fetch commits" });
-    }
-  });
-
-  app.post('/api/commits', async (req, res) => {
-    try {
-      const commitData = insertCommitSchema.parse(req.body);
-      const commit = await storage.createCommit(commitData);
-      res.status(201).json(commit);
-    } catch (error) {
-      console.error("Error creating commit:", error);
-      res.status(400).json({ message: "Failed to create commit" });
-    }
-  });
-
-  // CAB routes
-  app.get('/api/project-versions/:versionId/cabs', async (req, res) => {
-    try {
-      const versionId = parseInt(req.params.versionId);
-      const cabs = await storage.getCabs(versionId);
-      res.json(cabs);
-    } catch (error) {
-      console.error("Error fetching CAB tickets:", error);
-      res.status(500).json({ message: "Failed to fetch CAB tickets" });
-    }
-  });
-
-  app.post('/api/cabs', async (req, res) => {
-    try {
-      const cabData = insertCabSchema.parse(req.body);
-      const cab = await storage.createCab(cabData);
-      res.status(201).json(cab);
-    } catch (error) {
-      console.error("Error creating CAB ticket:", error);
-      res.status(400).json({ message: "Failed to create CAB ticket" });
-    }
-  });
-
-  // Procedure routes (4 types organized by Git repository)
-  app.get('/api/git-repos/:repoId/procedures', async (req, res) => {
-    try {
-      const repoId = parseInt(req.params.repoId);
-      const procedures = await storage.getProcedures(repoId);
-      res.json(procedures);
-    } catch (error) {
-      console.error("Error fetching procedures:", error);
-      res.status(500).json({ message: "Failed to fetch procedures" });
-    }
-  });
-
-  app.get('/api/git-repos/:repoId/procedures/:type', async (req, res) => {
-    try {
-      const repoId = parseInt(req.params.repoId);
-      const type = req.params.type;
-      const procedures = await storage.getProceduresByType(repoId, type);
-      res.json(procedures);
-    } catch (error) {
-      console.error("Error fetching procedures by type:", error);
-      res.status(500).json({ message: "Failed to fetch procedures by type" });
-    }
-  });
-
-  app.post('/api/procedures', async (req, res) => {
-    try {
-      const procedureData = insertProcedureSchema.parse(req.body);
-      const procedure = await storage.createProcedure(procedureData);
-      res.status(201).json(procedure);
-    } catch (error) {
-      console.error("Error creating procedure:", error);
-      res.status(400).json({ message: "Failed to create procedure" });
-    }
-  });
-
-  app.patch('/api/procedures/:id/toggle', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const procedure = await storage.toggleProcedureCompletion(id);
-      res.json(procedure);
-    } catch (error) {
-      console.error("Error toggling procedure completion:", error);
-      res.status(500).json({ message: "Failed to toggle procedure completion" });
-    }
-  });
-
-  // Git Repository CRUD operations
-  app.get('/api/git-repos/all', async (req, res) => {
-    try {
-      // Récupérer tous les repositories Git distincts (pas spécifiques à une version)
-      const allRepos = await db.select({
-        id: gitRepos.id,
-        name: gitRepos.name,
-        url: gitRepos.url,
-      })
-      .from(gitRepos)
-      .groupBy(gitRepos.name, gitRepos.url, gitRepos.id);
-      
-      res.json(allRepos);
-    } catch (error) {
-      console.error("Error fetching all git repos:", error);
-      res.status(500).json({ message: "Failed to fetch git repos" });
-    }
-  });
-
-  // Commits for Git repositories
-  app.post('/api/git-repos/:gitRepoId/commits', async (req, res) => {
-    try {
-      const gitRepoId = parseInt(req.params.gitRepoId);
-      const commitData = insertCommitSchema.parse({ ...req.body, gitRepoId });
-      const commit = await storage.createCommit(commitData);
-      res.status(201).json(commit);
-    } catch (error) {
-      console.error("Error creating commit:", error);
-      res.status(400).json({ message: "Failed to create commit" });
-    }
-  });
-
-  app.patch('/api/commits/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const commitData = insertCommitSchema.partial().parse(req.body);
-      const commit = await storage.updateCommit(id, commitData);
-      res.json(commit);
-    } catch (error) {
-      console.error("Error updating commit:", error);
-      res.status(400).json({ message: "Failed to update commit" });
-    }
-  });
-
-  app.delete('/api/commits/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteCommit(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting commit:", error);
-      res.status(500).json({ message: "Failed to delete commit" });
-    }
-  });
-
-  // Procedures for Git repositories
-  app.post('/api/git-repos/:gitRepoId/procedures', async (req, res) => {
-    try {
-      const gitRepoId = parseInt(req.params.gitRepoId);
-      const procedureData = insertProcedureSchema.parse({ ...req.body, gitRepoId });
-      const procedure = await storage.createProcedure(procedureData);
-      res.status(201).json(procedure);
-    } catch (error) {
-      console.error("Error creating procedure:", error);
-      res.status(400).json({ message: "Failed to create procedure" });
-    }
-  });
-
-  app.patch('/api/procedures/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const procedureData = insertProcedureSchema.partial().parse(req.body);
-      const procedure = await storage.updateProcedure(id, procedureData);
-      res.json(procedure);
-    } catch (error) {
-      console.error("Error updating procedure:", error);
-      res.status(400).json({ message: "Failed to update procedure" });
-    }
-  });
-
-  app.delete('/api/procedures/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteProcedure(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting procedure:", error);
-      res.status(500).json({ message: "Failed to delete procedure" });
-    }
-  });
-
-  app.post('/api/project-versions/:id/git-repos', async (req, res) => {
-    try {
-      const projectVersionId = parseInt(req.params.id);
-      const gitRepoData = { ...req.body, projectVersionId };
-      const gitRepo = await storage.createGitRepo(gitRepoData);
-      res.status(201).json(gitRepo);
-    } catch (error) {
-      console.error("Error creating git repo:", error);
-      res.status(400).json({ message: "Failed to create git repo" });
-    }
-  });
-
-  app.patch('/api/git-repos/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const gitRepo = await storage.updateGitRepo(id, req.body);
-      res.json(gitRepo);
-    } catch (error) {
-      console.error("Error updating git repo:", error);
-      res.status(400).json({ message: "Failed to update git repo" });
-    }
-  });
-
-  app.delete('/api/git-repos/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteGitRepo(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting git repo:", error);
-      res.status(500).json({ message: "Failed to delete git repo" });
     }
   });
 

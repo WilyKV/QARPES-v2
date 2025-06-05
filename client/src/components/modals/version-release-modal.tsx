@@ -32,13 +32,16 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Link as LinkIcon } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertReleaseSchema, type ReleaseWithProjects } from "@shared/schema";
 import { z } from "zod";
+import { type ReleaseWithProjects } from "@shared/schema";
+import { STATUS_OPTIONS } from "@/lib/constants";
 
-const releaseFormSchema = insertReleaseSchema.extend({
-  recetteDate: z.string().optional(),
-  preprodDate: z.string().optional(), 
-  productionDate: z.string().optional(),
+const releaseFormSchema = z.object({
+  name: z.string().optional(),
+  status: z.enum(["0", "1", "2", "3", "4", "5", "Annulé"]),
+  recetteDate: z.string().min(1, "La date de recette est requise"),
+  preprodDate: z.string().min(1, "La date de préprod est requise"),
+  productionDate: z.string().min(1, "La date de production est requise"),
 });
 
 const associationSchema = z.object({
@@ -85,8 +88,7 @@ export function VersionReleaseModal({
       releaseId: undefined,
       createRelease: {
         name: "",
-        description: "",
-        status: "testing",
+        status: "0",
         recetteDate: "",
         preprodDate: "",
         productionDate: "",
@@ -232,28 +234,9 @@ export function VersionReleaseModal({
                   name="createRelease.name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nom de la release</FormLabel>
+                      <FormLabel>Nom de la release (optionnel)</FormLabel>
                       <FormControl>
                         <Input placeholder="Nom de la nouvelle release" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="createRelease.description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          placeholder="Description de la release..." 
-                          rows={3} 
-                          {...field} 
-                          value={field.value || ""} 
-                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -273,9 +256,11 @@ export function VersionReleaseModal({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="testing">Tests</SelectItem>
-                          <SelectItem value="preproduction">Préprod</SelectItem>
-                          <SelectItem value="production">Production</SelectItem>
+                          {STATUS_OPTIONS.release.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />

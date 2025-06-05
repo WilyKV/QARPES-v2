@@ -29,13 +29,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertReleaseSchema, type ReleaseWithProjects } from "@shared/schema";
 import { z } from "zod";
+import { STATUS_OPTIONS } from "@/lib/constants";
 
-const formSchema = insertReleaseSchema.extend({
-  recetteDate: z.string().optional(),
-  preprodDate: z.string().optional(), 
-  productionDate: z.string().optional(),
+const formSchema = z.object({
+  name: z.string().optional(),
+  status: z.enum(["0", "1", "2", "3", "4", "5", "Annulé"]),
+  recetteDate: z.string().min(1, "La date de recette est requise"),
+  preprodDate: z.string().min(1, "La date de préprod est requise"),
+  productionDate: z.string().min(1, "La date de production est requise"),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -55,8 +57,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      description: "",
-      status: "testing",
+      status: "0",
       recetteDate: "",
       preprodDate: "",
       productionDate: "",
@@ -67,7 +68,6 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
     if (release) {
       form.reset({
         name: release.name,
-        description: release.description || "",
         status: release.status,
         recetteDate: release.recetteDate || "",
         preprodDate: release.preprodDate || "",
@@ -76,8 +76,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
     } else {
       form.reset({
         name: "",
-        description: "",
-        status: "testing",
+        status: "0",
         recetteDate: "",
         preprodDate: "",
         productionDate: "",
@@ -135,7 +134,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl w-full">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Modifier la release" : "Créer une nouvelle release"}
@@ -147,117 +146,102 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
           )}
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nom</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Nom de la release" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Description de la release..." 
-                      rows={3} 
-                      {...field} 
-                      value={field.value || ""} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Ligne nom + statut */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nom (optionnel)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Nom de la release" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="w-full md:w-60">
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Statut</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionnez un statut" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {STATUS_OPTIONS.release.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Statut</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionnez un statut" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="testing">Tests</SelectItem>
-                      <SelectItem value="preproduction">Préprod</SelectItem>
-                      <SelectItem value="production">Production</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Ligne des 3 dates */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <FormField
+                  control={form.control}
+                  name="recetteDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date de mise en recette</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="flex-1">
+                <FormField
+                  control={form.control}
+                  name="preprodDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date de mise en préprod</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="flex-1">
+                <FormField
+                  control={form.control}
+                  name="productionDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date de mise en production</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
-            <FormField
-              control={form.control}
-              name="recetteDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date de mise en recette</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="date" 
-                      {...field} 
-                      value={field.value || ""} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="preprodDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date de mise en préprod</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="date" 
-                      {...field} 
-                      value={field.value || ""} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="productionDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date de mise en production</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="date" 
-                      {...field} 
-                      value={field.value || ""} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
+            {/* Boutons */}
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Annuler

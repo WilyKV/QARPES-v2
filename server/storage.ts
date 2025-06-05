@@ -51,11 +51,10 @@ import {
   type ReleaseWithProjects,
   type ArbWithDetails,
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, desc, and, ilike, sql, count } from "drizzle-orm";
+import { prisma } from "./db";
 
 export interface IStorage {
-  // User operations (required for Replit Auth)
+  // User operations
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   getUsers(): Promise<User[]>;
@@ -125,7 +124,7 @@ export interface IStorage {
   toggleProcedureCompletion(id: number): Promise<Procedure>;
   
   // Release procedures aggregation
-  getReleaseProcedures(releaseId: number): Promise<ReleaseProceduresAggregated>;
+  // TODO: Réimplémenter en Prisma si besoin
   
   // ARB operations
   getArbs(): Promise<ArbWithDetails[]>;
@@ -137,8 +136,8 @@ export interface IStorage {
   // PV operations
   getProjectPvs(projectVersionId: number): Promise<(ProjectPv & { files: PvFile[] })[]>;
   getProjectPv(id: number): Promise<(ProjectPv & { files: PvFile[] }) | undefined>;
-  createProjectPv(pv: InsertProjectPv): Promise<ProjectPv>;
-  updateProjectPv(id: number, pv: Partial<InsertProjectPv>): Promise<ProjectPv>;
+  createProjectPv(pvData: InsertProjectPv): Promise<ProjectPv>;
+  updateProjectPv(id: number, pvData: Partial<InsertProjectPv>): Promise<ProjectPv>;
   deleteProjectPv(id: number): Promise<void>;
   
   // PV File operations
@@ -159,460 +158,284 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+    return prisma.user.findUnique({ where: { id } }) || undefined;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
+    return prisma.user.upsert({
+      where: { id: userData.id },
+      update: { ...userData, updatedAt: new Date() },
+      create: userData,
+    });
   }
 
   async getUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(desc(users.createdAt));
+    return prisma.user.findMany({ orderBy: { createdAt: "desc" } });
   }
 
   async createUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .returning();
-    return user;
+    return prisma.user.create({ data: userData });
   }
 
   // Team operations
   async getTeams(): Promise<TeamWithMembers[]> {
-    const teamsWithDetails = await db
-      .select({
-        team: teams,
-        leader: users,
-        memberCount: count(teamMembers.id),
-      })
-      .from(teams)
-      .leftJoin(users, eq(teams.leaderId, users.id))
-      .leftJoin(teamMembers, eq(teams.id, teamMembers.teamId))
-      .groupBy(teams.id, users.id)
-      .orderBy(desc(teams.createdAt));
-
-    return teamsWithDetails.map((row) => ({
-      ...row.team,
-      leader: row.leader || undefined,
-      _count: { members: row.memberCount, projects: 0 },
-    }));
+    const teams = await prisma.team.findMany({
+      include: {
+        leader: true,
+        members: { include: { user: true } },
+        _count: { select: { members: true, projects: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return teams;
   }
 
   async getTeam(id: number): Promise<TeamWithMembers | undefined> {
-    const [team] = await db
-      .select()
-      .from(teams)
-      .leftJoin(users, eq(teams.leaderId, users.id))
-      .where(eq(teams.id, id));
-
-    if (!team) return undefined;
-
-    const members = await db
-      .select({
-        teamMember: teamMembers,
-        user: users,
-      })
-      .from(teamMembers)
-      .innerJoin(users, eq(teamMembers.userId, users.id))
-      .where(eq(teamMembers.teamId, id));
-
-    return {
-      ...team.teams,
-      leader: team.users || undefined,
-      members: members.map((m) => ({ ...m.teamMember, user: m.user })),
-    };
+    const team = await prisma.team.findUnique({
+      where: { id },
+      include: {
+        leader: true,
+        members: { include: { user: true } },
+      },
+    });
+    return team || undefined;
   }
 
   async createTeam(team: InsertTeam): Promise<Team> {
-    const [newTeam] = await db.insert(teams).values(team).returning();
-    return newTeam;
+    return prisma.team.create({ data: team });
   }
 
   async updateTeam(id: number, team: Partial<InsertTeam>): Promise<Team> {
-    const [updatedTeam] = await db
-      .update(teams)
-      .set({ ...team, updatedAt: new Date() })
-      .where(eq(teams.id, id))
-      .returning();
-    return updatedTeam;
+    return prisma.team.update({ where: { id }, data: { ...team, updatedAt: new Date() } });
   }
 
   async deleteTeam(id: number): Promise<void> {
-    await db.delete(teams).where(eq(teams.id, id));
+    await prisma.team.delete({ where: { id } });
   }
 
   // Team member operations
   async addTeamMember(member: InsertTeamMember): Promise<TeamMember> {
-    const [newMember] = await db.insert(teamMembers).values(member).returning();
-    return newMember;
+    return prisma.teamMember.create({ data: member });
   }
 
   async removeTeamMember(teamId: number, userId: string): Promise<void> {
-    await db
-      .delete(teamMembers)
-      .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, userId)));
+    await prisma.teamMember.delete({ where: { teamId_userId: { teamId, userId } } });
   }
 
   async getTeamMembers(teamId: number): Promise<(TeamMember & { user: User })[]> {
-    const members = await db
-      .select({
-        teamMember: teamMembers,
-        user: users,
-      })
-      .from(teamMembers)
-      .innerJoin(users, eq(teamMembers.userId, users.id))
-      .where(eq(teamMembers.teamId, teamId));
-
-    return members.map((m) => ({ ...m.teamMember, user: m.user }));
+    const members = await prisma.teamMember.findMany({
+      where: { teamId },
+      include: { user: true },
+    });
+    return members;
   }
 
   // Project operations
   async getProjects(): Promise<ProjectWithTeam[]> {
-    const projectsWithTeam = await db
-      .select({
-        project: projects,
-        team: teams,
-      })
-      .from(projects)
-      .leftJoin(teams, eq(projects.teamId, teams.id))
-      .orderBy(desc(projects.createdAt));
-
-    return projectsWithTeam.map((row) => ({
-      ...row.project,
-      team: row.team || undefined,
-    }));
+    const projects = await prisma.project.findMany({
+      include: { team: true },
+      orderBy: { createdAt: "desc" },
+    });
+    return projects;
   }
 
   async getProject(id: number): Promise<ProjectWithTeam | undefined> {
-    const [project] = await db
-      .select({
-        project: projects,
-        team: teams,
-      })
-      .from(projects)
-      .leftJoin(teams, eq(projects.teamId, teams.id))
-      .where(eq(projects.id, id));
-
-    if (!project) return undefined;
-
-    return {
-      ...project.project,
-      team: project.team || undefined,
-    };
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: { team: true },
+    });
+    return project || undefined;
   }
 
   async createProject(project: InsertProject): Promise<Project> {
-    const [newProject] = await db.insert(projects).values(project).returning();
-    return newProject;
+    return prisma.project.create({ data: project });
   }
 
   async updateProject(id: number, project: Partial<InsertProject>): Promise<Project> {
-    const [updatedProject] = await db
-      .update(projects)
-      .set({ ...project, updatedAt: new Date() })
-      .where(eq(projects.id, id))
-      .returning();
-    return updatedProject;
+    return prisma.project.update({ where: { id }, data: { ...project, updatedAt: new Date() } });
   }
 
   async deleteProject(id: number): Promise<void> {
-    await db.delete(projects).where(eq(projects.id, id));
+    await prisma.project.delete({ where: { id } });
   }
 
   // Release operations
   async getReleases(): Promise<ReleaseWithProjects[]> {
-    const releasesData = await db
-      .select()
-      .from(releases)
-      .orderBy(desc(releases.createdAt));
-
-    const releasesWithProjects = await Promise.all(
-      releasesData.map(async (release) => {
-        const releaseProjectsData = await db
-          .select({
-            releaseProject: releaseProjects,
-            project: projects,
-          })
-          .from(releaseProjects)
-          .innerJoin(projects, eq(releaseProjects.projectId, projects.id))
-          .where(eq(releaseProjects.releaseId, release.id));
-
-        return {
-          ...release,
-          releaseProjects: releaseProjectsData.map((rp) => ({
-            ...rp.releaseProject,
-            project: rp.project,
-          })),
-        };
-      })
-    );
-
-    return releasesWithProjects;
+    return prisma.release.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        releaseProjects: { include: { project: true } },
+      },
+    });
   }
 
   async getRelease(id: number): Promise<ReleaseWithProjects | undefined> {
-    const [release] = await db
-      .select()
-      .from(releases)
-      .where(eq(releases.id, id));
-
-    if (!release) return undefined;
-
-    const releaseProjectsData = await db
-      .select({
-        releaseProject: releaseProjects,
-        project: projects,
-      })
-      .from(releaseProjects)
-      .innerJoin(projects, eq(releaseProjects.projectId, projects.id))
-      .where(eq(releaseProjects.releaseId, id));
-
-    return {
-      ...release,
-      releaseProjects: releaseProjectsData.map((rp) => ({
-        ...rp.releaseProject,
-        project: rp.project,
-      })),
-    };
+    return prisma.release.findUnique({
+      where: { id },
+      include: {
+        releaseProjects: { include: { project: true } },
+      },
+    }) || undefined;
   }
 
   async createRelease(release: InsertRelease): Promise<Release> {
-    // Generate automatic release ID in YYYYMM-NN format
+    // Génération de releaseId automatique (YYYYMM-NN)
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-    
-    // Find the latest release for this month
-    const latestRelease = await db
-      .select()
-      .from(releases)
-      .where(sql`release_id LIKE ${yearMonth + '-%'}`)
-      .orderBy(desc(releases.releaseId))
-      .limit(1);
-    
+    const last = await prisma.release.findFirst({
+      where: { releaseId: { startsWith: yearMonth } },
+      orderBy: { releaseId: 'desc' },
+    });
     let nextNumber = 1;
-    if (latestRelease.length > 0) {
-      const lastReleaseId = latestRelease[0].releaseId;
-      const lastNumber = parseInt(lastReleaseId.split('-')[1]);
+    if (last && last.releaseId) {
+      const lastNumber = parseInt(last.releaseId.split('-')[1]);
       nextNumber = lastNumber + 1;
     }
-    
     const releaseId = `${yearMonth}-${nextNumber.toString().padStart(2, '0')}`;
-    
-    const [newRelease] = await db.insert(releases).values({
-      ...release,
-      releaseId
-    }).returning();
-    return newRelease;
+
+    // Correction : parser les dates si elles sont au format YYYY-MM-DD
+    const parseDate = (d: any) => {
+      if (!d) return undefined;
+      if (d instanceof Date) return d;
+      if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        return new Date(d + 'T00:00:00.000Z');
+      }
+      return new Date(d);
+    };
+
+    return prisma.release.create({
+      data: {
+        ...release,
+        recetteDate: parseDate(release.recetteDate),
+        preprodDate: parseDate(release.preprodDate),
+        productionDate: parseDate(release.productionDate),
+        releaseId,
+      },
+    });
   }
 
   async updateRelease(id: number, release: Partial<InsertRelease>): Promise<Release> {
-    const [updatedRelease] = await db
-      .update(releases)
-      .set({ ...release, updatedAt: new Date() })
-      .where(eq(releases.id, id))
-      .returning();
-    return updatedRelease;
+    // Correction : parser les dates si elles sont au format YYYY-MM-DD
+    const parseDate = (d: any) => {
+      if (!d) return undefined;
+      if (d instanceof Date) return d;
+      if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        return new Date(d + 'T00:00:00.000Z');
+      }
+      return new Date(d);
+    };
+    return prisma.release.update({
+      where: { id },
+      data: {
+        ...release,
+        recetteDate: parseDate(release.recetteDate),
+        preprodDate: parseDate(release.preprodDate),
+        productionDate: parseDate(release.productionDate),
+        updatedAt: new Date(),
+      },
+    });
   }
 
   async deleteRelease(id: number): Promise<void> {
-    await db.delete(releases).where(eq(releases.id, id));
+    await prisma.release.delete({ where: { id } });
   }
 
   // Release-Project operations
   async addProjectToRelease(releaseProject: InsertReleaseProject): Promise<ReleaseProject> {
-    const [newReleaseProject] = await db
-      .insert(releaseProjects)
-      .values(releaseProject)
-      .returning();
-    return newReleaseProject;
+    return prisma.releaseProject.create({ data: releaseProject });
   }
 
   async removeProjectFromRelease(releaseId: number, projectId: number): Promise<void> {
-    await db
-      .delete(releaseProjects)
-      .where(
-        and(
-          eq(releaseProjects.releaseId, releaseId),
-          eq(releaseProjects.projectId, projectId)
-        )
-      );
+    await prisma.releaseProject.delete({ where: { releaseId_projectId: { releaseId, projectId } } });
   }
 
   // ARB operations
   async getArbs(): Promise<ArbWithDetails[]> {
-    const arbsWithDetails = await db
-      .select({
-        arb: arb,
-        requester: {
-          id: users.id,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          profileImageUrl: users.profileImageUrl,
-          role: users.role,
-        },
-        approver: sql`approver_user.*`,
-        team: teams,
-        project: projects,
-      })
-      .from(arb)
-      .innerJoin(users, eq(arb.requesterId, users.id))
-      .leftJoin(sql`users as approver_user`, sql`arb.approver_id = approver_user.id`)
-      .leftJoin(teams, eq(arb.teamId, teams.id))
-      .leftJoin(projects, eq(arb.projectId, projects.id))
-      .orderBy(desc(arb.createdAt));
-
-    return arbsWithDetails.map((row) => ({
-      ...row.arb,
-      requester: row.requester as User,
-      approver: row.approver as User | undefined,
-      team: row.team || undefined,
-      project: row.project || undefined,
-    }));
+    return prisma.arb.findMany({
+      include: {
+        requester: true,
+        approver: true,
+        team: true,
+        project: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
   }
 
   async getArb(id: number): Promise<ArbWithDetails | undefined> {
-    const [arbWithDetails] = await db
-      .select({
-        arb: arb,
-        requester: {
-          id: users.id,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          profileImageUrl: users.profileImageUrl,
-          role: users.role,
-        },
-        approver: sql`approver_user.*`,
-        team: teams,
-        project: projects,
-      })
-      .from(arb)
-      .innerJoin(users, eq(arb.requesterId, users.id))
-      .leftJoin(sql`users as approver_user`, sql`arb.approver_id = approver_user.id`)
-      .leftJoin(teams, eq(arb.teamId, teams.id))
-      .leftJoin(projects, eq(arb.projectId, projects.id))
-      .where(eq(arb.id, id));
-
-    if (!arbWithDetails) return undefined;
-
-    return {
-      ...arbWithDetails.arb,
-      requester: arbWithDetails.requester as User,
-      approver: arbWithDetails.approver as User | undefined,
-      team: arbWithDetails.team || undefined,
-      project: arbWithDetails.project || undefined,
-    };
+    return prisma.arb.findUnique({
+      where: { id },
+      include: {
+        requester: true,
+        approver: true,
+        team: true,
+        project: true,
+      },
+    }) || undefined;
   }
 
   async createArb(arbData: InsertArb): Promise<Arb> {
-    const [newArb] = await db.insert(arb).values(arbData).returning();
-    return newArb;
+    return prisma.arb.create({ data: arbData });
   }
 
   async updateArb(id: number, arbData: Partial<InsertArb>): Promise<Arb> {
-    const updateData = { ...arbData, updatedAt: new Date() };
-    
-    const [updatedArb] = await db
-      .update(arb)
-      .set(updateData)
-      .where(eq(arb.id, id))
-      .returning();
-    return updatedArb;
+    return prisma.arb.update({ where: { id }, data: { ...arbData, updatedAt: new Date() } });
   }
 
   async deleteArb(id: number): Promise<void> {
-    await db.delete(arb).where(eq(arb.id, id));
+    await prisma.arb.delete({ where: { id } });
   }
 
   // Project Version operations
   async getProjectVersions(projectId: number): Promise<ProjectVersionWithDetails[]> {
-    const versions = await db
-      .select()
-      .from(projectVersions)
-      .where(eq(projectVersions.projectId, projectId))
-      .orderBy(desc(projectVersions.createdAt));
-
-    const versionsWithDetails = await Promise.all(
-      versions.map(async (version) => {
-        const gitReposData = await this.getGitRepos(version.id);
-        const cabsData = await this.getCabs(version.id);
-        
-        return {
-          ...version,
-          gitRepos: gitReposData,
-          cabs: cabsData,
-        };
-      })
-    );
-
-    return versionsWithDetails;
+    const versions = await prisma.projectVersion.findMany({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        gitRepos: {
+          include: {
+            commits: true,
+            procedures: true,
+          },
+        },
+        cabs: true,
+      },
+    });
+    // Adapter le format si besoin (ex: mapping pour ProjectVersionWithDetails)
+    return versions;
   }
 
   async getProjectVersion(id: number): Promise<ProjectVersionWithDetails | undefined> {
-    const [version] = await db
-      .select()
-      .from(projectVersions)
-      .where(eq(projectVersions.id, id));
-
-    if (!version) return undefined;
-
-    const gitReposData = await this.getGitRepos(version.id);
-    const cabsData = await this.getCabs(version.id);
-
-    return {
-      ...version,
-      gitRepos: gitReposData,
-      cabs: cabsData,
-    };
+    return prisma.projectVersion.findUnique({
+      where: { id },
+      include: {
+        gitRepos: {
+          include: {
+            commits: true,
+            procedures: true,
+          },
+        },
+        cabs: true,
+      },
+    }) || undefined;
   }
 
   async createProjectVersion(version: InsertProjectVersion): Promise<ProjectVersion> {
-    const [newVersion] = await db.insert(projectVersions).values(version).returning();
-    
-    // Update project status automatically based on version status
+    const newVersion = await prisma.projectVersion.create({ data: version });
     await this.updateProjectStatusFromVersions(newVersion.projectId);
-    
     return newVersion;
   }
 
   async updateProjectVersion(id: number, version: Partial<InsertProjectVersion>): Promise<ProjectVersion> {
-    const [updatedVersion] = await db
-      .update(projectVersions)
-      .set({ ...version, updatedAt: new Date() })
-      .where(eq(projectVersions.id, id))
-      .returning();
-    
-    // Update project status automatically based on version status
+    const updatedVersion = await prisma.projectVersion.update({ where: { id }, data: { ...version, updatedAt: new Date() } });
     await this.updateProjectStatusFromVersions(updatedVersion.projectId);
-    
     return updatedVersion;
   }
 
-  // Update project status based on highest version status (never downgrade)
   private async updateProjectStatusFromVersions(projectId: number): Promise<void> {
-    const versions = await db
-      .select()
-      .from(projectVersions)
-      .where(eq(projectVersions.projectId, projectId));
-
+    const versions = await prisma.projectVersion.findMany({ where: { projectId } });
     if (!versions.length) return;
-
-    // Status hierarchy (higher numbers are more advanced)
-    const statusHierarchy = {
+    const statusHierarchy: Record<string, number> = {
       'en_developpement': 1,
       'en_cours_arb': 2,
       'a_deployer_recette': 3,
@@ -623,18 +446,14 @@ export class DatabaseStorage implements IStorage {
       'merge_git_a_faire': 8,
       'termine': 9,
       'annule': 0,
-      'hotfix_a_prevoir': 5, // Same level as preprod
+      'hotfix_a_prevoir': 5,
     };
-
-    // Find the highest status among all versions
-    const highestVersionStatus = versions.reduce((highest, version) => {
-      const currentLevel = statusHierarchy[version.status as keyof typeof statusHierarchy] || 0;
-      const highestLevel = statusHierarchy[highest as keyof typeof statusHierarchy] || 0;
+    const highestVersionStatus = versions.reduce((highest: string, version: { status: string }) => {
+      const currentLevel = statusHierarchy[version.status] || 0;
+      const highestLevel = statusHierarchy[highest] || 0;
       return currentLevel > highestLevel ? version.status : highest;
     }, 'en_developpement');
-
-    // Map version status to project status
-    const versionToProjectStatus = {
+    const versionToProjectStatus: Record<string, string> = {
       'en_developpement': 'development',
       'en_cours_arb': 'development',
       'a_deployer_recette': 'testing',
@@ -647,323 +466,168 @@ export class DatabaseStorage implements IStorage {
       'annule': 'development',
       'hotfix_a_prevoir': 'preproduction',
     };
-
-    const newProjectStatus = versionToProjectStatus[highestVersionStatus as keyof typeof versionToProjectStatus] || 'development';
-
-    // Get current project status to ensure we never downgrade
-    const [currentProject] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId));
-
+    const newProjectStatus = versionToProjectStatus[highestVersionStatus] || 'development';
+    const currentProject = await prisma.project.findUnique({ where: { id: projectId } });
     if (!currentProject) return;
-
-    const projectStatusHierarchy = {
+    const projectStatusHierarchy: Record<string, number> = {
       'development': 1,
       'testing': 2,
       'preproduction': 3,
       'production': 4,
     };
-
-    const currentLevel = projectStatusHierarchy[currentProject.status as keyof typeof projectStatusHierarchy] || 0;
-    const newLevel = projectStatusHierarchy[newProjectStatus as keyof typeof projectStatusHierarchy] || 0;
-
-    // Only update if new status is higher than current
+    const currentLevel = projectStatusHierarchy[currentProject.status] || 0;
+    const newLevel = projectStatusHierarchy[newProjectStatus] || 0;
     if (newLevel > currentLevel) {
-      await db
-        .update(projects)
-        .set({ status: newProjectStatus, updatedAt: new Date() })
-        .where(eq(projects.id, projectId));
+      await prisma.project.update({ where: { id: projectId }, data: { status: newProjectStatus, updatedAt: new Date() } });
     }
   }
 
   async deleteProjectVersion(id: number): Promise<void> {
-    await db.delete(projectVersions).where(eq(projectVersions.id, id));
+    await prisma.projectVersion.delete({ where: { id } });
   }
 
   // Git Repository operations
   async getGitRepos(projectVersionId: number): Promise<GitRepoWithDetails[]> {
-    const repos = await db
-      .select()
-      .from(gitRepos)
-      .where(eq(gitRepos.projectVersionId, projectVersionId));
-
-    const reposWithDetails = await Promise.all(
-      repos.map(async (repo) => {
-        const commitsData = await this.getCommits(repo.id);
-        const proceduresData = await this.getProcedures(repo.id);
-        
-        return {
-          ...repo,
-          commits: commitsData,
-          proceduresByType: proceduresData,
-        };
-      })
-    );
-
-    return reposWithDetails;
+    return prisma.gitRepo.findMany({
+      where: { projectVersionId },
+      include: {
+        commits: true,
+        procedures: true,
+      },
+    });
   }
 
   async createGitRepo(gitRepo: InsertGitRepo): Promise<GitRepo> {
-    const [newRepo] = await db.insert(gitRepos).values(gitRepo).returning();
-    return newRepo;
+    return prisma.gitRepo.create({ data: gitRepo });
   }
 
   async updateGitRepo(id: number, gitRepo: Partial<InsertGitRepo>): Promise<GitRepo> {
-    const [updatedRepo] = await db
-      .update(gitRepos)
-      .set({ ...gitRepo, updatedAt: new Date() })
-      .where(eq(gitRepos.id, id))
-      .returning();
-    return updatedRepo;
+    return prisma.gitRepo.update({ where: { id }, data: { ...gitRepo, updatedAt: new Date() } });
   }
 
   async deleteGitRepo(id: number): Promise<void> {
-    await db.delete(gitRepos).where(eq(gitRepos.id, id));
+    await prisma.gitRepo.delete({ where: { id } });
   }
 
   // Commit operations
   async getCommits(gitRepoId: number): Promise<Commit[]> {
-    return await db
-      .select()
-      .from(commits)
-      .where(eq(commits.gitRepoId, gitRepoId))
-      .orderBy(desc(commits.committedAt));
+    return prisma.commit.findMany({
+      where: { gitRepoId },
+      orderBy: { committedAt: 'desc' },
+    });
   }
 
   async createCommit(commit: InsertCommit): Promise<Commit> {
-    const [newCommit] = await db.insert(commits).values(commit).returning();
-    return newCommit;
+    return prisma.commit.create({ data: commit });
+  }
+
+  async updateCommit(id: number, commit: Partial<InsertCommit>): Promise<Commit> {
+    return prisma.commit.update({ where: { id }, data: { ...commit, updatedAt: new Date() } });
+  }
+
+  async deleteCommit(id: number): Promise<void> {
+    await prisma.commit.delete({ where: { id } });
   }
 
   // CAB operations
   async getCabs(projectVersionId: number): Promise<CabWithDetails[]> {
-    const cabResults = await db
-      .select({
-        cab: cab,
-        assignee: users,
-      })
-      .from(cab)
-      .leftJoin(users, eq(cab.assigneeId, users.id))
-      .where(eq(cab.projectVersionId, projectVersionId))
-      .orderBy(desc(cab.createdAt));
-
-    return cabResults.map((result) => ({
-      ...result.cab,
-      assignee: result.assignee || undefined,
-    }));
+    return prisma.cab.findMany({
+      where: { projectVersionId },
+      include: { assignee: true },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async createCab(cabData: InsertCab): Promise<Cab> {
-    const [newCab] = await db.insert(cab).values(cabData).returning();
-    return newCab;
+    return prisma.cab.create({ data: cabData });
   }
 
   async updateCab(id: number, cabData: Partial<InsertCab>): Promise<Cab> {
-    const [updatedCab] = await db
-      .update(cab)
-      .set({ ...cabData, updatedAt: new Date() })
-      .where(eq(cab.id, id))
-      .returning();
-    return updatedCab;
+    return prisma.cab.update({ where: { id }, data: { ...cabData, updatedAt: new Date() } });
   }
 
   async deleteCab(id: number): Promise<void> {
-    await db.delete(cab).where(eq(cab.id, id));
+    await prisma.cab.delete({ where: { id } });
   }
 
   // Procedure operations (4 types organized by Git repository)
   async getProcedures(gitRepoId: number): Promise<ProceduresByType> {
-    const allProcedures = await db
-      .select()
-      .from(procedures)
-      .where(eq(procedures.gitRepoId, gitRepoId))
-      .orderBy(procedures.order);
-
+    const allProcedures = await prisma.procedure.findMany({
+      where: { gitRepoId },
+      orderBy: { order: 'asc' },
+    });
     return {
-      environment_variables: allProcedures.filter(p => p.type === 'environment_variables'),
-      service_verification: allProcedures.filter(p => p.type === 'service_verification'),
-      command_execution: allProcedures.filter(p => p.type === 'command_execution'),
-      data_import: allProcedures.filter(p => p.type === 'data_import'),
+      environment_variables: allProcedures.filter((p: any) => p.type === 'environment_variables'),
+      service_verification: allProcedures.filter((p: any) => p.type === 'service_verification'),
+      command_execution: allProcedures.filter((p: any) => p.type === 'command_execution'),
+      data_import: allProcedures.filter((p: any) => p.type === 'data_import'),
     };
   }
 
   async getProceduresByType(gitRepoId: number, type: string): Promise<Procedure[]> {
-    return await db
-      .select()
-      .from(procedures)
-      .where(and(eq(procedures.gitRepoId, gitRepoId), eq(procedures.type, type)))
-      .orderBy(procedures.order);
+    return prisma.procedure.findMany({
+      where: { gitRepoId, type },
+      orderBy: { order: 'asc' },
+    });
   }
 
   async createProcedure(procedure: InsertProcedure): Promise<Procedure> {
-    const [newProcedure] = await db.insert(procedures).values(procedure).returning();
-    return newProcedure;
+    return prisma.procedure.create({ data: procedure });
   }
 
   async updateProcedure(id: number, procedure: Partial<InsertProcedure>): Promise<Procedure> {
-    const [updatedProcedure] = await db
-      .update(procedures)
-      .set({ ...procedure, updatedAt: new Date() })
-      .where(eq(procedures.id, id))
-      .returning();
-    return updatedProcedure;
+    return prisma.procedure.update({ where: { id }, data: { ...procedure, updatedAt: new Date() } });
   }
 
   async deleteProcedure(id: number): Promise<void> {
-    await db.delete(procedures).where(eq(procedures.id, id));
+    await prisma.procedure.delete({ where: { id } });
   }
 
   async toggleProcedureCompletion(id: number): Promise<Procedure> {
-    const [procedure] = await db
-      .select()
-      .from(procedures)
-      .where(eq(procedures.id, id));
-
-    const [updatedProcedure] = await db
-      .update(procedures)
-      .set({ 
-        isCompleted: !procedure.isCompleted,
-        updatedAt: new Date()
-      })
-      .where(eq(procedures.id, id))
-      .returning();
-
-    return updatedProcedure;
+    const proc = await prisma.procedure.findUnique({ where: { id } });
+    if (!proc) throw new Error('Procedure not found');
+    return prisma.procedure.update({
+      where: { id },
+      data: { isCompleted: !proc.isCompleted, updatedAt: new Date() },
+    });
   }
 
-  // Release procedures aggregation
-  async getReleaseProcedures(releaseId: number): Promise<ReleaseProceduresAggregated> {
-    const releaseProjectsData = await db
-      .select({
-        project: projects,
-        releaseProject: releaseProjects,
-      })
-      .from(releaseProjects)
-      .innerJoin(projects, eq(releaseProjects.projectId, projects.id))
-      .where(eq(releaseProjects.releaseId, releaseId));
-
-    const projectsWithVersions = await Promise.all(
-      releaseProjectsData.map(async (item) => {
-        const versions = await this.getProjectVersions(item.project.id);
-        
-        const versionsWithRepos = await Promise.all(
-          versions.map(async (version) => ({
-            versionId: version.id,
-            version: version.version,
-            gitRepos: (version.gitRepos || []).map(repo => ({
-              repoId: repo.id,
-              repoName: repo.name,
-              procedures: repo.proceduresByType || {
-                environment_variables: [],
-                service_verification: [],
-                command_execution: [],
-                data_import: [],
+  // Release procedures aggregation (exemple simple)
+  async getReleaseProcedures(releaseId: number): Promise<Procedure[]> {
+    // On récupère tous les projets de la release, puis tous les PV, puis toutes les procédures
+    const release = await prisma.release.findUnique({
+      where: { id: releaseId },
+      include: {
+        releaseProjects: {
+          include: {
+            project: {
+              include: {
+                versions: {
+                  include: {
+                    gitRepos: {
+                      include: { procedures: true },
+                    },
+                  },
+                },
               },
-            })),
-          }))
-        );
-
-        return {
-          projectId: item.project.id,
-          projectName: item.project.name,
-          versions: versionsWithRepos,
-        };
-      })
-    );
-
-    return {
-      releaseId,
-      projects: projectsWithVersions,
-    };
+            },
+          },
+        },
+      },
+    });
+    if (!release) return [];
+    const procedures: Procedure[] = [];
+    for (const rp of release.releaseProjects) {
+      for (const version of rp.project.versions) {
+        for (const repo of version.gitRepos) {
+          procedures.push(...repo.procedures);
+        }
+      }
+    }
+    return procedures;
   }
-
+  
   // Dashboard stats
-  // PV operations
-  async getProjectPvs(projectVersionId: number): Promise<(ProjectPv & { files: PvFile[] })[]> {
-    const pvs = await db
-      .select()
-      .from(projectPvs)
-      .where(eq(projectPvs.projectVersionId, projectVersionId))
-      .orderBy(projectPvs.type);
-
-    const pvsWithFiles = await Promise.all(
-      pvs.map(async (pv) => {
-        const files = await db
-          .select()
-          .from(pvFiles)
-          .where(eq(pvFiles.pvId, pv.id))
-          .orderBy(pvFiles.uploadedAt);
-        
-        return { ...pv, files };
-      })
-    );
-
-    return pvsWithFiles;
-  }
-
-  async getProjectPv(id: number): Promise<(ProjectPv & { files: PvFile[] }) | undefined> {
-    const [pv] = await db
-      .select()
-      .from(projectPvs)
-      .where(eq(projectPvs.id, id));
-
-    if (!pv) return undefined;
-
-    const files = await db
-      .select()
-      .from(pvFiles)
-      .where(eq(pvFiles.pvId, id))
-      .orderBy(pvFiles.uploadedAt);
-
-    return { ...pv, files };
-  }
-
-  async createProjectPv(pvData: InsertProjectPv): Promise<ProjectPv> {
-    const [pv] = await db
-      .insert(projectPvs)
-      .values(pvData)
-      .returning();
-    
-    return pv;
-  }
-
-  async updateProjectPv(id: number, pvData: Partial<InsertProjectPv>): Promise<ProjectPv> {
-    const [pv] = await db
-      .update(projectPvs)
-      .set({ ...pvData, updatedAt: new Date() })
-      .where(eq(projectPvs.id, id))
-      .returning();
-
-    return pv;
-  }
-
-  async deleteProjectPv(id: number): Promise<void> {
-    await db.delete(projectPvs).where(eq(projectPvs.id, id));
-  }
-
-  // PV File operations
-  async addPvFile(fileData: InsertPvFile): Promise<PvFile> {
-    const [file] = await db
-      .insert(pvFiles)
-      .values(fileData)
-      .returning();
-    
-    return file;
-  }
-
-  async removePvFile(id: number): Promise<void> {
-    await db.delete(pvFiles).where(eq(pvFiles.id, id));
-  }
-
-  async getPvFiles(pvId: number): Promise<PvFile[]> {
-    return await db
-      .select()
-      .from(pvFiles)
-      .where(eq(pvFiles.pvId, pvId))
-      .orderBy(pvFiles.uploadedAt);
-  }
-
   async getDashboardStats(): Promise<{
     activeReleases: number;
     totalProjects: number;
@@ -971,56 +635,23 @@ export class DatabaseStorage implements IStorage {
     activeArb: number;
     projectsByStatus: { status: string; count: number }[];
   }> {
-    const [activeReleasesResult] = await db
-      .select({ count: count() })
-      .from(releases)
-      .where(sql`status != 'production'`);
-
-    const [totalProjectsResult] = await db
-      .select({ count: count() })
-      .from(projects);
-
-    const [totalTeamsResult] = await db
-      .select({ count: count() })
-      .from(teams);
-
-    const [activeArbResult] = await db
-      .select({ count: count() })
-      .from(arb)
-      .where(sql`status IN ('pending', 'in_review')`);
-
-    const projectsByStatus = await db
-      .select({
-        status: projects.status,
-        count: count(),
-      })
-      .from(projects)
-      .groupBy(projects.status);
-
+    const [activeReleases, totalProjects, totalTeams, activeArb, projectsByStatus] = await Promise.all([
+      prisma.release.count({ where: { status: { not: 'production' } } }),
+      prisma.project.count(),
+      prisma.team.count(),
+      prisma.arb.count({ where: { status: { in: ['pending', 'in_review'] } } }),
+      prisma.project.groupBy({
+        by: ['status'],
+        _count: { status: true },
+      }),
+    ]);
     return {
-      activeReleases: activeReleasesResult.count,
-      totalProjects: totalProjectsResult.count,
-      totalTeams: totalTeamsResult.count,
-      activeArb: activeArbResult.count,
-      projectsByStatus: projectsByStatus.map((p) => ({
-        status: p.status,
-        count: p.count,
-      })),
+      activeReleases,
+      totalProjects,
+      totalTeams,
+      activeArb,
+      projectsByStatus: projectsByStatus.map((p: { status: string; _count: { status: number } }) => ({ status: p.status, count: p._count.status })),
     };
-  }
-
-  // Commit operations (merged with existing implementation)
-  async updateCommit(id: number, commit: Partial<InsertCommit>): Promise<Commit> {
-    const [updatedCommit] = await db
-      .update(commits)
-      .set({ ...commit, createdAt: new Date() })
-      .where(eq(commits.id, id))
-      .returning();
-    return updatedCommit;
-  }
-
-  async deleteCommit(id: number): Promise<void> {
-    await db.delete(commits).where(eq(commits.id, id));
   }
 }
 

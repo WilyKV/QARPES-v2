@@ -1,10 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+let globalLog: (msg: string, source?: string) => void = () => {};
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -28,8 +29,7 @@ app.use((req, res, next) => {
       if (logLine.length > 80) {
         logLine = logLine.slice(0, 79) + "…";
       }
-
-      log(logLine);
+      globalLog(logLine);
     }
   });
 
@@ -37,6 +37,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  const { log } = await import("./" + "vite.js");
+  globalLog = log;
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -47,24 +49,18 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  if (process.env.NODE_ENV === "development" || app.get("env") === "development") {
+    // Import dynamique pour éviter d'inclure vite en production
+    const { setupVite } = await import("./" + "viteDev.js");
     await setupVite(app, server);
   } else {
+    const { serveStatic } = await import("./" + "vite.js");
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
+  // ALWAYS serve the app on port 8080
+  const port = 8080;
+  app.listen(port, () => {
+    log(`Server listening on http://localhost:${port}`);
   });
 })();

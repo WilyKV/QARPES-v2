@@ -1,0 +1,6 @@
+{
+  "schema": "./shared/schema.ts",
+  "out": "./drizzle",
+  "dialect": "postgresql",
+  "url": "env:DATABASE_URL"
+}

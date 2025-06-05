@@ -1,0 +1,212 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// Prisma schema for QARPES-v2 (généré à partir du schéma Drizzle)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @db.VarChar(255)
+  email          String?   @unique
+  firstName      String?
+  lastName       String?
+  profileImageUrl String?
+  role           String    @default("viewer")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now())
+  teamsLed       Team[]    @relation("LeaderOfTeams")
+  teamMembers    TeamMember[]
+  requestedArbs  Arb[]     @relation("RequesterArbs")
+  approvedArbs   Arb[]     @relation("ApproverArbs")
+}
+
+model Team {
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String?
+  leaderId    String?     @db.VarChar(255)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @default(now())
+  leader      User?       @relation("LeaderOfTeams", fields: [leaderId], references: [id])
+  members     TeamMember[]
+  projects    Project[]
+  arbs        Arb[]
+}
+
+model TeamMember {
+  id        Int      @id @default(autoincrement())
+  teamId    Int
+  userId    String   @db.VarChar(255)
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+  team      Team     @relation(fields: [teamId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Project {
+  id            Int         @id @default(autoincrement())
+  name          String
+  description   String?
+  status        String     @default("development")
+  teamId        Int?
+  repositoryUrl String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @default(now())
+  team          Team?      @relation(fields: [teamId], references: [id])
+  releaseProjects ReleaseProject[]
+  arbs Arb[]
+  projectVersions ProjectVersion[]
+}
+
+model Release {
+  id              Int      @id @default(autoincrement())
+  releaseId       String   @unique @db.VarChar(20)
+  name            String
+  description     String?
+  status          String   @default("testing")
+  recetteDate     DateTime?
+  preprodDate     DateTime?
+  productionDate  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+  releaseProjects ReleaseProject[]
+}
+
+model ReleaseProject {
+  id         Int      @id @default(autoincrement())
+  releaseId  Int
+  projectId  Int
+  addedAt    DateTime @default(now())
+  release    Release  @relation(fields: [releaseId], references: [id])
+  project    Project  @relation(fields: [projectId], references: [id])
+}
+
+model Arb {
+  id           Int      @id @default(autoincrement())
+  title        String
+  description  String?
+  type         String
+  status       String   @default("pending")
+  requesterId  String   @db.VarChar(255)
+  approverId   String?  @db.VarChar(255)
+  teamId       Int?
+  projectId    Int?
+  budget       Int?
+  priority     String   @default("medium")
+  dueDate      DateTime?
+  approvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+  requester    User     @relation("RequesterArbs", fields: [requesterId], references: [id])
+  approver     User?    @relation("ApproverArbs", fields: [approverId], references: [id])
+  team         Team?    @relation(fields: [teamId], references: [id])
+  project      Project? @relation(fields: [projectId], references: [id])
+}
+
+model ProjectVersion {
+  id          Int       @id @default(autoincrement())
+  projectId   Int
+  version     String
+  status      String    @default("development")
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now())
+  project     Project   @relation(fields: [projectId], references: [id])
+  gitRepos    GitRepo[]
+  commits     Commit[]
+  cabs        Cab[]
+  procedures  Procedure[]
+  pvs         ProjectPv[]
+}
+
+model GitRepo {
+  id                Int       @id @default(autoincrement())
+  projectVersionId  Int
+  name              String
+  url               String
+  branch            String?
+  lastCommitHash    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now())
+  projectVersion    ProjectVersion @relation(fields: [projectVersionId], references: [id])
+  commits           Commit[]
+  procedures        Procedure[]
+}
+
+model Commit {
+  id         Int      @id @default(autoincrement())
+  gitRepoId  Int
+  hash       String
+  message    String
+  author     String
+  authorEmail String?
+  committedAt DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+  gitRepo    GitRepo  @relation(fields: [gitRepoId], references: [id])
+  projectVersion   ProjectVersion? @relation(fields: [projectVersionId], references: [id])
+  projectVersionId Int?
+}
+
+model Cab {
+  id               Int      @id @default(autoincrement())
+  projectVersionId Int
+  ticketNumber     String
+  title            String
+  description      String?
+  status           String   @default("open")
+  priority         String   @default("medium")
+  assigneeId       String?
+  dueDate          DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+  projectVersion   ProjectVersion @relation(fields: [projectVersionId], references: [id])
+}
+
+model Procedure {
+  id          Int      @id @default(autoincrement())
+  gitRepoId   Int
+  type        String
+  title       String
+  description String?
+  content     Json
+  order       Int?
+  isCompleted Boolean? @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  gitRepo     GitRepo  @relation(fields: [gitRepoId], references: [id])
+  projectVersion   ProjectVersion? @relation(fields: [projectVersionId], references: [id])
+  projectVersionId Int?
+}
+
+model ProjectPv {
+  id               Int      @id @default(autoincrement())
+  projectVersionId Int
+  type             String
+  status           String   @default("draft")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+  projectVersion   ProjectVersion @relation(fields: [projectVersionId], references: [id])
+  files            PvFile[]
+}
+
+model PvFile {
+  id       Int    @id @default(autoincrement())
+  pvId     Int
+  fileName String
+  filePath String
+  fileSize Int?
+  mimeType String?
+  uploadedAt DateTime @default(now())
+  pv       ProjectPv @relation(fields: [pvId], references: [id])
+}

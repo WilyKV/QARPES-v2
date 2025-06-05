@@ -27,7 +27,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { insertProcedureSchema, type Procedure } from "@shared/schema";
+import { type Procedure } from "@shared/schema";
 import { z } from "zod";
 import { useEffect } from "react";
 

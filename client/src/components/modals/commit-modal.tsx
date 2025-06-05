@@ -20,23 +20,22 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { insertCommitSchema, type Commit } from "@shared/schema";
+import { type Commit } from "@shared/schema";
 import { z } from "zod";
 import { useEffect } from "react";
 
-const formSchema = insertCommitSchema.pick({
-  hash: true,
-  message: true,
-  author: true,
-  authorEmail: true,
-  committedAt: true,
-}).extend({
-  hash: z.string().min(1, "Le hash est requis").max(40, "Maximum 40 caractères"),
-  message: z.string().min(1, "Le message est requis"),
-  author: z.string().min(1, "L'auteur est requis"),
-  authorEmail: z.string().email("Email invalide").optional(),
-  committedAt: z.string().min(1, "La date est requise"),
-});
+const formSchema = z
+  .object({
+    hash: z
+      .string()
+      .min(1, "Le hash est requis")
+      .max(40, "Maximum 40 caractères"),
+    message: z.string().min(1, "Le message est requis"),
+    author: z.string().min(1, "L'auteur est requis"),
+    authorEmail: z.string().email("Email invalide").optional(),
+    committedAt: z.string().min(1, "La date est requise"),
+  })
+  .strict();
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -49,13 +48,13 @@ interface CommitModalProps {
   commit?: Commit;
 }
 
-export function CommitModal({ 
-  open, 
-  onOpenChange, 
-  gitRepoId, 
-  projectId, 
-  versionId, 
-  commit 
+export function CommitModal({
+  open,
+  onOpenChange,
+  gitRepoId,
+  projectId,
+  versionId,
+  commit,
 }: CommitModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -68,7 +67,8 @@ export function CommitModal({
       message: commit?.message || "",
       author: commit?.author || "",
       authorEmail: commit?.authorEmail || "",
-      committedAt: commit?.committedAt ? new Date(commit.committedAt).toISOString().slice(0, 16) : "",
+      committedAt:
+        commit?.committedAt?.toString().slice(0, 16) || "",
     },
   });
 
@@ -79,7 +79,8 @@ export function CommitModal({
         message: commit.message,
         author: commit.author,
         authorEmail: commit.authorEmail || "",
-        committedAt: commit.committedAt ? new Date(commit.committedAt).toISOString().slice(0, 16) : "",
+        committedAt:
+          commit.committedAt?.toString().slice(0, 16) || "",
       });
     } else if (!isEditing) {
       form.reset({
@@ -102,21 +103,31 @@ export function CommitModal({
       if (isEditing) {
         return await apiRequest("PATCH", `/api/commits/${commit.id}`, payload);
       } else {
-        return await apiRequest("POST", `/api/git-repos/${gitRepoId}/commits`, payload);
+        return await apiRequest(
+          "POST",
+          `/api/git-repos/${gitRepoId}/commits`,
+          payload
+        );
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/projects/${projectId}/versions/${versionId}`],
+      });
       toast({
         title: "Succès",
-        description: isEditing ? "Commit modifié avec succès" : "Commit ajouté avec succès",
+        description: isEditing
+          ? "Commit modifié avec succès"
+          : "Commit ajouté avec succès",
       });
       onOpenChange(false);
     },
     onError: (error) => {
       toast({
         title: "Erreur",
-        description: `Erreur lors de ${isEditing ? 'la modification' : 'l\'ajout'} du commit: ${error.message}`,
+        description: `Erreur lors de ${
+          isEditing ? "la modification" : "l'ajout"
+        } du commit: ${error.message}`,
         variant: "destructive",
       });
     },
@@ -144,7 +155,7 @@ export function CommitModal({
                 <FormItem>
                   <FormLabel>Hash du commit</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       placeholder="ex: abc123def456..."
                       {...field}
                       maxLength={40}
@@ -162,7 +173,7 @@ export function CommitModal({
                 <FormItem>
                   <FormLabel>Message du commit</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Description du commit..."
                       {...field}
                     />
@@ -179,7 +190,7 @@ export function CommitModal({
                 <FormItem>
                   <FormLabel>Auteur</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       placeholder="Nom de l'auteur"
                       {...field}
                     />
@@ -196,7 +207,7 @@ export function CommitModal({
                 <FormItem>
                   <FormLabel>Email de l'auteur (optionnel)</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="email"
                       placeholder="email@example.com"
                       {...field}
@@ -214,7 +225,7 @@ export function CommitModal({
                 <FormItem>
                   <FormLabel>Date du commit</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="datetime-local"
                       {...field}
                     />
@@ -225,15 +236,19 @@ export function CommitModal({
             />
 
             <div className="flex justify-end gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => onOpenChange(false)}
               >
                 Annuler
               </Button>
               <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "En cours..." : isEditing ? "Modifier" : "Ajouter"}
+                {mutation.isPending
+                  ? "En cours..."
+                  : isEditing
+                  ? "Modifier"
+                  : "Ajouter"}
               </Button>
             </div>
           </form>

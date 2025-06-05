@@ -12,19 +12,82 @@ import { ReleaseModal } from "@/components/modals/release-modal";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { STATUS_COLORS, STATUS_OPTIONS } from "@/lib/constants";
 import type { ReleaseWithProjects } from "@shared/schema";
+import type { Team } from "@shared/schema";
 
-const statusColors = {
-  testing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  preproduction: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  production: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-};
+// Liste exhaustive des statuts et leur mapping français
+const ALL_STATUS_LABELS = STATUS_OPTIONS.release.reduce((acc, cur) => { acc[cur.value] = cur.label; return acc; }, {} as Record<string, string>);
+
+const statusColors = STATUS_COLORS;
+
+const TABLES = [
+  {
+    title: "En développement",
+    statuses: ["0"],
+  },
+  {
+    title: "A déployer",
+    statuses: ["1"],
+  },
+  {
+    title: "Recette en cours",
+    statuses: ["2"],
+  },
+  {
+    title: "En préproduction",
+    statuses: ["3"],
+  },
+  {
+    title: "Mis en production",
+    statuses: ["4"],
+  },
+  {
+    title: "Merge final",
+    statuses: ["5"],
+  },
+  {
+    title: "Annulé",
+    statuses: ["Annulé"],
+  },
+];
 
 const statusLabels = {
   testing: "Recette",
   preproduction: "Préprod",
   production: "Production",
 };
+
+// Edition inline : composant cellule éditable
+interface EditableCellProps {
+  value: string | number | undefined | null;
+  onSave: (value: string) => void;
+  type?: string;
+  options?: { value: string; label: string }[];
+}
+
+function EditableCell({ value, onSave, type = "text", options = [] }: EditableCellProps) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value ?? "");
+  useEffect(() => { setVal(value ?? ""); }, [value]);
+  if (!editing) return (
+    <span onClick={() => setEditing(true)} className="cursor-pointer hover:underline">{type === "select" ? (options?.find(o => o.value === value)?.label || value) : value || <span className="text-gray-400">-</span>}</span>
+  );
+  return (
+    <span>
+      {type === "select" ? (
+        <select value={val} onChange={e => setVal(e.target.value)} onBlur={() => { setEditing(false); onSave(val as string); }}>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : (
+        <input value={val} onChange={e => setVal(e.target.value)} onBlur={() => { setEditing(false); onSave(val as string); }} />
+      )}
+    </span>
+  );
+}
+
+// Ajout d'un type local pour la release avec équipe
+export type ReleaseWithTeamAndProjects = ReleaseWithProjects & { team?: Team };
 
 export default function Releases() {
   const { toast } = useToast();
@@ -84,7 +147,7 @@ export default function Releases() {
     },
   });
 
-  const handleEdit = (release: ReleaseWithTeamAndProjects) => {
+  const handleEdit = (release: ReleaseWithProjects) => {
     setEditingRelease(release);
     setIsModalOpen(true);
   };
@@ -100,105 +163,22 @@ export default function Releases() {
     setEditingRelease(null);
   };
 
-  const filteredReleases = releases?.filter((release: ReleaseWithTeamAndProjects) =>
-    release.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    release.releaseId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    release.team?.name.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  // Correction du typage de releases (on force le tableau de ReleaseWithTeamAndProjects)
+  const releasesTyped: ReleaseWithTeamAndProjects[] = Array.isArray(releases) ? releases as ReleaseWithTeamAndProjects[] : [];
 
-  const columns = [
-    {
-      accessorKey: "releaseId",
-      header: "ID Release",
-      cell: ({ row }: any) => (
-        <Badge variant="outline" className="font-mono">
-          {row.getValue("releaseId")}
-        </Badge>
-      ),
-    },
-    {
-      accessorKey: "name",
-      header: "Nom",
-      cell: ({ row }: any) => (
-        <div>
-          <div className="font-medium">{row.getValue("name")}</div>
-          {row.original.description && (
-            <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs">
-              {row.original.description}
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      accessorKey: "status",
-      header: "Statut",
-      cell: ({ row }: any) => {
-        const status = row.getValue("status") as keyof typeof statusColors;
-        return (
-          <Badge className={statusColors[status] || statusColors.development}>
-            {statusLabels[status] || status}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "team",
-      header: "Équipe",
-      cell: ({ row }: any) => (
-        <div>
-          {row.original.team?.name || (
-            <span className="text-gray-500 dark:text-gray-400">Aucune équipe</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      accessorKey: "releaseProjects",
-      header: "Projets",
-      cell: ({ row }: any) => (
-        <div>
-          <span className="font-medium">
-            {row.original.releaseProjects?.length || 0}
-          </span>
-          <span className="text-sm text-gray-500 dark:text-gray-400 ml-1">
-            projet{(row.original.releaseProjects?.length || 0) > 1 ? "s" : ""}
-          </span>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "releaseDate",
-      header: "Date de Release",
-      cell: ({ row }: any) => {
-        const date = row.getValue("releaseDate");
-        return date ? new Date(date).toLocaleDateString("fr-FR") : "-";
-      },
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      cell: ({ row }: any) => (
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleEdit(row.original)}
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDelete(row.original.id)}
-            disabled={deleteMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  // Correction du filtrage (on vérifie que les champs sont bien des string)
+  const filteredReleases: ReleaseWithTeamAndProjects[] = releasesTyped.filter((release) =>
+    (typeof release.name === "string" ? release.name : "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (typeof release.releaseId === "string" ? release.releaseId : "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (typeof release.team?.name === "string" ? release.team.name : "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Correction du typage de updateField
+  const updateField = (id: number, field: string, value: string) => {
+    apiRequest("PUT", `/api/releases/${id}`, { [field]: value })
+      .then(() => queryClient.invalidateQueries({ queryKey: ["/api/releases"] }))
+      .catch(() => toast({ title: "Erreur", description: "Échec de la modification", variant: "destructive" }));
+  };
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -211,10 +191,14 @@ export default function Releases() {
     );
   }
 
+  // Découpage des releases par tableau
+  const releasesByTable: ReleaseWithTeamAndProjects[][] = TABLES.map(table =>
+    filteredReleases.filter(r => typeof r.status === "string" && table.statuses.includes(r.status))
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
       <Sidebar />
-      
       <main className="flex-1 overflow-auto">
         <Header 
           title="Releases" 
@@ -226,31 +210,80 @@ export default function Releases() {
             </Button>
           }
         />
-
-        <div className="p-6">
-          {/* Search and Filters */}
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Rechercher par nom, ID ou équipe..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <div className="p-6 space-y-12">
+          {TABLES.map((table, idx) => (
+            <div key={table.title}>
+              <h2 className="text-lg font-semibold mb-2">{table.title}</h2>
+              <div className="rounded-xl shadow bg-white dark:bg-gray-800 p-4 overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="px-3 py-2 text-left">ID Release</th>
+                      <th className="px-3 py-2 text-left">Nom</th>
+                      <th className="px-3 py-2 text-left">Statut</th>
+                      <th className="px-3 py-2 text-left">Équipe</th>
+                      <th className="px-3 py-2 text-left">Projets</th>
+                      <th className="px-3 py-2 text-left">Recette</th>
+                      <th className="px-3 py-2 text-left">Préprod</th>
+                      <th className="px-3 py-2 text-left">Prod</th>
+                      <th className="px-3 py-2 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {releasesByTable[idx].map((row: ReleaseWithTeamAndProjects) => {
+                      // Correction id
+                      const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
+                      // Correction releaseId
+                      const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
+                      // Correction name
+                      const name = typeof row.name === "string" ? row.name : "";
+                      // Correction status
+                      const status = typeof row.status === "string" ? row.status : "";
+                      // Correction team
+                      const teamName = typeof row.team?.name === "string" ? row.team.name : "";
+                      // Correction dates
+                      const safeDate = (d: any) => {
+                        if (!d) return "";
+                        if (typeof d === "string") return d.slice(0, 10);
+                        if (d instanceof Date) return d.toISOString().slice(0, 10);
+                        if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
+                        return "";
+                      };
+                      return (
+                        <tr key={rowId} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td className="px-3 py-2 font-mono">{releaseId}</td>
+                          <td className="px-3 py-2">
+                            <EditableCell value={name} onSave={v => updateField(rowId!, "name", v)} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell value={status} onSave={v => updateField(rowId!, "status", v)} type="select" options={STATUS_OPTIONS.release} />
+                          </td>
+                          <td className="px-3 py-2">{teamName || <span className="text-gray-400">-</span>}</td>
+                          <td className="px-3 py-2">{Array.isArray(row.releaseProjects) ? row.releaseProjects.length : 0}</td>
+                          <td className="px-3 py-2">
+                            <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell value={safeDate(row.preprodDate)} onSave={v => updateField(rowId!, "preprodDate", v)} type="date" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(row)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4" /></Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {releasesByTable[idx].length === 0 && <div className="text-center text-gray-400 py-8">Aucune release</div>}
+              </div>
             </div>
-          </div>
-
-          {/* Data Table */}
-          <DataTable
-            columns={columns}
-            data={filteredReleases}
-            loading={releasesLoading}
-            emptyMessage="Aucune release trouvée"
-          />
+          ))}
         </div>
       </main>
-
       <ReleaseModal 
         open={isModalOpen} 
         onOpenChange={handleModalClose}

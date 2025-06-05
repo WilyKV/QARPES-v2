@@ -28,15 +28,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertCabSchema, type Cab, type User } from "@shared/schema";
 import { z } from "zod";
 
-const formSchema = insertCabSchema.extend({
-  ticketNumber: z.string().min(1, "Le numéro de ticket est requis"),
-  title: z.string().min(1, "Le titre est requis"),
-  status: z.string().min(1, "Le statut est requis"),
-  priority: z.string().min(1, "La priorité est requise"),
-});
+const formSchema = z
+  .object({
+    ticketNumber: z.string().min(1, "Le numéro de ticket est requis"),
+    title: z.string().min(1, "Le titre est requis"),
+    status: z.string().min(1, "Le statut est requis"),
+    priority: z.string().min(1, "La priorité est requise"),
+  })
+  .strict();
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -49,13 +50,13 @@ interface CabModalProps {
   cab?: Cab;
 }
 
-export function CabModal({ 
-  open, 
-  onOpenChange, 
-  projectVersionId, 
-  projectId, 
-  versionId, 
-  cab 
+export function CabModal({
+  open,
+  onOpenChange,
+  projectVersionId,
+  projectId,
+  versionId,
+  cab,
 }: CabModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -76,7 +77,7 @@ export function CabModal({
       status: cab?.status || "open",
       priority: cab?.priority || "medium",
       assigneeId: cab?.assigneeId || "",
-      dueDate: cab?.dueDate ? new Date(cab.dueDate).toISOString().split('T')[0] : "",
+      dueDate: cab?.dueDate ? new Date(cab.dueDate).toISOString().split("T")[0] : "",
     },
   });
 
@@ -173,7 +174,7 @@ export function CabModal({
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Description détaillée..."
                       rows={3}
                       {...field}
@@ -269,10 +270,10 @@ export function CabModal({
                 <FormItem>
                   <FormLabel>Date d'échéance</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="date" 
-                      {...field} 
-                      value={field.value || ""} 
+                    <Input
+                      type="date"
+                      {...field}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -285,8 +286,8 @@ export function CabModal({
                 Annuler
               </Button>
               <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending 
-                  ? (isEditing ? "Modification..." : "Création...") 
+                {mutation.isPending
+                  ? (isEditing ? "Modification..." : "Création...")
                   : (isEditing ? "Modifier" : "Créer")
                 }
               </Button>

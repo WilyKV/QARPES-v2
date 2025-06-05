@@ -27,13 +27,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertProjectPvSchema, type ProjectPv } from "@shared/schema";
 import { z } from "zod";
 
-const formSchema = insertProjectPvSchema.extend({
-  type: z.string().min(1, "Le type est requis"),
-  status: z.string().min(1, "Le statut est requis"),
-});
+const formSchema = z
+  .object({
+    type: z.string().min(1, "Le type est requis"),
+    status: z.string().min(1, "Le statut est requis"),
+    description: z.string().optional(),
+  })
+  .strict();
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -46,13 +48,13 @@ interface PvModalProps {
   pv?: ProjectPv;
 }
 
-export function PvModal({ 
-  open, 
-  onOpenChange, 
-  projectVersionId, 
-  projectId, 
-  versionId, 
-  pv 
+export function PvModal({
+  open,
+  onOpenChange,
+  projectVersionId,
+  projectId,
+  versionId,
+  pv,
 }: PvModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -72,11 +74,17 @@ export function PvModal({
       if (isEditing) {
         return await apiRequest("PATCH", `/api/project-pvs/${pv.id}`, data);
       } else {
-        return await apiRequest("POST", `/api/project-versions/${projectVersionId}/pvs`, data);
+        return await apiRequest(
+          "POST",
+          `/api/project-versions/${projectVersionId}/pvs`,
+          data
+        );
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/projects/${projectId}/versions/${versionId}`],
+      });
       toast({
         title: "Succès",
         description: `PV ${isEditing ? "modifié" : "créé"} avec succès`,
@@ -174,7 +182,7 @@ export function PvModal({
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Description du PV..."
                       rows={3}
                       {...field}
@@ -187,14 +195,21 @@ export function PvModal({
             />
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
                 Annuler
               </Button>
               <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending 
-                  ? (isEditing ? "Modification..." : "Création...") 
-                  : (isEditing ? "Modifier" : "Créer")
-                }
+                {mutation.isPending
+                  ? isEditing
+                    ? "Modification..."
+                    : "Création..."
+                  : isEditing
+                  ? "Modifier"
+                  : "Créer"}
               </Button>
             </div>
           </form>

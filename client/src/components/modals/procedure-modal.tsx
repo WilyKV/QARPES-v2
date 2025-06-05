@@ -60,7 +60,6 @@ export default function ProcedureModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [content, setContent] = useState(existingProcedure?.content || "");
-  const quillRef = useRef<ReactQuill>(null);
   
   // Récupérer les procédures existantes pour vérifier les doublons
   const { data: procedures } = useQuery({
@@ -213,81 +212,77 @@ export default function ProcedureModal({
     return labels[type as keyof typeof labels] || type;
   };
 
-  // Configuration de l'éditeur avec insertion de tableaux HTML
-  const modules = useMemo(() => {
-    return {
-      toolbar: {
-        container: [
-          [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-          ['bold', 'italic', 'underline', 'strike'],
-          [{ 'color': [] }, { 'background': [] }],
-          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-          [{ 'indent': '-1'}, { 'indent': '+1' }],
-          [{ 'align': [] }],
-          ['link', 'image'],
-          ['blockquote', 'code-block'],
-          ['clean'],
-          ['table-insert']
-        ],
-        handlers: {
-          'table-insert': function() {
-            const quill = (this as any).quill;
-            const range = quill.getSelection();
-            if (range) {
-              const tableHTML = `
-                <table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
-                  <thead>
-                    <tr>
-                      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 1</th>
-                      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 2</th>
-                      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 3</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 1</td>
-                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 2</td>
-                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 3</td>
-                    </tr>
-                    <tr>
-                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 4</td>
-                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 5</td>
-                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 6</td>
-                    </tr>
-                  </tbody>
-                </table>
-              `;
-              quill.clipboard.dangerouslyPasteHTML(range.index, tableHTML);
-            }
-          }
-        }
-      },
-    };
-  }, []);
+  // Fonctions d'aide pour le formatage
+  const insertTable = () => {
+    const tableHTML = `
+<table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 1</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 2</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 1</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 2</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 3</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 4</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 5</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 6</td>
+    </tr>
+  </tbody>
+</table>
+`;
+    setContent(content + tableHTML);
+    form.setValue("content", content + tableHTML);
+  };
 
-  const formats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike',
-    'color', 'background',
-    'list', 'bullet', 'indent',
-    'align',
-    'link', 'image',
-    'blockquote', 'code-block'
-  ];
+  const formatText = (tag: string) => {
+    const selection = window.getSelection();
+    if (selection && selection.toString()) {
+      const selectedText = selection.toString();
+      let formattedText = "";
+      
+      switch (tag) {
+        case 'bold':
+          formattedText = `<strong>${selectedText}</strong>`;
+          break;
+        case 'italic':
+          formattedText = `<em>${selectedText}</em>`;
+          break;
+        case 'list':
+          formattedText = `<ul><li>${selectedText}</li></ul>`;
+          break;
+        default:
+          formattedText = selectedText;
+      }
+      
+      const newContent = content.replace(selectedText, formattedText);
+      setContent(newContent);
+      form.setValue("content", newContent);
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-semibold">
-            {existingProcedure ? "Modifier la procédure" : "Ajouter une procédure"} - {getTypeLabel(selectedType)}
+      <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto bg-white dark:bg-gray-900">
+        <DialogHeader className="pb-6 border-b border-gray-200 dark:border-gray-700">
+          <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white">
+            {existingProcedure ? "Modifier la procédure" : "Ajouter une procédure"}
           </DialogTitle>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {getTypeLabel(selectedType)}
+          </p>
         </DialogHeader>
 
         {existingProcedureOfType && !existingProcedure && (
-          <Alert className="mb-4">
-            <InfoIcon className="h-4 w-4" />
-            <AlertDescription>
+          <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20">
+            <InfoIcon className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <AlertDescription className="text-orange-800 dark:text-orange-200">
               Une procédure de type "{getTypeLabel(selectedType)}" existe déjà. 
               Il ne peut y avoir qu'une seule procédure par type par dépôt Git.
             </AlertDescription>
@@ -360,39 +355,85 @@ export default function ProcedureModal({
               name="content"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Contenu de la procédure</FormLabel>
+                  <FormLabel className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Contenu de la procédure
+                  </FormLabel>
                   <FormControl>
-                    <div className="border rounded-md">
-                      <div className="mb-2 p-2 bg-gray-50 dark:bg-gray-800 border-b text-sm text-gray-600 dark:text-gray-400">
-                        Utilisez la barre d'outils pour formater votre texte ou cliquez sur le bouton "Insérer un tableau" pour ajouter des tableaux.
+                    <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                      <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-600 p-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => formatText('bold')}
+                            className="h-8 px-3"
+                          >
+                            <Bold className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => formatText('italic')}
+                            className="h-8 px-3"
+                          >
+                            <Italic className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => formatText('list')}
+                            className="h-8 px-3"
+                          >
+                            <List className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={insertTable}
+                            className="h-8 px-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
+                          >
+                            <Table className="h-4 w-4 mr-1" />
+                            Insérer un tableau
+                          </Button>
+                        </div>
                       </div>
-                      <ReactQuill
-                        ref={quillRef}
-                        theme="snow"
+                      <Textarea
                         value={content}
-                        onChange={(value) => {
-                          setContent(value);
-                          form.setValue("content", value);
+                        onChange={(e) => {
+                          setContent(e.target.value);
+                          form.setValue("content", e.target.value);
                         }}
-                        modules={modules}
-                        formats={formats}
-                        style={{ minHeight: '300px' }}
-                        placeholder="Décrivez les étapes de la procédure..."
+                        placeholder="Décrivez les étapes de la procédure... Vous pouvez utiliser du HTML pour le formatage."
+                        className="min-h-[400px] border-0 resize-none focus:ring-0 focus:border-0"
+                        style={{ fontFamily: 'monospace' }}
                       />
                     </div>
                   </FormControl>
                   <FormMessage />
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Astuce: Sélectionnez du texte puis cliquez sur les boutons de formatage, ou utilisez le bouton "Insérer un tableau" pour ajouter des tableaux structurés.
+                  </div>
                 </FormItem>
               )}
             />
 
-            <div className="flex justify-end space-x-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={handleClose}>
+            <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handleClose}
+                className="px-6"
+              >
                 Annuler
               </Button>
               <Button 
                 type="submit" 
                 disabled={createMutation.isPending || updateMutation.isPending || (existingProcedureOfType && !existingProcedure)}
+                className="px-6 bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {createMutation.isPending || updateMutation.isPending ? "Enregistrement..." : 
                  existingProcedure ? "Mettre à jour" : "Ajouter"}

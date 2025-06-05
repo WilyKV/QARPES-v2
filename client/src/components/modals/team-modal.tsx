@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -29,10 +28,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertTeamSchema, type TeamWithMembers, type User } from "@shared/schema";
-import { z } from "zod";
+import { type TeamWithMembers, type User } from "@shared/schema";
 
-type FormData = z.infer<typeof insertTeamSchema>;
+// Remplacement du type de formulaire par une définition explicite (plus de zod)
+type FormData = {
+  name: string;
+  description?: string;
+  leaderId: string;
+};
 
 interface TeamModalProps {
   open: boolean;
@@ -46,11 +49,11 @@ export function TeamModal({ open, onOpenChange, team }: TeamModalProps) {
   const isEditing = !!team;
 
   const form = useForm<FormData>({
-    resolver: zodResolver(insertTeamSchema),
+    resolver: undefined,
     defaultValues: {
-      name: "",
-      description: "",
-      leaderId: undefined,
+      name: typeof team?.name === 'string' ? team.name : '',
+      description: typeof team?.description === 'string' ? team.description : '',
+      leaderId: typeof team?.leaderId === 'string' ? team.leaderId : '',
     },
   });
 
@@ -61,15 +64,15 @@ export function TeamModal({ open, onOpenChange, team }: TeamModalProps) {
   useEffect(() => {
     if (team) {
       form.reset({
-        name: team.name,
-        description: team.description || "",
-        leaderId: team.leaderId || undefined,
+        name: typeof team.name === 'string' ? team.name : '',
+        description: typeof team.description === 'string' ? team.description : '',
+        leaderId: typeof team.leaderId === 'string' ? team.leaderId : '',
       });
     } else {
       form.reset({
-        name: "",
-        description: "",
-        leaderId: undefined,
+        name: '',
+        description: '',
+        leaderId: '',
       });
     }
   }, [team, form]);
@@ -181,8 +184,8 @@ export function TeamModal({ open, onOpenChange, team }: TeamModalProps) {
                     </FormControl>
                     <SelectContent>
                       {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.firstName} {user.lastName}
+                        <SelectItem key={typeof user.id === 'string' ? user.id : ''} value={typeof user.id === 'string' ? user.id : ''}>
+                          {typeof user.firstName === 'string' ? user.firstName : ''} {typeof user.lastName === 'string' ? user.lastName : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -1,15 +1,21 @@
 export const STATUS_OPTIONS = {
   project: [
-    { value: "development", label: "Développement" },
-    { value: "testing", label: "Recette" },
-    { value: "preproduction", label: "Pré-production" },
-    { value: "production", label: "Production" },
+    { value: "0", label: "En développement" },
+    { value: "1", label: "A déployer" },
+    { value: "2", label: "Recette en cours" },
+    { value: "3", label: "En préproduction" },
+    { value: "4", label: "Mis en production" },
+    { value: "5", label: "Merge final" },
+    { value: "Annulé", label: "Annulé" },
   ],
   release: [
-    { value: "development", label: "Développement" },
-    { value: "testing", label: "Recette" },
-    { value: "preproduction", label: "Pré-production" },
-    { value: "production", label: "Production" },
+    { value: "0", label: "En développement" },
+    { value: "1", label: "A déployer" },
+    { value: "2", label: "Recette en cours" },
+    { value: "3", label: "En préproduction" },
+    { value: "4", label: "Mis en production" },
+    { value: "5", label: "Merge final" },
+    { value: "Annulé", label: "Annulé" },
   ],
   arb: [
     { value: "pending", label: "En attente" },
@@ -47,11 +53,13 @@ export const USER_ROLES = [
 ];
 
 export const STATUS_COLORS = {
-  // Project/Release statuses
-  development: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
-  testing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  preproduction: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  production: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
+  '0': 'bg-primary text-white',
+  '1': 'bg-gray-100 text-gray-800', // light
+  '2': 'bg-blue-100 text-blue-800', // info
+  '3': 'bg-yellow-100 text-yellow-800', // warning
+  '4': 'bg-red-100 text-red-800', // danger
+  '5': 'bg-green-100 text-green-800', // success
+  'Annulé': 'bg-gray-400 text-white', // secondary
   
   // ARB statuses
   pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",

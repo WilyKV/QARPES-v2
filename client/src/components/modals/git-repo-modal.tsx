@@ -27,15 +27,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertGitRepoSchema, type GitRepo, type GitRepoWithDetails, type ProjectVersionWithDetails } from "@shared/schema";
+import { type GitRepo, type GitRepoWithDetails, type ProjectVersionWithDetails } from "@shared/schema";
 import { z } from "zod";
 import { useState, useEffect } from "react";
 
-const formSchema = insertGitRepoSchema.pick({
-  name: true,
-  url: true,
-}).extend({
+const formSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
+  url: z.string().url("URL invalide").optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;

@@ -29,11 +29,31 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertProjectSchema, type ProjectWithTeam } from "@shared/schema";
+import { type ProjectWithTeam } from "@shared/schema";
 import { STATUS_OPTIONS } from "@/lib/constants";
 import { z } from "zod";
 
-type FormData = z.infer<typeof insertProjectSchema>;
+// Schéma de validation local pour un projet
+const projectSchema = z.object({
+  name: z.string().min(2, "Le nom est requis"),
+  description: z.string().optional().nullable(),
+  status: z.enum(["development", "testing", "preproduction", "production"]),
+  teamId: z
+    .union([
+      z.number(),
+      z.string().regex(/^\d+$/).transform(Number),
+    ])
+    .optional()
+    .nullable(),
+  repositoryUrl: z
+    .string()
+    .url("URL invalide")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+});
+
+type FormData = z.infer<typeof projectSchema>;
 
 interface ProjectModalProps {
   open: boolean;
@@ -47,7 +67,7 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
   const isEditing = !!project;
 
   const form = useForm<FormData>({
-    resolver: zodResolver(insertProjectSchema),
+    resolver: zodResolver(projectSchema),
     defaultValues: {
       name: "",
       description: "",
