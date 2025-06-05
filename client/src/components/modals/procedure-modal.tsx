@@ -12,6 +12,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
@@ -25,207 +26,328 @@ import {
 } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { type Procedure } from "@shared/schema";
 import { z } from "zod";
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { InfoIcon } from "lucide-react";
 
-const procedureTypes = [
-  { value: "environment_variables", label: "Variables d'environnement" },
-  { value: "service_verification", label: "Vérification des services" },
-  { value: "command_execution", label: "Exécution de commandes" },
-  { value: "data_import", label: "Import de données" },
-];
-
-// Configuration de la barre d'outils Quill enrichie
-const quillModules = {
-  toolbar: [
-    [{ 'header': [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    [{ 'indent': '-1'}, { 'indent': '+1' }],
-    [{ 'color': [] }, { 'background': [] }],
-    [{ 'align': [] }],
-    ['link', 'image', 'code-block'],
-    ['blockquote'],
-    ['clean']
-  ]
-};
-
-const quillFormats = [
-  'header', 'bold', 'italic', 'underline', 'strike',
-  'list', 'bullet', 'indent', 'color', 'background', 
-  'align', 'link', 'image', 'code-block', 'blockquote'
-];
-
-const formSchema = z.object({
+const procedureSchema = z.object({
+  title: z.string().min(1, "Le titre est obligatoire"),
+  description: z.string().optional(),
   type: z.enum(["environment_variables", "service_verification", "command_execution", "data_import"]),
-  content: z.string().min(1, "Le contenu est requis"),
+  content: z.string().min(1, "Le contenu est obligatoire"),
 });
 
-type FormData = z.infer<typeof formSchema>;
+type FormData = z.infer<typeof procedureSchema>;
 
 interface ProcedureModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onClose: () => void;
   gitRepoId: number;
-  projectId: number;
-  versionId: number;
-  procedure?: Procedure;
-  procedureType?: string;
+  type?: string;
+  existingProcedure?: any;
+  onSuccess?: () => void;
 }
 
-export function ProcedureModal({ 
-  open, 
-  onOpenChange, 
-  gitRepoId, 
-  projectId, 
-  versionId, 
-  procedure, 
-  procedureType 
+export default function ProcedureModal({
+  isOpen,
+  onClose,
+  gitRepoId,
+  type,
+  existingProcedure,
+  onSuccess,
 }: ProcedureModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const isEditing = !!procedure;
-  const quillRef = useRef<any>(null);
+  const [content, setContent] = useState(existingProcedure?.content || "");
+  const quillRef = useRef<ReactQuill>(null);
+  
+  // Récupérer les procédures existantes pour vérifier les doublons
+  const { data: procedures } = useQuery({
+    queryKey: [`/api/git-repos/${gitRepoId}/procedures`],
+    enabled: !!gitRepoId && isOpen,
+  });
 
   const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(procedureSchema),
     defaultValues: {
-      type: (procedure?.type as any) || (procedureType as any) || "environment_variables",
-      content: typeof procedure?.content === "string" ? procedure.content : JSON.stringify(procedure?.content || ""),
+      title: existingProcedure?.title || "",
+      description: existingProcedure?.description || "",
+      type: type as any || existingProcedure?.type || "environment_variables",
+      content: existingProcedure?.content || "",
     },
   });
 
-  useEffect(() => {
-    if (isEditing && procedure) {
-      form.reset({
-        type: procedure.type as any,
-        content: typeof procedure.content === "string" ? procedure.content : JSON.stringify(procedure.content),
-      });
-    } else if (!isEditing) {
-      form.reset({
-        type: (procedureType as any) || "environment_variables",
-        content: "",
-      });
+  const selectedType = form.watch("type");
+
+  // Vérifier s'il existe déjà une procédure de ce type
+  const existingProcedureOfType = useMemo(() => {
+    if (!procedures || !selectedType) return null;
+    
+    const typeKey = selectedType as keyof typeof procedures;
+    const proceduresOfType = procedures[typeKey] || [];
+    
+    // Si on modifie une procédure existante, on l'exclut de la vérification
+    if (existingProcedure) {
+      return proceduresOfType.find((p: any) => p.id !== existingProcedure.id);
     }
-  }, [procedure, isEditing, procedureType, form]);
+    
+    return proceduresOfType.length > 0 ? proceduresOfType[0] : null;
+  }, [procedures, selectedType, existingProcedure]);
 
-  const mutation = useMutation({
+  // Initialiser le contenu quand le modal s'ouvre
+  useEffect(() => {
+    if (isOpen && existingProcedure) {
+      setContent(existingProcedure.content || "");
+      form.reset({
+        title: existingProcedure.title || "",
+        description: existingProcedure.description || "",
+        type: existingProcedure.type || "environment_variables",
+        content: existingProcedure.content || "",
+      });
+    } else if (isOpen && type) {
+      form.setValue("type", type as any);
+    }
+  }, [isOpen, existingProcedure, type, form]);
+
+  const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const payload = {
+      const procedureData = {
         ...data,
-        title: procedureTypes.find(p => p.value === data.type)?.label || data.type,
-        order: 1,
+        gitRepoId,
+        content,
       };
-
-      if (isEditing) {
-        return await apiRequest("PATCH", `/api/procedures/${procedure.id}`, payload);
-      } else {
-        return await apiRequest("POST", `/api/git-repos/${gitRepoId}/procedures`, payload);
-      }
+      return apiRequest(`/api/git-repos/${gitRepoId}/procedures`, procedureData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/git-repos/${gitRepoId}/procedures`] });
       toast({
-        title: "Succès",
-        description: isEditing ? "Procédure modifiée avec succès" : "Procédure ajoutée avec succès",
+        title: "Procédure créée",
+        description: "La procédure a été créée avec succès.",
       });
-      onOpenChange(false);
-      form.reset();
+      queryClient.invalidateQueries({ queryKey: [`/api/git-repos/${gitRepoId}/procedures`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/project-versions`] });
+      onSuccess?.();
+      handleClose();
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast({
         title: "Erreur",
-        description: error.message || "Une erreur est survenue",
+        description: "Impossible de créer la procédure.",
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: FormData) => {
-    mutation.mutate(data);
+  const updateMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      const procedureData = {
+        ...data,
+        content,
+      };
+      return apiRequest(`/api/procedures/${existingProcedure.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(procedureData),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Procédure mise à jour",
+        description: "La procédure a été mise à jour avec succès.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/git-repos/${gitRepoId}/procedures`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/project-versions`] });
+      onSuccess?.();
+      handleClose();
+    },
+    onError: (error) => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour la procédure.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleClose = () => {
+    form.reset();
+    setContent("");
+    onClose();
   };
 
-  const insertTable = () => {
-    if (quillRef.current) {
-      const quill = quillRef.current.getEditor();
-      const range = quill.getSelection();
-      const tableHTML = `
-        <table style="border-collapse: collapse; width: 100%; margin: 15px 0; border: 2px solid #333;">
-          <thead>
-            <tr style="background-color: #f0f0f0;">
-              <th style="border: 1px solid #333; padding: 12px; text-align: left; font-weight: bold; background-color: #e9ecef;">En-tête 1</th>
-              <th style="border: 1px solid #333; padding: 12px; text-align: left; font-weight: bold; background-color: #e9ecef;">En-tête 2</th>
-              <th style="border: 1px solid #333; padding: 12px; text-align: left; font-weight: bold; background-color: #e9ecef;">En-tête 3</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 1</td>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 2</td>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 3</td>
-            </tr>
-            <tr>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #f8f9fa;">Cellule 4</td>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #f8f9fa;">Cellule 5</td>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #f8f9fa;">Cellule 6</td>
-            </tr>
-            <tr>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 7</td>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 8</td>
-              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 9</td>
-            </tr>
-          </tbody>
-        </table><p><br></p>
-      `;
-      if (range) {
-        quill.clipboard.dangerouslyPasteHTML(range.index, tableHTML);
-        quill.setSelection(range.index + tableHTML.length);
-      }
+  const onSubmit = (data: FormData) => {
+    const finalData = { ...data, content };
+    
+    // Si une procédure de ce type existe déjà et qu'on n'est pas en mode modification
+    if (existingProcedureOfType && !existingProcedure) {
+      toast({
+        title: "Procédure existante",
+        description: `Une procédure de type "${getTypeLabel(selectedType)}" existe déjà. Veuillez la modifier plutôt que d'en créer une nouvelle.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (existingProcedure) {
+      updateMutation.mutate(finalData);
+    } else {
+      createMutation.mutate(finalData);
     }
   };
 
+  const getTypeLabel = (type: string) => {
+    const labels = {
+      environment_variables: "Variables d'environnement",
+      service_verification: "Vérification des services",
+      command_execution: "Exécution de commandes",
+      data_import: "Import de données",
+    };
+    return labels[type as keyof typeof labels] || type;
+  };
+
+  // Configuration de l'éditeur avec insertion de tableaux HTML
+  const modules = useMemo(() => {
+    return {
+      toolbar: {
+        container: [
+          [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ 'color': [] }, { 'background': [] }],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          [{ 'indent': '-1'}, { 'indent': '+1' }],
+          [{ 'align': [] }],
+          ['link', 'image'],
+          ['blockquote', 'code-block'],
+          ['clean'],
+          ['table-insert']
+        ],
+        handlers: {
+          'table-insert': function() {
+            const quill = this.quill;
+            const range = quill.getSelection();
+            if (range) {
+              const tableHTML = `
+                <table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+                  <thead>
+                    <tr>
+                      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 1</th>
+                      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 2</th>
+                      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 3</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 1</td>
+                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 2</td>
+                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 3</td>
+                    </tr>
+                    <tr>
+                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 4</td>
+                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 5</td>
+                      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 6</td>
+                    </tr>
+                  </tbody>
+                </table>
+              `;
+              quill.clipboard.dangerouslyPasteHTML(range.index, tableHTML);
+            }
+          }
+        }
+      },
+    };
+  }, []);
+
+  const formats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike',
+    'color', 'background',
+    'list', 'bullet', 'indent',
+    'align',
+    'link', 'image',
+    'blockquote', 'code-block'
+  ];
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Modifier la procédure" : `Ajouter une procédure - ${procedureTypes.find(p => p.value === procedureType)?.label || 'Nouvelle procédure'}`}
+          <DialogTitle className="text-xl font-semibold">
+            {existingProcedure ? "Modifier la procédure" : "Ajouter une procédure"} - {getTypeLabel(selectedType)}
           </DialogTitle>
         </DialogHeader>
-        
+
+        {existingProcedureOfType && !existingProcedure && (
+          <Alert className="mb-4">
+            <InfoIcon className="h-4 w-4" />
+            <AlertDescription>
+              Une procédure de type "{getTypeLabel(selectedType)}" existe déjà. 
+              Il ne peut y avoir qu'une seule procédure par type par dépôt Git.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {!procedureType && (
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="type"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type de procédure</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={!!type || !!existingProcedure}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Sélectionner un type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {procedureTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="environment_variables">Variables d'environnement</SelectItem>
+                        <SelectItem value="service_verification">Vérification des services</SelectItem>
+                        <SelectItem value="command_execution">Exécution de commandes</SelectItem>
+                        <SelectItem value="data_import">Import de données</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
+
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Titre</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Titre de la procédure" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description (optionnelle)</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Description courte de la procédure..."
+                      className="resize-none"
+                      rows={2}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -234,51 +356,40 @@ export function ProcedureModal({
                 <FormItem>
                   <FormLabel>Contenu de la procédure</FormLabel>
                   <FormControl>
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={insertTable}
-                          className="flex items-center gap-2"
-                        >
-                          <span>⊞</span>
-                          Insérer un tableau
-                        </Button>
+                    <div className="border rounded-md">
+                      <div className="mb-2 p-2 bg-gray-50 dark:bg-gray-800 border-b text-sm text-gray-600 dark:text-gray-400">
+                        Utilisez la barre d'outils pour formater votre texte ou cliquez sur le bouton "Insérer un tableau" pour ajouter des tableaux.
                       </div>
-                      <div className="border rounded-md">
-                        <ReactQuill
-                          ref={quillRef}
-                          theme="snow"
-                          value={field.value}
-                          onChange={field.onChange}
-                          modules={quillModules}
-                          formats={quillFormats}
-                          placeholder="Décrivez la procédure avec la barre d'outils de formatage..."
-                          style={{ minHeight: '200px' }}
-                        />
-                      </div>
+                      <ReactQuill
+                        ref={quillRef}
+                        theme="snow"
+                        value={content}
+                        onChange={(value) => {
+                          setContent(value);
+                          form.setValue("content", value);
+                        }}
+                        modules={modules}
+                        formats={formats}
+                        style={{ minHeight: '300px' }}
+                        placeholder="Décrivez les étapes de la procédure..."
+                      />
                     </div>
                   </FormControl>
                   <FormMessage />
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Utilisez la barre d'outils pour formater votre texte ou le bouton "Insérer un tableau" ci-dessus.
-                  </div>
                 </FormItem>
               )}
             />
 
-            <div className="flex justify-end gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => onOpenChange(false)}
-              >
+            <div className="flex justify-end space-x-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={handleClose}>
                 Annuler
               </Button>
-              <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "En cours..." : isEditing ? "Modifier" : "Ajouter"}
+              <Button 
+                type="submit" 
+                disabled={createMutation.isPending || updateMutation.isPending || (existingProcedureOfType && !existingProcedure)}
+              >
+                {createMutation.isPending || updateMutation.isPending ? "Enregistrement..." : 
+                 existingProcedure ? "Mettre à jour" : "Ajouter"}
               </Button>
             </div>
           </form>

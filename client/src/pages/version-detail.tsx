@@ -17,7 +17,7 @@ import { GitRepoModal } from "@/components/modals/git-repo-modal";
 import { PvModal } from "@/components/modals/pv-modal";
 import { CabModal } from "@/components/modals/cab-modal";
 import { CommitModal } from "@/components/modals/commit-modal";
-import { ProcedureModal } from "@/components/modals/procedure-modal";
+import ProcedureModal from "@/components/modals/procedure-modal";
 import type { 
   ProjectVersionWithDetails, 
   GitRepoWithDetails, 
