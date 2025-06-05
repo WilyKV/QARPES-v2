@@ -320,9 +320,12 @@ export default function Projects() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <CardTitle className="text-lg group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                          {project.name}
-                        </CardTitle>
+                        <div className="flex items-center gap-2 mb-1">
+                          <CardTitle className="text-lg group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {project.name}
+                          </CardTitle>
+                          <ProjectVersionBadge projectId={project.id} />
+                        </div>
                         {project.team && (
                           <CardDescription className="flex items-center mt-1">
                             <Users className="w-3 h-3 mr-1" />
@@ -390,7 +393,6 @@ export default function Projects() {
                       >
                         Voir le projet
                       </Button>
-                      <ProjectVersionButton projectId={project.id} />
                     </div>
                     
                     {project.repositoryUrl && (
