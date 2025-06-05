@@ -448,62 +448,12 @@ export default function VersionDetail() {
               
               {version.gitRepos && version.gitRepos.length > 0 ? (
                 version.gitRepos.map((repo) => (
-                  <Card key={repo.id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-base">{repo.name}</CardTitle>
-                          <CardDescription>
-                            Dernier commit: {repo.lastCommitHash ? repo.lastCommitHash.substring(0, 7) : 'N/A'}
-                          </CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedGitRepo(repo);
-                              setGitRepoModalOpen(true);
-                            }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              if (confirm('Êtes-vous sûr de vouloir supprimer ce repository ?')) {
-                                try {
-                                  await apiRequest("DELETE", `/api/git-repos/${repo.id}`);
-                                  queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
-                                  toast({
-                                    title: "Succès",
-                                    description: "Repository supprimé avec succès",
-                                  });
-                                } catch (error) {
-                                  toast({
-                                    title: "Erreur",
-                                    description: "Impossible de supprimer le repository",
-                                    variant: "destructive",
-                                  });
-                                }
-                              }
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                          {repo.url && (
-                            <Button variant="outline" size="sm" asChild>
-                              <a href={repo.url} target="_blank" rel="noopener noreferrer">
-                                <GitBranch className="w-4 h-4 mr-2" />
-                                Voir le repo
-                              </a>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                  </Card>
+                  <GitRepoSection 
+                    key={repo.id} 
+                    repo={repo} 
+                    onAddCommit={handleAddCommit}
+                    onAddProcedure={handleAddProcedure}
+                  />
                 ))
               ) : (
                 <Card>
