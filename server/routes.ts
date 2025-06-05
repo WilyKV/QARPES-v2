@@ -627,6 +627,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Git Repository CRUD operations
+  app.post('/api/project-versions/:id/git-repos', async (req, res) => {
+    try {
+      const projectVersionId = parseInt(req.params.id);
+      const gitRepoData = { ...req.body, projectVersionId };
+      const gitRepo = await storage.createGitRepo(gitRepoData);
+      res.status(201).json(gitRepo);
+    } catch (error) {
+      console.error("Error creating git repo:", error);
+      res.status(400).json({ message: "Failed to create git repo" });
+    }
+  });
+
+  app.patch('/api/git-repos/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const gitRepo = await storage.updateGitRepo(id, req.body);
+      res.json(gitRepo);
+    } catch (error) {
+      console.error("Error updating git repo:", error);
+      res.status(400).json({ message: "Failed to update git repo" });
+    }
+  });
+
+  app.delete('/api/git-repos/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteGitRepo(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting git repo:", error);
+      res.status(500).json({ message: "Failed to delete git repo" });
+    }
+  });
+
+  // Project PV CRUD operations
+  app.post('/api/project-versions/:id/pvs', async (req, res) => {
+    try {
+      const projectVersionId = parseInt(req.params.id);
+      const pvData = { ...req.body, projectVersionId };
+      const pv = await storage.createProjectPv(pvData);
+      res.status(201).json(pv);
+    } catch (error) {
+      console.error("Error creating project PV:", error);
+      res.status(400).json({ message: "Failed to create project PV" });
+    }
+  });
+
+  app.patch('/api/project-pvs/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const pv = await storage.updateProjectPv(id, req.body);
+      res.json(pv);
+    } catch (error) {
+      console.error("Error updating project PV:", error);
+      res.status(400).json({ message: "Failed to update project PV" });
+    }
+  });
+
+  app.delete('/api/project-pvs/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteProjectPv(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting project PV:", error);
+      res.status(500).json({ message: "Failed to delete project PV" });
+    }
+  });
+
+  // CAB CRUD operations
+  app.post('/api/project-versions/:id/cabs', async (req, res) => {
+    try {
+      const projectVersionId = parseInt(req.params.id);
+      const cabData = { ...req.body, projectVersionId };
+      const cab = await storage.createCab(cabData);
+      res.status(201).json(cab);
+    } catch (error) {
+      console.error("Error creating CAB:", error);
+      res.status(400).json({ message: "Failed to create CAB" });
+    }
+  });
+
+  app.patch('/api/cabs/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const cab = await storage.updateCab(id, req.body);
+      res.json(cab);
+    } catch (error) {
+      console.error("Error updating CAB:", error);
+      res.status(400).json({ message: "Failed to update CAB" });
+    }
+  });
+
+  app.delete('/api/cabs/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteCab(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting CAB:", error);
+      res.status(500).json({ message: "Failed to delete CAB" });
+    }
+  });
+
   // Release procedures aggregation
   app.get('/api/releases/:releaseId/procedures', async (req, res) => {
     try {

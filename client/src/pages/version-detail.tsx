@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, Settings, Database, Terminal, Upload, GitBranch, Users, Link as LinkIcon } from "lucide-react";
+import { ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, Settings, Database, Terminal, Upload, GitBranch, Users, Link as LinkIcon, Plus, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,9 @@ import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { formatDate } from "@/lib/constants";
 import { VersionReleaseModal } from "@/components/modals/version-release-modal";
+import { GitRepoModal } from "@/components/modals/git-repo-modal";
+import { PvModal } from "@/components/modals/pv-modal";
+import { CabModal } from "@/components/modals/cab-modal";
 import type { 
   ProjectVersionWithDetails, 
   GitRepoWithDetails, 
@@ -185,6 +188,18 @@ export default function VersionDetail() {
   const projectId = parseInt(params.projectId || "0");
   const versionId = parseInt(params.versionId || "0");
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+  
+  // Git Repo modal states
+  const [gitRepoModalOpen, setGitRepoModalOpen] = useState(false);
+  const [selectedGitRepo, setSelectedGitRepo] = useState<any>(null);
+  
+  // PV modal states
+  const [pvModalOpen, setPvModalOpen] = useState(false);
+  const [selectedPv, setSelectedPv] = useState<any>(null);
+  
+  // CAB modal states
+  const [cabModalOpen, setCabModalOpen] = useState(false);
+  const [selectedCab, setSelectedCab] = useState<any>(null);
 
   const { data: version, isLoading: versionLoading } = useQuery<ProjectVersionWithDetails>({
     queryKey: [`/api/projects/${projectId}/versions/${versionId}`],
