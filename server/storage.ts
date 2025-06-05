@@ -11,6 +11,8 @@ import {
   commits,
   cab,
   procedures,
+  projectPvs,
+  pvFiles,
   type User,
   type UpsertUser,
   type Team,
@@ -35,6 +37,10 @@ import {
   type InsertCab,
   type Procedure,
   type InsertProcedure,
+  type ProjectPv,
+  type InsertProjectPv,
+  type PvFile,
+  type InsertPvFile,
   type TeamWithMembers,
   type ProjectWithTeam,
   type ProjectVersionWithDetails,
@@ -123,6 +129,18 @@ export interface IStorage {
   createArb(arbData: InsertArb): Promise<Arb>;
   updateArb(id: number, arbData: Partial<InsertArb>): Promise<Arb>;
   deleteArb(id: number): Promise<void>;
+  
+  // PV operations
+  getProjectPvs(projectVersionId: number): Promise<(ProjectPv & { files: PvFile[] })[]>;
+  getProjectPv(id: number): Promise<(ProjectPv & { files: PvFile[] }) | undefined>;
+  createProjectPv(pv: InsertProjectPv): Promise<ProjectPv>;
+  updateProjectPv(id: number, pv: Partial<InsertProjectPv>): Promise<ProjectPv>;
+  deleteProjectPv(id: number): Promise<void>;
+  
+  // PV File operations
+  addPvFile(file: InsertPvFile): Promise<PvFile>;
+  removePvFile(id: number): Promise<void>;
+  getPvFiles(pvId: number): Promise<PvFile[]>;
   
   // Dashboard stats
   getDashboardStats(): Promise<{
