@@ -97,24 +97,47 @@ function ProcedureCard({ procedure, repoName }: { procedure: Procedure; repoName
 }
 
 function GitRepoSection({ repo }: { repo: GitRepoWithDetails }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <GitBranch className="w-4 h-4" />
-          <CardTitle className="text-lg">{repo.name}</CardTitle>
-          <Badge variant="secondary">{repo.branch}</Badge>
+      <CardHeader 
+        className="cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-4 h-4" />
+            <CardTitle className="text-lg">{repo.name}</CardTitle>
+            <Badge variant="secondary">{repo.branch}</Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="p-1">
+              {isExpanded ? (
+                <ArrowLeft className="w-4 h-4 rotate-90" />
+              ) : (
+                <ArrowLeft className="w-4 h-4 -rotate-90" />
+              )}
+            </Button>
+          </div>
         </div>
         {repo.url && (
           <CardDescription>
-            <a href={repo.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+            <a 
+              href={repo.url} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              onClick={(e) => e.stopPropagation()}
+            >
               {repo.url}
             </a>
           </CardDescription>
         )}
       </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="commits" className="w-full">
+      {isExpanded && (
+        <CardContent>
+          <Tabs defaultValue="commits" className="w-full">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="commits">Commits</TabsTrigger>
             <TabsTrigger value="environment_variables">Variables env.</TabsTrigger>
@@ -171,6 +194,7 @@ function GitRepoSection({ repo }: { repo: GitRepoWithDetails }) {
           ))}
         </Tabs>
       </CardContent>
+      )}
     </Card>
   );
 }
@@ -338,6 +362,7 @@ export default function ProjectDetail() {
                     <Tabs defaultValue="repositories" className="w-full">
                       <TabsList>
                         <TabsTrigger value="repositories">Repositories Git</TabsTrigger>
+                        <TabsTrigger value="pvs">PVs</TabsTrigger>
                         <TabsTrigger value="cab">Tickets CAB</TabsTrigger>
                       </TabsList>
                       
@@ -351,6 +376,66 @@ export default function ProjectDetail() {
                             Aucun repository Git trouvé pour cette version
                           </p>
                         )}
+                      </TabsContent>
+                      
+                      <TabsContent value="pvs" className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {["pv_fonctionnel_recette", "pv_metier_recette", "pv_conformite_preprod", "pv_tests_homologation_preprod"].map((pvType) => {
+                            const pvTypeLabels = {
+                              pv_fonctionnel_recette: "PV Fonctionnel Recette",
+                              pv_metier_recette: "PV Métier Recette", 
+                              pv_conformite_preprod: "PV Conformité Préprod",
+                              pv_tests_homologation_preprod: "PV Tests Homologation IT Préprod"
+                            };
+                            
+                            const pv = version.pvs?.find(p => p.type === pvType);
+                            
+                            return (
+                              <Card key={pvType} className={`border-l-4 ${pv?.status === 'completed' ? 'border-l-green-500 bg-green-50 dark:bg-green-950' : 'border-l-orange-500'}`}>
+                                <CardHeader className="pb-3">
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <CardTitle className="text-sm">{pvTypeLabels[pvType as keyof typeof pvTypeLabels]}</CardTitle>
+                                      <CardDescription className="text-xs">
+                                        {pv ? `Status: ${pv.status}` : 'Non créé'}
+                                      </CardDescription>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {pv?.status === 'completed' ? (
+                                        <CheckCircle className="w-4 h-4 text-green-600" />
+                                      ) : (
+                                        <Clock className="w-4 h-4 text-orange-600" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </CardHeader>
+                                {pv?.files && pv.files.length > 0 && (
+                                  <CardContent>
+                                    <div className="space-y-2">
+                                      <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                                        Fichiers attachés ({pv.files.length})
+                                      </p>
+                                      {pv.files.slice(0, 3).map((file) => (
+                                        <div key={file.id} className="flex items-center gap-2 text-xs">
+                                          <FileText className="w-3 h-3" />
+                                          <span className="truncate">{file.fileName}</span>
+                                          <span className="text-gray-400">
+                                            ({Math.round((file.fileSize || 0) / 1024)} KB)
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {pv.files.length > 3 && (
+                                        <p className="text-xs text-gray-500">
+                                          +{pv.files.length - 3} autres fichiers
+                                        </p>
+                                      )}
+                                    </div>
+                                  </CardContent>
+                                )}
+                              </Card>
+                            );
+                          })}
+                        </div>
                       </TabsContent>
                       
                       <TabsContent value="cab" className="space-y-3">
