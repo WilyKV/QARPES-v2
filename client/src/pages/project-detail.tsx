@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, Settings, Database, Terminal, Upload, GitBranch, Users } from "lucide-react";
+import { ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, Settings, Database, Terminal, Upload, GitBranch, Users, Plus, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +57,18 @@ const statusLabels = {
   approved: "Approuvé",
   rejected: "Rejeté",
   closed: "Fermé",
+  // Version statuses
+  en_cours_arb: "En cours d'ARB",
+  en_developpement: "En développement",
+  a_deployer_recette: "À déployer Recette",
+  recette_en_cours: "Recette en cours",
+  a_deployer_preprod: "À déployer Préprod",
+  preprod_en_cours: "Préprod en cours",
+  a_deployer_production: "À déployer en production",
+  merge_git_a_faire: "Merge git à faire",
+  annule: "Annulé",
+  hotfix_a_prevoir: "Hotfix à prévoir",
+  termine: "Terminé",
 };
 
 const priorityColors = {
@@ -525,6 +537,23 @@ export default function ProjectDetail() {
           </div>
         </div>
       </main>
+
+      {/* Modals */}
+      <VersionModal 
+        open={versionModalOpen} 
+        onOpenChange={setVersionModalOpen} 
+        projectId={projectId} 
+      />
+      
+      {selectedVersionId && (
+        <VersionReleaseModal
+          open={releaseModalOpen}
+          onOpenChange={setReleaseModalOpen}
+          projectId={projectId}
+          versionId={selectedVersionId}
+          versionName={selectedVersionName}
+        />
+      )}
     </div>
   );
 }
