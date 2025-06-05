@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -16,16 +16,23 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertGitRepoSchema, type GitRepo } from "@shared/schema";
+import { insertGitRepoSchema, type GitRepo, type GitRepoWithDetails, type ProjectVersionWithDetails } from "@shared/schema";
 import { z } from "zod";
+import { useState, useEffect } from "react";
 
 const formSchema = insertGitRepoSchema.extend({
   name: z.string().min(1, "Le nom est requis"),
-  branch: z.string().min(1, "La branche est requise"),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -50,23 +57,59 @@ export function GitRepoModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditing = !!gitRepo;
+  const [isCreatingNew, setIsCreatingNew] = useState(!isEditing);
+
+  // Récupérer les détails de la version pour obtenir la release associée
+  const { data: version } = useQuery<ProjectVersionWithDetails>({
+    queryKey: [`/api/projects/${projectId}/versions/${versionId}`],
+    enabled: open,
+  });
+
+  // Récupérer tous les repositories Git existants pour permettre la sélection
+  const { data: allGitRepos = [] } = useQuery<GitRepoWithDetails[]>({
+    queryKey: ["/api/git-repos/all"],
+    enabled: open && !isEditing,
+  });
+
+  // Calculer la branche automatiquement basée sur la release associée
+  const automaticBranch = version?.releaseId ? `release/${version.releaseId}` : "main";
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: gitRepo?.name || "",
       url: gitRepo?.url || "",
-      branch: gitRepo?.branch || "main",
-      lastCommitHash: gitRepo?.lastCommitHash || "",
+      description: gitRepo?.description || "",
     },
   });
 
+  useEffect(() => {
+    if (isEditing && gitRepo) {
+      form.reset({
+        name: gitRepo.name,
+        url: gitRepo.url || "",
+        description: gitRepo.description || "",
+      });
+    } else if (!isEditing) {
+      form.reset({
+        name: "",
+        url: "",
+        description: "",
+      });
+    }
+  }, [gitRepo, isEditing, form]);
+
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
+      const payload = {
+        ...data,
+        branch: automaticBranch, // Branche automatique basée sur la release
+      };
+
       if (isEditing) {
-        return await apiRequest("PATCH", `/api/git-repos/${gitRepo.id}`, data);
+        return await apiRequest("PATCH", `/api/git-repos/${gitRepo.id}`, payload);
       } else {
-        return await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, data);
+        return await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, payload);
       }
     },
     onSuccess: () => {
@@ -77,6 +120,7 @@ export function GitRepoModal({
       });
       onOpenChange(false);
       form.reset();
+      setIsCreatingNew(!isEditing);
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -98,6 +142,50 @@ export function GitRepoModal({
     },
   });
 
+  const handleSelectExistingRepo = async (repoId: string) => {
+    if (repoId === "new") {
+      setIsCreatingNew(true);
+      return;
+    }
+
+    const selectedRepo = allGitRepos.find(repo => repo.id.toString() === repoId);
+    if (selectedRepo) {
+      try {
+        // Associer le repository existant à la version de projet
+        await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, {
+          name: selectedRepo.name,
+          url: selectedRepo.url,
+          description: selectedRepo.description,
+          branch: automaticBranch, // Branche automatique basée sur la release
+        });
+        
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+        toast({
+          title: "Succès",
+          description: "Repository associé avec succès",
+        });
+        onOpenChange(false);
+      } catch (error) {
+        if (isUnauthorizedError(error)) {
+          toast({
+            title: "Non autorisé",
+            description: "Vous êtes déconnecté. Reconnexion en cours...",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            window.location.href = "/api/login";
+          }, 500);
+          return;
+        }
+        toast({
+          title: "Erreur",
+          description: "Impossible d'associer le repository",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   const onSubmit = (data: FormData) => {
     mutation.mutate(data);
   };
@@ -107,89 +195,122 @@ export function GitRepoModal({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Modifier le repository" : "Nouveau repository Git"}
+            {isEditing ? "Modifier le repository" : "Repository Git"}
           </DialogTitle>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nom du repository</FormLabel>
-                  <FormControl>
-                    <Input placeholder="nom-du-repo" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>URL (optionnelle)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="https://github.com/user/repo" 
-                      {...field} 
-                      value={field.value || ""} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="branch"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Branche</FormLabel>
-                  <FormControl>
-                    <Input placeholder="main" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="lastCommitHash"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Dernier commit (optionnel)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="abc123..." 
-                      {...field} 
-                      value={field.value || ""} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Annuler
-              </Button>
-              <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending 
-                  ? (isEditing ? "Modification..." : "Création...") 
-                  : (isEditing ? "Modifier" : "Créer")
-                }
-              </Button>
+        {!isEditing && !isCreatingNew && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Sélectionner un repository existant</label>
+              <Select onValueChange={handleSelectExistingRepo}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Choisir un repository existant ou créer un nouveau" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">+ Créer un nouveau repository</SelectItem>
+                  {allGitRepos.map((repo) => (
+                    <SelectItem key={repo.id} value={repo.id.toString()}>
+                      {repo.name} ({repo.url || 'Pas d\'URL'})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </form>
-        </Form>
+            
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              <p><strong>Branche automatique:</strong> {automaticBranch}</p>
+              {version?.release?.releaseId && (
+                <p className="mt-1">Basée sur la release associée: {version.release.releaseId}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(isEditing || isCreatingNew) && (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom du repository</FormLabel>
+                    <FormControl>
+                      <Input placeholder="my-project-repo" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="url"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL du repository (optionnel)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="https://github.com/user/repo.git" 
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (optionnel)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Description du repository..." 
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                <p><strong>Branche automatique:</strong> {automaticBranch}</p>
+                {version?.release?.releaseId && (
+                  <p className="mt-1">Basée sur la release associée: {version.release.releaseId}</p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    if (!isEditing) {
+                      setIsCreatingNew(false);
+                    } else {
+                      onOpenChange(false);
+                    }
+                  }}
+                >
+                  {isEditing ? "Annuler" : "Retour"}
+                </Button>
+                <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending 
+                    ? (isEditing ? "Modification..." : "Création...") 
+                    : (isEditing ? "Modifier" : "Créer")
+                  }
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
       </DialogContent>
     </Dialog>
   );

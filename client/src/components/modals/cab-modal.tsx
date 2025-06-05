@@ -84,6 +84,7 @@ export function CabModal({
     mutationFn: async (data: FormData) => {
       const payload = {
         ...data,
+        assigneeId: data.assigneeId === "none" ? null : data.assigneeId,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
       };
 
@@ -248,7 +249,7 @@ export function CabModal({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Aucun</SelectItem>
+                      <SelectItem value="none">Aucun</SelectItem>
                       {users.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.email}

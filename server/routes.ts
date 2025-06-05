@@ -15,7 +15,9 @@ import {
   insertCommitSchema,
   insertCabSchema,
   insertProcedureSchema,
+  gitRepos,
 } from "@shared/schema";
+import { db } from "./db";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -628,6 +630,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Git Repository CRUD operations
+  app.get('/api/git-repos/all', async (req, res) => {
+    try {
+      // Récupérer tous les repositories Git distincts (pas spécifiques à une version)
+      const allRepos = await db.select({
+        id: gitRepos.id,
+        name: gitRepos.name,
+        url: gitRepos.url,
+        description: gitRepos.description,
+      })
+      .from(gitRepos)
+      .groupBy(gitRepos.name, gitRepos.url, gitRepos.id, gitRepos.description);
+      
+      res.json(allRepos);
+    } catch (error) {
+      console.error("Error fetching all git repos:", error);
+      res.status(500).json({ message: "Failed to fetch git repos" });
+    }
+  });
+
   app.post('/api/project-versions/:id/git-repos', async (req, res) => {
     try {
       const projectVersionId = parseInt(req.params.id);
