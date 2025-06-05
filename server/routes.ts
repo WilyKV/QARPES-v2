@@ -338,7 +338,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateProjectVersion(versionId, { releaseId: targetReleaseId });
       
       // Also associate project to release if not already associated
-      await storage.addProjectToRelease({ releaseId: targetReleaseId, projectId });
+      try {
+        await storage.addProjectToRelease({ releaseId: targetReleaseId, projectId });
+      } catch (error) {
+        // Ignore duplicate key errors - project already associated to release
+        console.log("Project already associated to release, skipping...");
+      }
       
       res.status(201).json({ 
         message: "Project version associated to release successfully",
@@ -359,6 +364,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching project versions:", error);
       res.status(500).json({ message: "Failed to fetch project versions" });
+    }
+  });
+
+  app.get('/api/projects/:projectId/versions/:versionId', async (req, res) => {
+    try {
+      const versionId = parseInt(req.params.versionId);
+      const version = await storage.getProjectVersion(versionId);
+      if (!version) {
+        return res.status(404).json({ message: "Version not found" });
+      }
+      res.json(version);
+    } catch (error) {
+      console.error("Error fetching project version:", error);
+      res.status(500).json({ message: "Failed to fetch project version" });
     }
   });
 

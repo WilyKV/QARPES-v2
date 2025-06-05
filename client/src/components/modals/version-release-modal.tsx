@@ -94,7 +94,7 @@ export function VersionReleaseModal({
     },
   });
 
-  const { data: releases = [] } = useQuery({
+  const { data: releases = [] } = useQuery<any[]>({
     queryKey: ["/api/releases"],
     enabled: open,
     retry: false,
@@ -208,12 +208,10 @@ export function VersionReleaseModal({
                         <SelectContent>
                           {releases.map((release: any) => (
                             <SelectItem key={release.id} value={release.id.toString()}>
-                              <div className="flex items-center justify-between w-full">
-                                <div className="flex items-center space-x-2">
-                                  <span className="font-medium">{release.releaseId}</span>
-                                  <span>-</span>
-                                  <span>{release.name}</span>
-                                </div>
+                              <div className="flex items-center space-x-2">
+                                <span className="font-medium">{release.releaseId}</span>
+                                <span>-</span>
+                                <span>{release.name}</span>
                                 <Badge className={statusColors[release.status as keyof typeof statusColors] || statusColors.testing}>
                                   {statusLabels[release.status as keyof typeof statusLabels] || release.status}
                                 </Badge>

@@ -369,7 +369,12 @@ export default function ProjectDetail() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle className="text-lg">Version {version.version}</CardTitle>
+                        <CardTitle 
+                          className="text-lg hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"
+                          onClick={() => setLocation(`/projects/${projectId}/versions/${version.id}`)}
+                        >
+                          Version {version.version}
+                        </CardTitle>
                         <CardDescription>{version.description}</CardDescription>
                       </div>
                       <div className="flex items-center gap-2">
