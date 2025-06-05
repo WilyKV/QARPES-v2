@@ -62,7 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Team routes
-  app.get('/api/teams', isAuthenticated, async (req, res) => {
+  app.get('/api/teams', async (req, res) => {
     try {
       const teams = await storage.getTeams();
       res.json(teams);
@@ -324,7 +324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Users routes
-  app.get('/api/users', isAuthenticated, async (req, res) => {
+  app.get('/api/users', async (req, res) => {
     try {
       const users = await storage.getUsers();
       res.json(users);
