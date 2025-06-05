@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, Settings, Database, Terminal, Upload, GitBranch, Users, Link as LinkIcon, Plus, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -188,6 +190,8 @@ export default function VersionDetail() {
   const projectId = parseInt(params.projectId || "0");
   const versionId = parseInt(params.versionId || "0");
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // Git Repo modal states
   const [gitRepoModalOpen, setGitRepoModalOpen] = useState(false);
@@ -336,9 +340,78 @@ export default function VersionDetail() {
             </TabsList>
             
             <TabsContent value="repositories" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Repositories Git</h3>
+                <Button 
+                  onClick={() => {
+                    setSelectedGitRepo(null);
+                    setGitRepoModalOpen(true);
+                  }}
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ajouter un repository
+                </Button>
+              </div>
+              
               {version.gitRepos && version.gitRepos.length > 0 ? (
                 version.gitRepos.map((repo) => (
-                  <GitRepoSection key={repo.id} repo={repo} />
+                  <Card key={repo.id}>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base">{repo.name}</CardTitle>
+                          <CardDescription>
+                            Branche: {repo.branch} | Dernier commit: {repo.lastCommitHash ? repo.lastCommitHash.substring(0, 7) : 'N/A'}
+                          </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedGitRepo(repo);
+                              setGitRepoModalOpen(true);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              if (confirm('Êtes-vous sûr de vouloir supprimer ce repository ?')) {
+                                try {
+                                  await apiRequest("DELETE", `/api/git-repos/${repo.id}`);
+                                  queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+                                  toast({
+                                    title: "Succès",
+                                    description: "Repository supprimé avec succès",
+                                  });
+                                } catch (error) {
+                                  toast({
+                                    title: "Erreur",
+                                    description: "Impossible de supprimer le repository",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                          {repo.url && (
+                            <Button variant="outline" size="sm" asChild>
+                              <a href={repo.url} target="_blank" rel="noopener noreferrer">
+                                <GitBranch className="w-4 h-4 mr-2" />
+                                Voir le repo
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </Card>
                 ))
               ) : (
                 <Card>
@@ -356,16 +429,66 @@ export default function VersionDetail() {
             </TabsContent>
 
             <TabsContent value="pvs" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">PVs (Procès-Verbaux)</h3>
+                <Button 
+                  onClick={() => {
+                    setSelectedPv(null);
+                    setPvModalOpen(true);
+                  }}
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ajouter un PV
+                </Button>
+              </div>
+              
               {version.pvs && version.pvs.length > 0 ? (
                 version.pvs.map((pv) => (
                   <Card key={pv.id} className="border-l-4 border-l-purple-500">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div>
-                          <CardTitle className="text-sm">PV #{pv.id}</CardTitle>
-                          <CardDescription className="text-sm">{pv.description}</CardDescription>
+                          <CardTitle className="text-sm">PV #{pv.id} - {pv.type}</CardTitle>
+                          <CardDescription className="text-sm">
+                            Statut: {pv.status} | {pv.files?.length || 0} fichier(s)
+                          </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedPv(pv);
+                              setPvModalOpen(true);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              if (confirm('Êtes-vous sûr de vouloir supprimer ce PV ?')) {
+                                try {
+                                  await apiRequest("DELETE", `/api/project-pvs/${pv.id}`);
+                                  queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+                                  toast({
+                                    title: "Succès",
+                                    description: "PV supprimé avec succès",
+                                  });
+                                } catch (error) {
+                                  toast({
+                                    title: "Erreur",
+                                    description: "Impossible de supprimer le PV",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                           {pv?.status === 'completed' ? (
                             <CheckCircle className="w-4 h-4 text-green-600" />
                           ) : (
@@ -415,6 +538,20 @@ export default function VersionDetail() {
             </TabsContent>
 
             <TabsContent value="cab" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Tickets CAB</h3>
+                <Button 
+                  onClick={() => {
+                    setSelectedCab(null);
+                    setCabModalOpen(true);
+                  }}
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ajouter un ticket CAB
+                </Button>
+              </div>
+              
               {version.cabs && version.cabs.length > 0 ? (
                 version.cabs.map((cab) => (
                   <Card key={cab.id} className="border-l-4 border-l-blue-500">
@@ -425,6 +562,40 @@ export default function VersionDetail() {
                           <CardDescription className="text-sm">{cab.title}</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedCab(cab);
+                              setCabModalOpen(true);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              if (confirm('Êtes-vous sûr de vouloir supprimer ce ticket CAB ?')) {
+                                try {
+                                  await apiRequest("DELETE", `/api/cabs/${cab.id}`);
+                                  queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+                                  toast({
+                                    title: "Succès",
+                                    description: "Ticket CAB supprimé avec succès",
+                                  });
+                                } catch (error) {
+                                  toast({
+                                    title: "Erreur",
+                                    description: "Impossible de supprimer le ticket CAB",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                           <Badge className={statusColors[cab.status as keyof typeof statusColors] || statusColors.open}>
                             {statusLabels[cab.status as keyof typeof statusLabels] || cab.status}
                           </Badge>
