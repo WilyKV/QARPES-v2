@@ -165,6 +165,7 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
                       placeholder="Description du projet"
                       rows={3}
                       {...field}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -214,7 +215,6 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="none">Aucune équipe</SelectItem>
                         {teams?.map((team: any) => (
                           <SelectItem key={team.id} value={team.id.toString()}>
                             {team.name}

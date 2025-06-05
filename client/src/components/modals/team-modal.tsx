@@ -156,6 +156,7 @@ export function TeamModal({ open, onOpenChange, team }: TeamModalProps) {
                       placeholder="Description de l'équipe"
                       rows={3}
                       {...field}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -171,7 +172,7 @@ export function TeamModal({ open, onOpenChange, team }: TeamModalProps) {
                   <FormLabel>Chef d'Équipe</FormLabel>
                   <Select 
                     onValueChange={field.onChange} 
-                    defaultValue={field.value}
+                    value={field.value || ""}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -179,7 +180,6 @@ export function TeamModal({ open, onOpenChange, team }: TeamModalProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Aucun chef d'équipe</SelectItem>
                       {users.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.firstName} {user.lastName}
