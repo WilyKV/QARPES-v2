@@ -55,6 +55,12 @@ export function Sidebar() {
       current: location === "/teams",
     },
     {
+      name: "Membres",
+      href: "/members",
+      icon: UserCog,
+      current: location === "/members",
+    },
+    {
       name: "ARB",
       href: "/arb",
       icon: Shield,
