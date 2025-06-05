@@ -766,6 +766,91 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Dashboard stats
+  // PV operations
+  async getProjectPvs(projectVersionId: number): Promise<(ProjectPv & { files: PvFile[] })[]> {
+    const pvs = await db
+      .select()
+      .from(projectPvs)
+      .where(eq(projectPvs.projectVersionId, projectVersionId))
+      .orderBy(projectPvs.type);
+
+    const pvsWithFiles = await Promise.all(
+      pvs.map(async (pv) => {
+        const files = await db
+          .select()
+          .from(pvFiles)
+          .where(eq(pvFiles.pvId, pv.id))
+          .orderBy(pvFiles.uploadedAt);
+        
+        return { ...pv, files };
+      })
+    );
+
+    return pvsWithFiles;
+  }
+
+  async getProjectPv(id: number): Promise<(ProjectPv & { files: PvFile[] }) | undefined> {
+    const [pv] = await db
+      .select()
+      .from(projectPvs)
+      .where(eq(projectPvs.id, id));
+
+    if (!pv) return undefined;
+
+    const files = await db
+      .select()
+      .from(pvFiles)
+      .where(eq(pvFiles.pvId, id))
+      .orderBy(pvFiles.uploadedAt);
+
+    return { ...pv, files };
+  }
+
+  async createProjectPv(pvData: InsertProjectPv): Promise<ProjectPv> {
+    const [pv] = await db
+      .insert(projectPvs)
+      .values(pvData)
+      .returning();
+    
+    return pv;
+  }
+
+  async updateProjectPv(id: number, pvData: Partial<InsertProjectPv>): Promise<ProjectPv> {
+    const [pv] = await db
+      .update(projectPvs)
+      .set({ ...pvData, updatedAt: new Date() })
+      .where(eq(projectPvs.id, id))
+      .returning();
+
+    return pv;
+  }
+
+  async deleteProjectPv(id: number): Promise<void> {
+    await db.delete(projectPvs).where(eq(projectPvs.id, id));
+  }
+
+  // PV File operations
+  async addPvFile(fileData: InsertPvFile): Promise<PvFile> {
+    const [file] = await db
+      .insert(pvFiles)
+      .values(fileData)
+      .returning();
+    
+    return file;
+  }
+
+  async removePvFile(id: number): Promise<void> {
+    await db.delete(pvFiles).where(eq(pvFiles.id, id));
+  }
+
+  async getPvFiles(pvId: number): Promise<PvFile[]> {
+    return await db
+      .select()
+      .from(pvFiles)
+      .where(eq(pvFiles.pvId, pvId))
+      .orderBy(pvFiles.uploadedAt);
+  }
+
   async getDashboardStats(): Promise<{
     activeReleases: number;
     totalProjects: number;

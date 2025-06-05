@@ -245,7 +245,8 @@ export async function createFixtures() {
       description: "Release de janvier avec les projets E2I et Nemo",
       status: "planning",
       teamId: createdTeams[0].id,
-      plannedDate: new Date("2025-01-15")
+      plannedDate: new Date("2025-01-15"),
+      releaseDate: "2025-01-15"
     },
     {
       releaseId: "202506-02",
@@ -253,7 +254,8 @@ export async function createFixtures() {
       description: "Release de février avec IRIS et EUBS",
       status: "in_progress",
       teamId: createdTeams[2].id,
-      plannedDate: new Date("2025-02-15")
+      plannedDate: new Date("2025-02-15"),
+      releaseDate: "2025-02-15"
     }
   ]).returning();
 
@@ -344,7 +346,8 @@ export async function createFixtures() {
     ];
 
     for (const repo of [gitRepo1[0], gitRepo2[0]]) {
-      for (const [index, procType] of procedureTypes.entries()) {
+      for (let index = 0; index < procedureTypes.length; index++) {
+        const procType = procedureTypes[index];
         await db.insert(procedures).values({
           gitRepoId: repo.id,
           type: procType.type,

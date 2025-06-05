@@ -462,6 +462,7 @@ export type ProjectVersionWithDetails = ProjectVersion & {
   project?: Project & { team?: Team };
   gitRepos?: GitRepoWithDetails[];
   cabs?: CabWithDetails[];
+  pvs?: (ProjectPv & { files: PvFile[] })[];
 };
 
 export type GitRepoWithDetails = GitRepo & {
