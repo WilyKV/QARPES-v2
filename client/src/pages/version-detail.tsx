@@ -130,9 +130,18 @@ function ProcedureCard({ procedure, repoName }: { procedure: Procedure; repoName
   );
 }
 
-function GitRepoSection({ repo }: { repo: GitRepoWithDetails }) {
+function GitRepoSection({ repo, onAddCommit, onAddProcedure }: { 
+  repo: GitRepoWithDetails; 
+  onAddCommit: (gitRepoId: number) => void;
+  onAddProcedure: (gitRepoId: number, type: string) => void;
+}) {
   const { data: procedures } = useQuery<ProceduresByType>({
     queryKey: [`/api/git-repos/${repo.id}/procedures`],
+    enabled: !!repo.id,
+  });
+  
+  const { data: commits } = useQuery({
+    queryKey: [`/api/git-repos/${repo.id}/commits`],
     enabled: !!repo.id,
   });
 
@@ -144,44 +153,100 @@ function GitRepoSection({ repo }: { repo: GitRepoWithDetails }) {
             <CardTitle className="text-base">{repo.name}</CardTitle>
             <CardDescription>
               Dernier commit: {repo.lastCommitHash ? repo.lastCommitHash.substring(0, 7) : 'N/A'}
+              {commits && Array.isArray(commits) && ` • ${commits.length} commit(s)`}
             </CardDescription>
           </div>
-          {repo.url && (
-            <Button variant="outline" size="sm" asChild>
-              <a href={repo.url} target="_blank" rel="noopener noreferrer">
-                <GitBranch className="w-4 h-4 mr-2" />
-                Voir le repo
-              </a>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => onAddCommit(repo.id)}
+            >
+              <GitCommit className="w-4 h-4 mr-2" />
+              Ajouter commit
             </Button>
-          )}
+            {repo.url && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={repo.url} target="_blank" rel="noopener noreferrer">
+                  <GitBranch className="w-4 h-4 mr-2" />
+                  Voir le repo
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       
-      {procedures && (
-        <CardContent>
-          <div className="space-y-4">
+      <CardContent>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
             <h4 className="font-medium">Procédures de déploiement</h4>
-            {Object.entries(procedures).map(([type, procedureList]) => (
-              procedureList.length > 0 && (
-                <div key={type} className="space-y-2">
-                  <h5 className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                    {procedureTypeLabels[type as keyof typeof procedureTypeLabels]} ({procedureList.length})
-                  </h5>
-                  <div className="space-y-2">
-                    {procedureList.map((procedure) => (
-                      <ProcedureCard 
-                        key={procedure.id} 
-                        procedure={procedure} 
-                        repoName={repo.name} 
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            ))}
+            <div className="flex gap-2">
+              {Object.keys(procedureTypeLabels).map((type) => (
+                <Button
+                  key={type}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onAddProcedure(repo.id, type)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {procedureTypeLabels[type as keyof typeof procedureTypeLabels]}
+                </Button>
+              ))}
+            </div>
           </div>
-        </CardContent>
-      )}
+          
+          {procedures && Object.entries(procedures).map(([type, procedureList]) => (
+            procedureList.length > 0 && (
+              <div key={type} className="space-y-2">
+                <h5 className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                  {procedureTypeLabels[type as keyof typeof procedureTypeLabels]} ({procedureList.length})
+                </h5>
+                <div className="space-y-2">
+                  {procedureList.map((procedure) => (
+                    <ProcedureCard 
+                      key={procedure.id} 
+                      procedure={procedure} 
+                      repoName={repo.name} 
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          ))}
+          
+          {commits && Array.isArray(commits) && commits.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="font-medium">Commits</h4>
+              <div className="space-y-2">
+                {commits.map((commit: any) => (
+                  <Card key={commit.id}>
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-mono text-sm">{commit.hash.substring(0, 7)}</div>
+                          <div className="text-sm text-gray-600 dark:text-gray-300">{commit.message}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {commit.author} • {formatDate(commit.committedAt)}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm">
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
     </Card>
   );
 }
@@ -222,6 +287,20 @@ export default function VersionDetail() {
     queryKey: [`/api/projects/${projectId}/versions/${versionId}`],
     enabled: !!projectId && !!versionId,
   });
+
+  // Handlers for commits and procedures
+  const handleAddCommit = (gitRepoId: number) => {
+    setSelectedGitRepoForCommit(gitRepoId);
+    setSelectedCommit(null);
+    setCommitModalOpen(true);
+  };
+
+  const handleAddProcedure = (gitRepoId: number, type: string) => {
+    setSelectedGitRepoForProcedure(gitRepoId);
+    setSelectedProcedureType(type);
+    setSelectedProcedure(null);
+    setProcedureModalOpen(true);
+  };
 
   if (versionLoading) {
     return (
@@ -687,6 +766,25 @@ export default function VersionDetail() {
         projectId={projectId}
         versionId={versionId}
         cab={selectedCab}
+      />
+      
+      <CommitModal
+        open={commitModalOpen}
+        onOpenChange={setCommitModalOpen}
+        gitRepoId={selectedGitRepoForCommit}
+        projectId={projectId}
+        versionId={versionId}
+        commit={selectedCommit}
+      />
+      
+      <ProcedureModal
+        open={procedureModalOpen}
+        onOpenChange={setProcedureModalOpen}
+        gitRepoId={selectedGitRepoForProcedure}
+        projectId={projectId}
+        versionId={versionId}
+        procedure={selectedProcedure}
+        procedureType={selectedProcedureType}
       />
     </div>
   );
