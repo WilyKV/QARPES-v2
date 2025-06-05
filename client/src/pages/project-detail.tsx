@@ -11,6 +11,7 @@ import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { formatDate } from "@/lib/constants";
 import { VersionModal } from "@/components/modals/version-modal";
+import { VersionReleaseModal } from "@/components/modals/version-release-modal";
 import type { 
   ProjectWithTeam, 
   ProjectVersionWithDetails, 
