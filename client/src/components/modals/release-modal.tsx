@@ -62,7 +62,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
     },
   });
 
-  const { data: teams } = useQuery({
+  const { data: teams = [] } = useQuery({
     queryKey: ["/api/teams"],
     retry: false,
   });
@@ -216,6 +216,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
                       placeholder="Description de la release"
                       rows={3}
                       {...field}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -240,8 +241,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="none">Aucune équipe</SelectItem>
-                        {teams?.map((team: any) => (
+                        {Array.isArray(teams) && teams.map((team: any) => (
                           <SelectItem key={team.id} value={team.id.toString()}>
                             {team.name}
                           </SelectItem>

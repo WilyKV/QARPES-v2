@@ -57,7 +57,7 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
     },
   });
 
-  const { data: teams } = useQuery({
+  const { data: teams = [] } = useQuery({
     queryKey: ["/api/teams"],
     retry: false,
   });
@@ -215,7 +215,7 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {teams?.map((team: any) => (
+                        {Array.isArray(teams) && teams.map((team: any) => (
                           <SelectItem key={team.id} value={team.id.toString()}>
                             {team.name}
                           </SelectItem>
@@ -239,6 +239,7 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
                       placeholder="https://github.com/..."
                       type="url"
                       {...field}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
