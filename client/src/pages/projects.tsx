@@ -30,8 +30,8 @@ const statusLabels = {
   production: "Production",
 };
 
-// Composant pour naviguer vers la dernière version d'un projet
-function ProjectVersionButton({ projectId }: { projectId: number }) {
+// Composant pour afficher et naviguer vers la dernière version d'un projet
+function ProjectVersionBadge({ projectId }: { projectId: number }) {
   const { data: versions, isLoading } = useQuery({
     queryKey: ['/api/projects', projectId, 'versions'],
     enabled: !!projectId,
@@ -39,30 +39,34 @@ function ProjectVersionButton({ projectId }: { projectId: number }) {
 
   if (isLoading) {
     return (
-      <Button variant="ghost" size="sm" disabled>
-        <ArrowRight className="h-4 w-4" />
-      </Button>
+      <Badge variant="secondary" className="text-xs">
+        Loading...
+      </Badge>
     );
   }
 
   const latestVersion = Array.isArray(versions) && versions.length > 0 ? versions[0] : null;
 
   if (!latestVersion) {
-    return null;
+    return (
+      <Badge variant="outline" className="text-xs">
+        Aucune version
+      </Badge>
+    );
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
+    <Badge
+      variant="default"
+      className="text-xs cursor-pointer hover:bg-blue-700 bg-blue-600 text-white"
       onClick={(e) => {
         e.stopPropagation();
         window.location.href = `/projects/${projectId}/versions/${latestVersion.id}`;
       }}
-      title={`Aller à la version ${latestVersion.version}`}
+      title={`Cliquer pour aller à la version ${latestVersion.version}`}
     >
-      <ArrowRight className="h-4 w-4" />
-    </Button>
+      v{latestVersion.version}
+    </Badge>
   );
 }
 

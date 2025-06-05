@@ -155,27 +155,32 @@ export function ProcedureModal({
       const quill = quillRef.current.getEditor();
       const range = quill.getSelection();
       const tableHTML = `
-        <table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+        <table style="border-collapse: collapse; width: 100%; margin: 15px 0; border: 2px solid #333;">
           <thead>
-            <tr style="background-color: #f8f9fa;">
-              <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">En-tête 1</th>
-              <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">En-tête 2</th>
-              <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">En-tête 3</th>
+            <tr style="background-color: #f0f0f0;">
+              <th style="border: 1px solid #333; padding: 12px; text-align: left; font-weight: bold; background-color: #e9ecef;">En-tête 1</th>
+              <th style="border: 1px solid #333; padding: 12px; text-align: left; font-weight: bold; background-color: #e9ecef;">En-tête 2</th>
+              <th style="border: 1px solid #333; padding: 12px; text-align: left; font-weight: bold; background-color: #e9ecef;">En-tête 3</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 1</td>
-              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 2</td>
-              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 3</td>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 1</td>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 2</td>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 3</td>
             </tr>
             <tr>
-              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 4</td>
-              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 5</td>
-              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 6</td>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #f8f9fa;">Cellule 4</td>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #f8f9fa;">Cellule 5</td>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #f8f9fa;">Cellule 6</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 7</td>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 8</td>
+              <td style="border: 1px solid #333; padding: 10px; background-color: #fff;">Cellule 9</td>
             </tr>
           </tbody>
-        </table>
+        </table><p><br></p>
       `;
       if (range) {
         quill.clipboard.dangerouslyPasteHTML(range.index, tableHTML);
