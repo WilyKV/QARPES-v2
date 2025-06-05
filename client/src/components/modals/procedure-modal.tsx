@@ -15,6 +15,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import QuillBetterTable from 'quill-better-table';
+import 'quill-better-table/dist/quill-better-table.css';
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -32,6 +34,12 @@ import { type Procedure } from "@shared/schema";
 import { z } from "zod";
 import { useEffect } from "react";
 
+// Enregistrement du module table pour Quill
+if (typeof window !== 'undefined') {
+  const Quill = ReactQuill.Quill;
+  Quill.register('modules/better-table', QuillBetterTable);
+}
+
 const procedureTypes = [
   { value: "environment_variables", label: "Variables d'environnement" },
   { value: "service_verification", label: "Vérification des services" },
@@ -39,21 +47,60 @@ const procedureTypes = [
   { value: "data_import", label: "Import de données" },
 ];
 
-// Configuration de la barre d'outils Quill
+// Configuration de la barre d'outils Quill avec tableaux
 const quillModules = {
   toolbar: [
     [{ 'header': [1, 2, 3, false] }],
     ['bold', 'italic', 'underline', 'strike'],
     [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'indent': '-1'}, { 'indent': '+1' }],
     [{ 'color': [] }, { 'background': [] }],
-    ['link', 'code-block'],
+    [{ 'align': [] }],
+    ['link', 'image', 'code-block'],
+    ['blockquote'],
+    ['better-table'],
     ['clean']
   ],
+  'better-table': {
+    operationMenu: {
+      items: {
+        unmergeCells: {
+          text: 'Séparer les cellules'
+        },
+        insertColumnRight: {
+          text: 'Insérer colonne à droite'
+        },
+        insertColumnLeft: {
+          text: 'Insérer colonne à gauche'
+        },
+        insertRowUp: {
+          text: 'Insérer ligne au-dessus'
+        },
+        insertRowDown: {
+          text: 'Insérer ligne en-dessous'
+        },
+        mergeCells: {
+          text: 'Fusionner les cellules'
+        },
+        deleteColumn: {
+          text: 'Supprimer la colonne'
+        },
+        deleteRow: {
+          text: 'Supprimer la ligne'
+        },
+        deleteTable: {
+          text: 'Supprimer le tableau'
+        }
+      }
+    }
+  }
 };
 
 const quillFormats = [
   'header', 'bold', 'italic', 'underline', 'strike',
-  'list', 'bullet', 'color', 'background', 'link', 'code-block'
+  'list', 'bullet', 'indent', 'color', 'background', 
+  'align', 'link', 'image', 'code-block', 'blockquote',
+  'better-table', 'table', 'table-col', 'table-cell', 'table-cell-line'
 ];
 
 const formSchema = z.object({
