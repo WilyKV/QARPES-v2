@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProjectModal } from "@/components/modals/project-modal";
-import { Plus, Search, Edit, Trash2, ExternalLink, MoreHorizontal, Users, Calendar } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ExternalLink, MoreHorizontal, Users, Calendar, ArrowRight } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import type { ProjectWithTeam } from "@shared/schema";
@@ -29,6 +29,42 @@ const statusLabels = {
   preproduction: "Pré-production",
   production: "Production",
 };
+
+// Composant pour naviguer vers la dernière version d'un projet
+function ProjectVersionButton({ projectId }: { projectId: number }) {
+  const { data: versions, isLoading } = useQuery({
+    queryKey: ['/api/projects', projectId, 'versions'],
+    enabled: !!projectId,
+  });
+
+  if (isLoading) {
+    return (
+      <Button variant="ghost" size="sm" disabled>
+        <ArrowRight className="h-4 w-4" />
+      </Button>
+    );
+  }
+
+  const latestVersion = versions && versions.length > 0 ? versions[0] : null;
+
+  if (!latestVersion) {
+    return null;
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        window.location.href = `/projects/${projectId}/versions/${latestVersion.id}`;
+      }}
+      title={`Aller à la version ${latestVersion.version}`}
+    >
+      <ArrowRight className="h-4 w-4" />
+    </Button>
+  );
+}
 
 export default function Projects() {
   const { toast } = useToast();
@@ -325,7 +361,7 @@ export default function Projects() {
                       </p>
                     )}
                     
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-3">
                       <Badge 
                         className={statusColors[project.status as keyof typeof statusColors] || statusColors.development}
                       >
@@ -334,8 +370,23 @@ export default function Projects() {
                       
                       <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
                         <Calendar className="w-3 h-3 mr-1" />
-                        {new Date(project.createdAt).toLocaleDateString('fr-FR')}
+                        {project.createdAt ? new Date(project.createdAt).toLocaleDateString('fr-FR') : '-'}
                       </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = `/projects/${project.id}`;
+                        }}
+                        className="flex-1"
+                      >
+                        Voir le projet
+                      </Button>
+                      <ProjectVersionButton projectId={project.id} />
                     </div>
                     
                     {project.repositoryUrl && (

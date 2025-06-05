@@ -30,7 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { type Procedure } from "@shared/schema";
 import { z } from "zod";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 const procedureTypes = [
   { value: "environment_variables", label: "Variables d'environnement" },
@@ -89,6 +89,7 @@ export function ProcedureModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditing = !!procedure;
+  const quillRef = useRef<any>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -149,6 +150,40 @@ export function ProcedureModal({
     mutation.mutate(data);
   };
 
+  const insertTable = () => {
+    if (quillRef.current) {
+      const quill = quillRef.current.getEditor();
+      const range = quill.getSelection();
+      const tableHTML = `
+        <table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+          <thead>
+            <tr style="background-color: #f8f9fa;">
+              <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">En-tête 1</th>
+              <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">En-tête 2</th>
+              <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">En-tête 3</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 1</td>
+              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 2</td>
+              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 3</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 4</td>
+              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 5</td>
+              <td style="border: 1px solid #dee2e6; padding: 8px;">Cellule 6</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      if (range) {
+        quill.clipboard.dangerouslyPasteHTML(range.index, tableHTML);
+        quill.setSelection(range.index + tableHTML.length);
+      }
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
@@ -194,21 +229,36 @@ export function ProcedureModal({
                 <FormItem>
                   <FormLabel>Contenu de la procédure</FormLabel>
                   <FormControl>
-                    <div className="border rounded-md">
-                      <ReactQuill
-                        theme="snow"
-                        value={field.value}
-                        onChange={field.onChange}
-                        modules={quillModules}
-                        formats={quillFormats}
-                        placeholder="Décrivez la procédure avec la barre d'outils de formatage..."
-                        style={{ minHeight: '200px' }}
-                      />
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={insertTable}
+                          className="flex items-center gap-2"
+                        >
+                          <span>⊞</span>
+                          Insérer un tableau
+                        </Button>
+                      </div>
+                      <div className="border rounded-md">
+                        <ReactQuill
+                          ref={quillRef}
+                          theme="snow"
+                          value={field.value}
+                          onChange={field.onChange}
+                          modules={quillModules}
+                          formats={quillFormats}
+                          placeholder="Décrivez la procédure avec la barre d'outils de formatage..."
+                          style={{ minHeight: '200px' }}
+                        />
+                      </div>
                     </div>
                   </FormControl>
                   <FormMessage />
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Utilisez la barre d'outils pour formater votre texte. Pour les tableaux, vous pouvez copier-coller depuis Excel/Word ou saisir du HTML directement.
+                    Utilisez la barre d'outils pour formater votre texte ou le bouton "Insérer un tableau" ci-dessus.
                   </div>
                 </FormItem>
               )}
