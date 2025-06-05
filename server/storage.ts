@@ -6,6 +6,11 @@ import {
   releases,
   releaseProjects,
   arb,
+  projectVersions,
+  gitRepos,
+  commits,
+  cab,
+  procedures,
   type User,
   type UpsertUser,
   type Team,
@@ -20,6 +25,16 @@ import {
   type InsertReleaseProject,
   type Arb,
   type InsertArb,
+  type ProjectVersion,
+  type InsertProjectVersion,
+  type GitRepo,
+  type InsertGitRepo,
+  type Commit,
+  type InsertCommit,
+  type Cab,
+  type InsertCab,
+  type Procedure,
+  type InsertProcedure,
   type TeamWithMembers,
   type ProjectWithTeam,
   type ReleaseWithTeamAndProjects,
@@ -62,6 +77,40 @@ export interface IStorage {
   // Release-Project operations
   addProjectToRelease(releaseProject: InsertReleaseProject): Promise<ReleaseProject>;
   removeProjectFromRelease(releaseId: number, projectId: number): Promise<void>;
+  
+  // Project Version operations
+  getProjectVersions(projectId: number): Promise<ProjectVersionWithDetails[]>;
+  getProjectVersion(id: number): Promise<ProjectVersionWithDetails | undefined>;
+  createProjectVersion(version: InsertProjectVersion): Promise<ProjectVersion>;
+  updateProjectVersion(id: number, version: Partial<InsertProjectVersion>): Promise<ProjectVersion>;
+  deleteProjectVersion(id: number): Promise<void>;
+  
+  // Git Repository operations
+  getGitRepos(projectVersionId: number): Promise<GitRepoWithDetails[]>;
+  createGitRepo(gitRepo: InsertGitRepo): Promise<GitRepo>;
+  updateGitRepo(id: number, gitRepo: Partial<InsertGitRepo>): Promise<GitRepo>;
+  deleteGitRepo(id: number): Promise<void>;
+  
+  // Commit operations
+  getCommits(gitRepoId: number): Promise<Commit[]>;
+  createCommit(commit: InsertCommit): Promise<Commit>;
+  
+  // CAB operations
+  getCabs(projectVersionId: number): Promise<CabWithDetails[]>;
+  createCab(cab: InsertCab): Promise<Cab>;
+  updateCab(id: number, cab: Partial<InsertCab>): Promise<Cab>;
+  deleteCab(id: number): Promise<void>;
+  
+  // Procedure operations (4 types organized by Git repository)
+  getProcedures(gitRepoId: number): Promise<ProceduresByType>;
+  getProceduresByType(gitRepoId: number, type: string): Promise<Procedure[]>;
+  createProcedure(procedure: InsertProcedure): Promise<Procedure>;
+  updateProcedure(id: number, procedure: Partial<InsertProcedure>): Promise<Procedure>;
+  deleteProcedure(id: number): Promise<void>;
+  toggleProcedureCompletion(id: number): Promise<Procedure>;
+  
+  // Release procedures aggregation
+  getReleaseProcedures(releaseId: number): Promise<ReleaseProceduresAggregated>;
   
   // ARB operations
   getArbs(): Promise<ArbWithDetails[]>;
