@@ -445,101 +445,72 @@ export async function createFixtures() {
     data: [
       // E2I
       {
-        name: "E2I v1.0.0 - Lot Egoronne",
-        description: "Lot Egoronne pour la plateforme E2I",
+        name: "E2I",
+        description: "E2I",
         status: "production",
         teamId: teamsList[0].id,
         repositoryUrl: "https://github.com/omneseducation/e2i-egoronne",
       },
-      {
-        name: "E2I v1.0.1 - Lot TreLot",
-        description: "Lot TreLot pour la plateforme E2I",
-        status: "testing",
-        teamId: teamsList[0].id,
-        repositoryUrl: "https://github.com/omneseducation/e2i-trelot",
-      },
       // Nemo
       {
-        name: "Nemo v4.1.0",
-        description: "Version 4.1.0 de la plateforme Nemo",
+        name: "Nemo",
+        description: "Nemo",
         status: "production",
-        teamId: teamsList[1].id,
-        repositoryUrl: "https://github.com/omneseducation/nemo",
-      },
-      {
-        name: "Nemo v4.1.1 - fix isActive",
-        description: "Correction du bug isActive dans Nemo",
-        status: "testing",
-        teamId: teamsList[1].id,
-        repositoryUrl: "https://github.com/omneseducation/nemo",
-      },
-      {
-        name: "Nemo v4.2.0",
-        description: "Version 4.2.0 de la plateforme Nemo",
-        status: "development",
         teamId: teamsList[1].id,
         repositoryUrl: "https://github.com/omneseducation/nemo",
       },
       // Iris
       {
-        name: "IRIS / WP6 v3.2.0 - Lot Egoronne",
-        description: "Lot Egoronne pour IRIS WP6",
+        name: "IRIS / WP6",
+        description: "IRIS WP6",
         status: "production",
         teamId: teamsList[2].id,
         repositoryUrl: "https://github.com/omneseducation/iris-wp6",
       },
-      // EUBS
-      {
-        name: "EUBS v1.1.0 - Lot Egoronne",
-        description: "Lot Egoronne pour EUBS",
-        status: "production",
-        teamId: teamsList[4].id,
-        repositoryUrl: "https://github.com/omneseducation/eubs",
-      },
       // Formulaire de Candidature
       {
-        name: "Release FDC 2.6.4",
-        description: "Version 2.6.4 du Formulaire de Candidature",
+        name: "FDC",
+        description: "Formulaire de Candidature",
         status: "production",
         teamId: teamsList[5].id,
         repositoryUrl: "https://github.com/omneseducation/formulaire-candidature",
       },
       // Techaway
       {
-        name: "Techaway v2.0.0",
-        description: "Version 2.0.0 de Techaway",
+        name: "Techaway",
+        description: "Techaway",
         status: "development",
         teamId: teamsList[6].id,
         repositoryUrl: "https://github.com/omneseducation/techaway",
       },
       // Ypareo
       {
-        name: "Ypareo v3.0.1",
-        description: "Version 3.0.1 de Ypareo",
+        name: "Ypareo",
+        description: "Ypareo",
         status: "production",
         teamId: teamsList[7].id,
         repositoryUrl: "https://github.com/omneseducation/ypareo",
       },
       // Match'Up
       {
-        name: "Match'Up v1.3.6",
-        description: "Version 1.3.6 de Match'Up",
+        name: "Match'Up",
+        description: "Match'Up",
         status: "production",
         teamId: teamsList[8].id,
         repositoryUrl: "https://github.com/omneseducation/matchup",
       },
       // Newform Backoffice
       {
-        name: "Newform Backoffice v1.0.0",
-        description: "Version 1.0.0 du Newform Backoffice",
+        name: "Newform Backoffice",
+        description: "Newform Backoffice",
         status: "testing",
         teamId: teamsList[9].id,
         repositoryUrl: "https://github.com/omneseducation/newform-backoffice",
       },
       // NewmanTrek
       {
-        name: "NewmanTrek v1.0.0",
-        description: "Version 1.0.0 de NewmanTrek - Automatisation des tests",
+        name: "NewmanTrek",
+        description: "NewmanTrek - Automatisation des tests",
         status: "development",
         teamId: teamsList[10].id,
         repositoryUrl: "https://github.com/omneseducation/newman-trek",

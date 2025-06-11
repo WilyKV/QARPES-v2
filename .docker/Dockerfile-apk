@@ -1,0 +1,103 @@
+# Dockerfile.apk - Build React app as Android APK using Capacitor
+# Utilise Node.js pour build, puis Capacitor + Android SDK pour packager en APK
+
+FROM node:20 AS build
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Étape Android/Java : utilise Temurin 21 officiel
+FROM eclipse-temurin:21-jdk AS android
+WORKDIR /app
+COPY --from=build /app /app
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
+# Installe Node.js et npm (nécessaires pour Capacitor)
+RUN apt-get update && \
+    apt-get install -y curl wget unzip && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs
+
+# Installe Capacitor et Android SDK tools
+RUN npm install --save @capacitor/core @capacitor/cli
+# Initialisation Capacitor (ignore l'erreur si déjà initialisé)
+RUN [ -f config/capacitor.config.json ] || npx cap init qarpes-v2 com.qarpes-v2.appli --web-dir=dist || true
+# Installe toutes les dépendances du projet (important pour cap add android)
+RUN npm install @capacitor/android
+# Ajoute Android (ignore l'erreur si déjà fait)
+RUN [ -d android ] || npx cap add android || true
+# Supprime le dossier android pour forcer une génération propre
+RUN rm -rf android && npx cap add android
+RUN ls -l android && ls -l android/app || true
+# Synchronise Capacitor Android (force la génération des fichiers natifs)
+RUN npx cap sync android || true
+# Vérifie la présence de gradlew pour debug
+RUN ls -l android && ls -l android/app && ls -l android/app/dist || true
+
+# Copie le build dans le dossier public de Capacitor (crée le dossier si besoin)
+RUN mkdir -p android/app/src/main/assets/public && rm -rf android/app/src/main/assets/public/* && cp -r dist/* android/app/src/main/assets/public/
+
+# Installe le SDK Android
+ENV ANDROID_SDK_ROOT=/sdk
+RUN wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O cmdline-tools.zip && \
+    mkdir -p /sdk/cmdline-tools && \
+    unzip cmdline-tools.zip -d /sdk/cmdline-tools && \
+    mv /sdk/cmdline-tools/cmdline-tools /sdk/cmdline-tools/latest && \
+    yes | /sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/sdk --licenses && \
+    /sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/sdk "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+
+# Install Gradle
+RUN wget https://services.gradle.org/distributions/gradle-8.7-bin.zip -O gradle.zip && \
+    unzip gradle.zip -d /opt && \
+    ln -s /opt/gradle-8.7/bin/gradle /usr/bin/gradle
+
+# Installe ImageMagick pour la conversion d'images
+RUN apt-get update && apt-get install -y imagemagick
+
+# Génère/redimensionne le logo dans les mipmap Android (icône APK personnalisée)
+RUN mkdir -p android/app/src/main/res/mipmap-mdpi \
+ && mkdir -p android/app/src/main/res/mipmap-hdpi \
+ && mkdir -p android/app/src/main/res/mipmap-xhdpi \
+ && mkdir -p android/app/src/main/res/mipmap-xxhdpi \
+ && mkdir -p android/app/src/main/res/mipmap-xxxhdpi \
+ && convert public/logo.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png \
+ && convert public/logo.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png \
+ && convert public/logo.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png \
+ && convert public/logo.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png \
+ && convert public/logo.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+# Build APK, versionne et copie tous les APK générés dans /app/output
+WORKDIR /app/android
+RUN mkdir -p /app/output && \
+    if [ -f ./gradlew ]; then \
+      chmod +x ./gradlew && ./gradlew assembleDebug --stacktrace || true; \
+      echo "Contenu de android/app/build/outputs/apk/debug/ :"; \
+      ls -l app/build/outputs/apk/debug/ || true; \
+      echo "Contenu de android/app/build/outputs/apk/release/ :"; \
+      ls -l app/build/outputs/apk/release/ || true; \
+      APK_PATH=$(find app/build/outputs/ -name '*.apk' | head -n 1); \
+      if [ -n "$APK_PATH" ]; then \
+        DATE=$(date +%Y%m%d); \
+        INDEX=1; \
+        APK_BASENAME="qarpes-v2-$DATE-$(printf '%02d' $INDEX).apk"; \
+        while [ -f "/app/output/$APK_BASENAME" ]; do \
+          INDEX=$((INDEX+1)); \
+          APK_BASENAME="qarpes-v2-$DATE-$(printf '%02d' $INDEX).apk"; \
+        done; \
+        cp "$APK_PATH" "/app/output/$APK_BASENAME"; \
+        find /app/output -type f ! -name "$APK_BASENAME" -delete; \
+        echo "APK copié dans /app/output/ : $APK_BASENAME"; \
+      else \
+        echo 'Aucun APK généré, vérifiez les logs Gradle.'; \
+        touch /app/output/README.txt; \
+      fi; \
+    else \
+      echo 'gradlew absent, build Android incomplet.'; \
+      touch /app/output/README.txt; \
+    fi
+
+# Ce Dockerfile est un exemple pour automatiser le build web + préparation Capacitor.
+# Pour générer l'APK, ouvrir le dossier android/ dans Android Studio et builder l'APK.

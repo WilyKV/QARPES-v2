@@ -180,6 +180,20 @@ export default function Releases() {
       .catch(() => toast({ title: "Erreur", description: "Échec de la modification", variant: "destructive" }));
   };
 
+  // Ajout d'une fonction utilitaire pour la couleur des statuts
+  function getStatusColor(status: string) {
+    switch (status) {
+      case "0": return "bg-gray-400 text-white"; // En développement
+      case "1": return "bg-blue-400 text-white"; // A déployer
+      case "2": return "bg-yellow-400 text-black"; // Recette en cours
+      case "3": return "bg-purple-500 text-white"; // Préprod
+      case "4": return "bg-green-500 text-white"; // Production
+      case "5": return "bg-pink-500 text-white"; // Merge final
+      case "Annulé": return "bg-red-500 text-white"; // Annulé
+      default: return "bg-gray-200 text-gray-700";
+    }
+  }
+
   if (isLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -191,10 +205,13 @@ export default function Releases() {
     );
   }
 
-  // Découpage des releases par tableau
-  const releasesByTable: ReleaseWithTeamAndProjects[][] = TABLES.map(table =>
-    filteredReleases.filter(r => typeof r.status === "string" && table.statuses.includes(r.status))
-  );
+  // Découpage des releases par tableau selon les statuts demandés
+  const preprodProdStatuses = ["3", "4"];
+  const devDeployRecetteStatuses = ["0", "1", "2"];
+
+  const releasesPreprodProd = filteredReleases.filter(r => preprodProdStatuses.includes(String(r.status)));
+  const releasesDevDeployRecette = filteredReleases.filter(r => devDeployRecetteStatuses.includes(String(r.status)));
+  const releasesAutres = filteredReleases.filter(r => !preprodProdStatuses.includes(String(r.status)) && !devDeployRecetteStatuses.includes(String(r.status)));
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
@@ -211,77 +228,206 @@ export default function Releases() {
           }
         />
         <div className="p-6 space-y-12">
-          {TABLES.map((table, idx) => (
-            <div key={table.title}>
-              <h2 className="text-lg font-semibold mb-2">{table.title}</h2>
-              <div className="rounded-xl shadow bg-white dark:bg-gray-800 p-4 overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="px-3 py-2 text-left">ID Release</th>
-                      <th className="px-3 py-2 text-left">Nom</th>
-                      <th className="px-3 py-2 text-left">Statut</th>
-                      <th className="px-3 py-2 text-left">Équipe</th>
-                      <th className="px-3 py-2 text-left">Projets</th>
-                      <th className="px-3 py-2 text-left">Recette</th>
-                      <th className="px-3 py-2 text-left">Préprod</th>
-                      <th className="px-3 py-2 text-left">Prod</th>
-                      <th className="px-3 py-2 text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {releasesByTable[idx].map((row: ReleaseWithTeamAndProjects) => {
-                      // Correction id
-                      const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
-                      // Correction releaseId
-                      const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
-                      // Correction name
-                      const name = typeof row.name === "string" ? row.name : "";
-                      // Correction status
-                      const status = typeof row.status === "string" ? row.status : "";
-                      // Correction team
-                      const teamName = typeof row.team?.name === "string" ? row.team.name : "";
-                      // Correction dates
-                      const safeDate = (d: any) => {
-                        if (!d) return "";
-                        if (typeof d === "string") return d.slice(0, 10);
-                        if (d instanceof Date) return d.toISOString().slice(0, 10);
-                        if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
-                        return "";
-                      };
-                      return (
-                        <tr key={rowId} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td className="px-3 py-2 font-mono">{releaseId}</td>
-                          <td className="px-3 py-2">
-                            <EditableCell value={name} onSave={v => updateField(rowId!, "name", v)} />
-                          </td>
-                          <td className="px-3 py-2">
-                            <EditableCell value={status} onSave={v => updateField(rowId!, "status", v)} type="select" options={STATUS_OPTIONS.release} />
-                          </td>
-                          <td className="px-3 py-2">{teamName || <span className="text-gray-400">-</span>}</td>
-                          <td className="px-3 py-2">{Array.isArray(row.releaseProjects) ? row.releaseProjects.length : 0}</td>
-                          <td className="px-3 py-2">
-                            <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
-                          </td>
-                          <td className="px-3 py-2">
-                            <EditableCell value={safeDate(row.preprodDate)} onSave={v => updateField(rowId!, "preprodDate", v)} type="date" />
-                          </td>
-                          <td className="px-3 py-2">
-                            <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
-                          </td>
-                          <td className="px-3 py-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(row)}><Edit className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4" /></Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {releasesByTable[idx].length === 0 && <div className="text-center text-gray-400 py-8">Aucune release</div>}
-              </div>
+          {/* Tableau 1 : Préprod & Prod */}
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Préproduction & Production</h2>
+            <div className="rounded-xl shadow bg-white dark:bg-gray-800 p-4 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="px-3 py-2 text-left">ID Release</th>
+                    <th className="px-3 py-2 text-left">Nom</th>
+                    <th className="px-3 py-2 text-left">Statut</th>
+                    <th className="px-3 py-2 text-left">Équipe</th>
+                    <th className="px-3 py-2 text-left">Projets</th>
+                    <th className="px-3 py-2 text-left">Recette</th>
+                    <th className="px-3 py-2 text-left">Préprod</th>
+                    <th className="px-3 py-2 text-left">Prod</th>
+                    <th className="px-3 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {releasesPreprodProd.map((row) => {
+                    const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
+                    const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
+                    const name = typeof row.name === "string" ? row.name : "";
+                    const status = typeof row.status === "string" ? row.status : "";
+                    const teamName = typeof row.team?.name === "string" ? row.team.name : "";
+                    const safeDate = (d: any) => {
+                      if (!d) return "";
+                      if (typeof d === "string") return d.slice(0, 10);
+                      if (d instanceof Date) return d.toISOString().slice(0, 10);
+                      if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
+                      return "";
+                    };
+                    return (
+                      <tr key={rowId} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-3 py-2 font-mono">{releaseId}</td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={name} onSave={v => updateField(rowId!, "name", v)} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusColor(status)}`}>
+                            {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{teamName || <span className="text-gray-400">-</span>}</td>
+                        <td className="px-3 py-2">{Array.isArray(row.releaseProjects) ? row.releaseProjects.length : 0}</td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.preprodDate)} onSave={v => updateField(rowId!, "preprodDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(row)}><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4" /></Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {releasesPreprodProd.length === 0 && <div className="text-center text-gray-400 py-8">Aucune release</div>}
             </div>
-          ))}
+          </div>
+
+          {/* Tableau 2 : Développement, A déployer, Recette */}
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Développement, À déployer & Recette</h2>
+            <div className="rounded-xl shadow bg-white dark:bg-gray-800 p-4 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="px-3 py-2 text-left">ID Release</th>
+                    <th className="px-3 py-2 text-left">Nom</th>
+                    <th className="px-3 py-2 text-left">Statut</th>
+                    <th className="px-3 py-2 text-left">Équipe</th>
+                    <th className="px-3 py-2 text-left">Projets</th>
+                    <th className="px-3 py-2 text-left">Recette</th>
+                    <th className="px-3 py-2 text-left">Préprod</th>
+                    <th className="px-3 py-2 text-left">Prod</th>
+                    <th className="px-3 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {releasesDevDeployRecette.map((row) => {
+                    const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
+                    const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
+                    const name = typeof row.name === "string" ? row.name : "";
+                    const status = typeof row.status === "string" ? row.status : "";
+                    const teamName = typeof row.team?.name === "string" ? row.team.name : "";
+                    const safeDate = (d: any) => {
+                      if (!d) return "";
+                      if (typeof d === "string") return d.slice(0, 10);
+                      if (d instanceof Date) return d.toISOString().slice(0, 10);
+                      if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
+                      return "";
+                    };
+                    return (
+                      <tr key={rowId} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-3 py-2 font-mono">{releaseId}</td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={name} onSave={v => updateField(rowId!, "name", v)} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusColor(status)}`}>
+                            {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{teamName || <span className="text-gray-400">-</span>}</td>
+                        <td className="px-3 py-2">{Array.isArray(row.releaseProjects) ? row.releaseProjects.length : 0}</td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.preprodDate)} onSave={v => updateField(rowId!, "preprodDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(row)}><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4" /></Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {releasesDevDeployRecette.length === 0 && <div className="text-center text-gray-400 py-8">Aucune release</div>}
+            </div>
+          </div>
+
+          {/* Tableau 3 : Autres */}
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Autres</h2>
+            <div className="rounded-xl shadow bg-white dark:bg-gray-800 p-4 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="px-3 py-2 text-left">ID Release</th>
+                    <th className="px-3 py-2 text-left">Nom</th>
+                    <th className="px-3 py-2 text-left">Statut</th>
+                    <th className="px-3 py-2 text-left">Équipe</th>
+                    <th className="px-3 py-2 text-left">Projets</th>
+                    <th className="px-3 py-2 text-left">Recette</th>
+                    <th className="px-3 py-2 text-left">Préprod</th>
+                    <th className="px-3 py-2 text-left">Prod</th>
+                    <th className="px-3 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {releasesAutres.map((row) => {
+                    const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
+                    const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
+                    const name = typeof row.name === "string" ? row.name : "";
+                    const status = typeof row.status === "string" ? row.status : "";
+                    const teamName = typeof row.team?.name === "string" ? row.team.name : "";
+                    const safeDate = (d: any) => {
+                      if (!d) return "";
+                      if (typeof d === "string") return d.slice(0, 10);
+                      if (d instanceof Date) return d.toISOString().slice(0, 10);
+                      if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
+                      return "";
+                    };
+                    return (
+                      <tr key={rowId} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-3 py-2 font-mono">{releaseId}</td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={name} onSave={v => updateField(rowId!, "name", v)} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusColor(status)}`}>
+                            {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{teamName || <span className="text-gray-400">-</span>}</td>
+                        <td className="px-3 py-2">{Array.isArray(row.releaseProjects) ? row.releaseProjects.length : 0}</td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.preprodDate)} onSave={v => updateField(rowId!, "preprodDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(row)}><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4" /></Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {releasesAutres.length === 0 && <div className="text-center text-gray-400 py-8">Aucune release</div>}
+            </div>
+          </div>
         </div>
       </main>
       <ReleaseModal 

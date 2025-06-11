@@ -26,8 +26,5 @@ COPY shared ./shared
 
 EXPOSE 8080 5173
 
-RUN npx prisma generate
-RUN npx prisma db seed
-
 # Commande de dev : le conteneur reste actif, on lance npm run dev à la main
 CMD ["tail", "-f", "/dev/null"]
