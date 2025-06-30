@@ -3,7 +3,11 @@ import { useParams, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, Settings, Database, Terminal, Upload, GitBranch, Users, Link as LinkIcon, Plus, Edit, Trash2 } from "lucide-react";
+import { 
+  ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, 
+  Settings, Database, Terminal, Upload, GitBranch, Users, Link as LinkIcon, 
+  Plus, Edit, Trash2, Rocket, Shield, Code, Server 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,28 +44,83 @@ const procedureTypeLabels = {
   data_import: "Import des données",
 };
 
+// Composant séparé pour éviter les hooks dans une boucle
+function RepoCommitsCard({ versionGitRepo }: { versionGitRepo: any }) {
+  const { data: commits } = useQuery({
+    queryKey: [`/api/version-git-repos/${versionGitRepo.id}/commits`],
+    enabled: !!versionGitRepo.id,
+  });
+
+  return (
+    <Card key={versionGitRepo.id}>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-4 h-4" />
+            <CardTitle className="text-base">{versionGitRepo.gitRepo?.name}</CardTitle>
+          </div>
+          <Badge variant="outline" className="text-xs">
+            {commits && Array.isArray(commits) ? commits.length : 0} commit(s)
+          </Badge>
+        </div>
+      </CardHeader>
+      
+      <CardContent>
+        {commits && Array.isArray(commits) && commits.length > 0 ? (
+          <div className="space-y-3">
+            {commits.slice(0, 5).map((commit) => (
+              <div key={commit.id} className="flex items-start gap-3 p-3 border rounded-lg">
+                <div className="flex-shrink-0">
+                  <Badge variant="secondary" className="text-xs font-mono">
+                    {commit.hash.substring(0, 8)}
+                  </Badge>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{commit.message}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {commit.author} • {commit.committedAt ? formatDate(commit.committedAt) : 'Date inconnue'}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {commits.length > 5 && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                +{commits.length - 5} autres commits
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+            Aucun commit trouvé
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 const statusColors = {
-  development: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
-  testing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  preproduction: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  production: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-  open: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  in_progress: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  approved: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
-  closed: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
-  // Version statuses
-  en_cours_arb: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100",
-  en_developpement: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
-  a_deployer_recette: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  recette_en_cours: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  a_deployer_preprod: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  preprod_en_cours: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  a_deployer_production: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-  merge_git_a_faire: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100",
-  annule: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
-  hotfix_a_prevoir: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100",
-  termine: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
+  development: "bg-gradient-to-r from-blue-50 to-indigo-100 text-blue-800 border-blue-200 dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-200 dark:border-blue-700",
+  testing: "bg-gradient-to-r from-yellow-50 to-amber-100 text-yellow-800 border-yellow-200 dark:from-yellow-900/30 dark:to-amber-900/30 dark:text-yellow-200 dark:border-yellow-700",
+  preproduction: "bg-gradient-to-r from-purple-50 to-violet-100 text-purple-800 border-purple-200 dark:from-purple-900/30 dark:to-violet-900/30 dark:text-purple-200 dark:border-purple-700",
+  production: "bg-gradient-to-r from-green-50 to-emerald-100 text-green-800 border-green-200 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-200 dark:border-green-700",
+  open: "bg-gradient-to-r from-blue-50 to-indigo-100 text-blue-800 border-blue-200 dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-200 dark:border-blue-700",
+  in_progress: "bg-gradient-to-r from-yellow-50 to-amber-100 text-yellow-800 border-yellow-200 dark:from-yellow-900/30 dark:to-amber-900/30 dark:text-yellow-200 dark:border-yellow-700",
+  approved: "bg-gradient-to-r from-green-50 to-emerald-100 text-green-800 border-green-200 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-200 dark:border-green-700",
+  rejected: "bg-gradient-to-r from-red-50 to-rose-100 text-red-800 border-red-200 dark:from-red-900/30 dark:to-rose-900/30 dark:text-red-200 dark:border-red-700",
+  closed: "bg-gradient-to-r from-gray-50 to-slate-100 text-gray-800 border-gray-200 dark:from-gray-900/30 dark:to-slate-900/30 dark:text-gray-200 dark:border-gray-700",
+  // Version statuses with enhanced styling
+  en_cours_arb: "bg-gradient-to-r from-orange-50 to-amber-100 text-orange-800 border-orange-200 dark:from-orange-900/30 dark:to-amber-900/30 dark:text-orange-200 dark:border-orange-700",
+  en_developpement: "bg-gradient-to-r from-blue-50 to-cyan-100 text-blue-800 border-blue-200 dark:from-blue-900/30 dark:to-cyan-900/30 dark:text-blue-200 dark:border-blue-700",
+  a_deployer_recette: "bg-gradient-to-r from-violet-50 to-purple-100 text-violet-800 border-violet-200 dark:from-violet-900/30 dark:to-purple-900/30 dark:text-violet-200 dark:border-violet-700",
+  recette_en_cours: "bg-gradient-to-r from-indigo-50 to-blue-100 text-indigo-800 border-indigo-200 dark:from-indigo-900/30 dark:to-blue-900/30 dark:text-indigo-200 dark:border-indigo-700",
+  a_deployer_preprod: "bg-gradient-to-r from-teal-50 to-cyan-100 text-teal-800 border-teal-200 dark:from-teal-900/30 dark:to-cyan-900/30 dark:text-teal-200 dark:border-teal-700",
+  preprod_en_cours: "bg-gradient-to-r from-emerald-50 to-green-100 text-emerald-800 border-emerald-200 dark:from-emerald-900/30 dark:to-green-900/30 dark:text-emerald-200 dark:border-emerald-700",
+  a_deployer_production: "bg-gradient-to-r from-green-50 to-lime-100 text-green-800 border-green-200 dark:from-green-900/30 dark:to-lime-900/30 dark:text-green-200 dark:border-green-700",
+  merge_git_a_faire: "bg-gradient-to-r from-purple-50 to-pink-100 text-purple-800 border-purple-200 dark:from-purple-900/30 dark:to-pink-900/30 dark:text-purple-200 dark:border-purple-700",
+  annule: "bg-gradient-to-r from-red-50 to-rose-100 text-red-800 border-red-200 dark:from-red-900/30 dark:to-rose-900/30 dark:text-red-200 dark:border-red-700",
+  hotfix_a_prevoir: "bg-gradient-to-r from-amber-50 to-orange-100 text-amber-800 border-amber-200 dark:from-amber-900/30 dark:to-orange-900/30 dark:text-amber-200 dark:border-amber-700",
+  termine: "bg-gradient-to-r from-green-50 to-emerald-100 text-green-800 border-green-200 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-200 dark:border-green-700",
 };
 
 const statusLabels = {
@@ -130,46 +189,60 @@ function ProcedureCard({ procedure, repoName }: { procedure: Procedure; repoName
   );
 }
 
-function GitRepoSection({ repo, onAddCommit, onAddProcedure }: { 
-  repo: GitRepoWithDetails; 
-  onAddCommit: (gitRepoId: number) => void;
-  onAddProcedure: (gitRepoId: number, type: string) => void;
+function GitRepoSection({ versionGitRepo, onAddCommit, onAddProcedure }: { 
+  versionGitRepo: any; 
+  onAddCommit: (versionGitRepoId: number) => void;
+  onAddProcedure: (versionGitRepoId: number, type: string) => void;
 }) {
   const { data: procedures } = useQuery<ProceduresByType>({
-    queryKey: [`/api/git-repos/${repo.id}/procedures`],
-    enabled: !!repo.id,
+    queryKey: [`/api/version-git-repos/${versionGitRepo.id}/procedures`],
+    enabled: !!versionGitRepo.id,
   });
   
   const { data: commits } = useQuery({
-    queryKey: [`/api/git-repos/${repo.id}/commits`],
-    enabled: !!repo.id,
+    queryKey: [`/api/version-git-repos/${versionGitRepo.id}/commits`],
+    enabled: !!versionGitRepo.id,
   });
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 shadow-lg bg-gradient-to-r from-white to-gray-50/50 dark:from-gray-800 dark:to-gray-700/50 hover:shadow-xl transition-all duration-200">
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-base">{repo.name}</CardTitle>
-            <CardDescription>
-              Dernier commit: {repo.lastCommitHash ? repo.lastCommitHash.substring(0, 7) : 'N/A'}
-              {commits && Array.isArray(commits) && ` • ${commits.length} commit(s)`}
-            </CardDescription>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg">
+              <GitBranch className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {versionGitRepo.gitRepo?.name}
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 dark:text-gray-400">
+                {versionGitRepo.gitRepo?.lastCommitHash ? (
+                  <span className="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">
+                    {versionGitRepo.gitRepo.lastCommitHash.substring(0, 7)}
+                  </span>
+                ) : 'Aucun commit'}
+                {commits && Array.isArray(commits) && (
+                  <span className="ml-2">• {commits.length} commit(s)</span>
+                )}
+              </CardDescription>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => onAddCommit(repo.id)}
+              onClick={() => onAddCommit(versionGitRepo.id)}
+              className="hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-blue-900/20"
             >
               <GitCommit className="w-4 h-4 mr-2" />
-              Ajouter commit
+              Commit
             </Button>
-            {repo.url && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={repo.url} target="_blank" rel="noopener noreferrer">
+            {versionGitRepo.gitRepo?.url && (
+              <Button variant="outline" size="sm" asChild className="hover:bg-green-50 hover:border-green-200 dark:hover:bg-green-900/20">
+                <a href={versionGitRepo.gitRepo.url} target="_blank" rel="noopener noreferrer">
                   <GitBranch className="w-4 h-4 mr-2" />
-                  Voir le repo
+                  Repo
                 </a>
               </Button>
             )}
@@ -178,42 +251,68 @@ function GitRepoSection({ repo, onAddCommit, onAddProcedure }: {
       </CardHeader>
       
       <CardContent>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium">Procédures de déploiement</h4>
-            <div className="flex gap-2">
-              {Object.keys(procedureTypeLabels).map((type) => (
-                <Button
-                  key={type}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onAddProcedure(repo.id, type)}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  {procedureTypeLabels[type as keyof typeof procedureTypeLabels]}
-                </Button>
-              ))}
+        <div className="space-y-6">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Settings className="w-4 h-4 text-purple-500" />
+                Procédures de déploiement
+              </h4>
+              <div className="flex gap-2 flex-wrap">
+                {Object.keys(procedureTypeLabels).map((type) => {
+                  const Icon = procedureTypeIcons[type as keyof typeof procedureTypeIcons];
+                  return (
+                    <Button
+                      key={type}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onAddProcedure(versionGitRepo.id, type)}
+                      className="text-xs hover:bg-purple-50 hover:border-purple-200 dark:hover:bg-purple-900/20"
+                    >
+                      <Icon className="w-3 h-3 mr-1" />
+                      {procedureTypeLabels[type as keyof typeof procedureTypeLabels]}
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
           </div>
           
-          {procedures && Object.entries(procedures).map(([type, procedureList]) => (
-            procedureList.length > 0 && (
-              <div key={type} className="space-y-2">
-                <h5 className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                  {procedureTypeLabels[type as keyof typeof procedureTypeLabels]} ({procedureList.length})
-                </h5>
-                <div className="space-y-2">
-                  {procedureList.map((procedure) => (
-                    <ProcedureCard 
-                      key={procedure.id} 
-                      procedure={procedure} 
-                      repoName={repo.name} 
-                    />
-                  ))}
-                </div>
-              </div>
-            )
-          ))}
+          {procedures && Object.entries(procedures).some(([, procedureList]) => procedureList.length > 0) ? (
+            <div className="space-y-4">
+              {Object.entries(procedures).map(([type, procedureList]) => (
+                procedureList.length > 0 && (
+                  <div key={type} className="space-y-3">
+                    <h5 className="text-sm font-medium text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                      {procedureTypeLabels[type as keyof typeof procedureTypeLabels]} 
+                      <Badge variant="outline" className="text-xs">
+                        {procedureList.length}
+                      </Badge>
+                    </h5>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {procedureList.map((procedure) => (
+                        <ProcedureCard 
+                          key={procedure.id} 
+                          procedure={procedure} 
+                          repoName={versionGitRepo.gitRepo?.name || ''} 
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+              <Settings className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Aucune procédure de déploiement configurée
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                Cliquez sur les boutons ci-dessus pour ajouter des procédures
+              </p>
+            </div>
+          )}
           
           {commits && Array.isArray(commits) && commits.length > 0 && (
             <div className="space-y-2">
@@ -281,22 +380,28 @@ export default function VersionDetail() {
   const [procedureModalOpen, setProcedureModalOpen] = useState(false);
   const [selectedProcedure, setSelectedProcedure] = useState<any>(null);
   const [selectedGitRepoForProcedure, setSelectedGitRepoForProcedure] = useState<number>(0);
-  const [selectedProcedureType, setSelectedProcedureType] = useState<string>("");
+  const [selectedProcedureType, setSelectedProcedureType] = useState<string>('');
 
   const { data: version, isLoading: versionLoading } = useQuery<ProjectVersionWithDetails>({
     queryKey: [`/api/projects/${projectId}/versions/${versionId}`],
     enabled: !!projectId && !!versionId,
   });
 
+  // Récupérer les détails de la release si la version en a une
+  const { data: release } = useQuery<any>({
+    queryKey: [`/api/releases/${version?.releaseId}`],
+    enabled: !!version?.releaseId,
+  });
+
   // Handlers for commits and procedures
-  const handleAddCommit = (gitRepoId: number) => {
-    setSelectedGitRepoForCommit(gitRepoId);
+  const handleAddCommit = (versionGitRepoId: number) => {
+    setSelectedGitRepoForCommit(versionGitRepoId);
     setSelectedCommit(null);
     setCommitModalOpen(true);
   };
 
-  const handleAddProcedure = (gitRepoId: number, type: string) => {
-    setSelectedGitRepoForProcedure(gitRepoId);
+  const handleAddProcedure = (versionGitRepoId: number, type: string) => {
+    setSelectedGitRepoForProcedure(versionGitRepoId);
     setSelectedProcedureType(type);
     setSelectedProcedure(null);
     setProcedureModalOpen(true);
@@ -361,7 +466,7 @@ export default function VersionDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
       
       <main className="flex-1 overflow-auto">
@@ -375,7 +480,7 @@ export default function VersionDetail() {
                 onClick={() => setReleaseModalOpen(true)}
               >
                 <LinkIcon className="w-4 h-4 mr-2" />
-                Associer à une release
+                Changer de release
               </Button>
               <Button variant="outline" onClick={() => setLocation(`/projects/${projectId}`)}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -387,37 +492,69 @@ export default function VersionDetail() {
 
         <div className="p-6 space-y-6">
           {/* Version Info */}
-          <Card>
-            <CardHeader>
+          <Card className="border-0 shadow-lg bg-gradient-to-r from-white to-blue-50/30 dark:from-gray-800 dark:to-blue-900/10">
+            <CardHeader className="pb-4">
               <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-2xl">Version {version.version}</CardTitle>
-                  <CardDescription className="text-base mt-1">
+                <div className="flex-1">
+                  <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Version {version.version}
+                  </CardTitle>
+                  <CardDescription className="text-lg mt-2 text-gray-600 dark:text-gray-300">
                     {version.description}
                   </CardDescription>
+                  {version.releaseId && release && (
+                    <div className="flex items-center gap-2 mt-3">
+                      <LinkIcon className="w-4 h-4 text-blue-500" />
+                      <a 
+                        href={`/releases/${version.releaseId}`} 
+                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline font-medium"
+                      >
+                        Release: {release?.name || `#${version.releaseId}`}
+                      </a>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge className={statusColors[version.status as keyof typeof statusColors] || statusColors.en_developpement}>
+                  <Badge className={`px-4 py-2 text-sm font-medium ${statusColors[version.status as keyof typeof statusColors] || statusColors.en_developpement}`}>
                     {statusLabels[version.status as keyof typeof statusLabels] || version.status}
                   </Badge>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Créée le: {version.createdAt ? formatDate(version.createdAt) : 'Date inconnue'}</span>
-                </div>
-                {version.releaseId && (
-                  <div className="flex items-center gap-2">
-                    <LinkIcon className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm">Release associée: #{version.releaseId}</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="flex items-center gap-3 p-3 bg-white/50 dark:bg-gray-700/30 rounded-lg">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <GitBranch className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Repositories: {version.gitRepos?.length || 0}</span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Date de création</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {version.createdAt ? formatDate(version.createdAt) : 'Date inconnue'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-white/50 dark:bg-gray-700/30 rounded-lg">
+                  <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <GitBranch className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Repositories</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {version.versionGitRepos?.length || 0} repo(s)
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-white/50 dark:bg-gray-700/30 rounded-lg">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <Rocket className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Release</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {version.releaseId ? 'Associée' : 'Non associée'}
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -425,10 +562,23 @@ export default function VersionDetail() {
 
           {/* Version Details */}
           <Tabs defaultValue="repositories" className="w-full">
-            <TabsList>
-              <TabsTrigger value="repositories">Repositories Git</TabsTrigger>
-              <TabsTrigger value="pvs">PVs</TabsTrigger>
-              <TabsTrigger value="cab">Tickets CAB</TabsTrigger>
+            <TabsList className="grid grid-cols-4 w-full max-w-2xl bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+              <TabsTrigger value="repositories" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
+                <GitBranch className="w-4 h-4 mr-2" />
+                Repositories
+              </TabsTrigger>
+              <TabsTrigger value="commits" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
+                <GitCommit className="w-4 h-4 mr-2" />
+                Commits
+              </TabsTrigger>
+              <TabsTrigger value="pvs" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white">
+                <FileText className="w-4 h-4 mr-2" />
+                PVs
+              </TabsTrigger>
+              <TabsTrigger value="cab" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+                <Shield className="w-4 h-4 mr-2" />
+                CAB
+              </TabsTrigger>
             </TabsList>
             
             <TabsContent value="repositories" className="space-y-4">
@@ -446,14 +596,37 @@ export default function VersionDetail() {
                 </Button>
               </div>
               
-              {version.gitRepos && version.gitRepos.length > 0 ? (
-                version.gitRepos.map((repo) => (
+              {version.versionGitRepos && version.versionGitRepos.length > 0 ? (                version.versionGitRepos.map((versionGitRepo) => (
                   <GitRepoSection 
-                    key={repo.id} 
-                    repo={repo} 
+                    key={versionGitRepo.id} 
+                    versionGitRepo={versionGitRepo}
                     onAddCommit={handleAddCommit}
                     onAddProcedure={handleAddProcedure}
                   />
+                ))
+              ) : (
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <GitBranch className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                      Aucun repository
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Aucun repository Git trouvé pour cette version
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="commits" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Tous les commits</h3>
+              </div>
+              
+              {version.versionGitRepos && version.versionGitRepos.length > 0 ? (
+                version.versionGitRepos.map((versionGitRepo) => (
+                  <RepoCommitsCard key={versionGitRepo.id} versionGitRepo={versionGitRepo} />
                 ))
               ) : (
                 <Card>
@@ -721,7 +894,7 @@ export default function VersionDetail() {
       <CommitModal
         open={commitModalOpen}
         onOpenChange={setCommitModalOpen}
-        gitRepoId={selectedGitRepoForCommit}
+        versionGitRepoId={selectedGitRepoForCommit}
         projectId={projectId}
         versionId={versionId}
         commit={selectedCommit}
@@ -730,7 +903,7 @@ export default function VersionDetail() {
       <ProcedureModal
         isOpen={procedureModalOpen}
         onClose={() => setProcedureModalOpen(false)}
-        gitRepoId={selectedGitRepoForProcedure}
+        versionGitRepoId={selectedGitRepoForProcedure}
         type={selectedProcedureType}
         existingProcedure={selectedProcedure}
         onSuccess={() => {

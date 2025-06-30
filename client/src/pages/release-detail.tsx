@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
@@ -9,9 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar, CheckCircle, Clock, GitBranch } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, Calendar, CheckCircle, Clock, GitBranch, FileText, Settings, Terminal, Upload, GitCommit, Database, Users } from "lucide-react";
 import { Link } from "wouter";
-import type { ReleaseWithProjects } from "@shared/schema";
+import type { ReleaseWithProjects, Procedure, CabWithDetails, ProjectVersionWithDetails } from "@shared/schema";
 
 const statusColors = {
   testing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
@@ -56,13 +57,13 @@ export default function ReleaseDetail() {
     retry: false,
   });
 
-  const { data: releaseProcedures, isLoading: isProceduresLoading } = useQuery({
-    queryKey: [`/api/releases/${releaseId}/procedures`],
+  const { data: projectVersions, isLoading: isVersionsLoading } = useQuery<ProjectVersionWithDetails[]>({
+    queryKey: [`/api/releases/${releaseId}/project-versions`],
     enabled: !!releaseId && isAuthenticated,
     retry: false,
   });
 
-  if (isLoading || isReleaseLoading) {
+  if (isLoading || isReleaseLoading || isVersionsLoading) {
     return (
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
         <Sidebar />
@@ -105,12 +106,11 @@ export default function ReleaseDetail() {
   const typedRelease = release as ReleaseWithProjects;
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 overflow-auto">
         <Header />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-6">
-          <div className="max-w-7xl mx-auto space-y-6">
+        <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -165,32 +165,65 @@ export default function ReleaseDetail() {
               </CardContent>
             </Card>
 
-            {/* Projects */}
+            {/* Project Versions */}
             <Card>
               <CardHeader>
-                <CardTitle>Projets inclus ({typedRelease.releaseProjects?.length || 0})</CardTitle>
-                <CardDescription>Liste des projets associés à cette release</CardDescription>
+                <CardTitle>Versions de projet incluses</CardTitle>
+                <CardDescription>Liste des versions de projet associées à cette release</CardDescription>
               </CardHeader>
               <CardContent>
-                {typedRelease.releaseProjects && typedRelease.releaseProjects.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {typedRelease.releaseProjects.map((rp) => (
-                      <div key={rp.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                        <h4 className="font-medium text-gray-900 dark:text-gray-100">{rp.project.name}</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{rp.project.description}</p>
-                        <div className="mt-3">
-                          <Link href={`/projects/${rp.project.id}`}>
-                            <Button variant="outline" size="sm">
-                              Voir le projet
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
+                {projectVersions && projectVersions.length > 0 ? (
+                  <div className="space-y-4">
+                    {projectVersions.map((version: ProjectVersionWithDetails) => (
+                      <Card key={version.id} className="border-l-4 border-l-blue-500">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <CardTitle className="text-lg">{version.project?.name}</CardTitle>
+                              <CardDescription className="text-sm mt-1">{version.project?.description}</CardDescription>
+                            </div>
+                            <Badge variant="outline">Version {version.version}</Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Version {version.version}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{version.description || "Aucune description"}</p>
+                              </div>
+                              <Badge variant="outline" className="capitalize">
+                                {version.status}
+                              </Badge>
+                            </div>
+                            {version.gitRepos && version.gitRepos.length > 0 && (
+                              <div className="mt-2">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {version.gitRepos.length} repository(ies) git
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-4 flex gap-2">
+                            <Link href={`/projects/${version.project?.id}/versions/${version.id}`}>
+                              <Button size="sm" variant="outline">
+                                <GitBranch className="w-4 h-4 mr-2" />
+                                Voir la version
+                              </Button>
+                            </Link>
+                            <Link href={`/projects/${version.project?.id}`}>
+                              <Button size="sm" variant="ghost">
+                                Voir le projet
+                              </Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-gray-500 dark:text-gray-400">Aucun projet associé à cette release</p>
+                    <p className="text-gray-500 dark:text-gray-400">Aucune version de projet associée à cette release</p>
                   </div>
                 )}
               </CardContent>
@@ -203,57 +236,51 @@ export default function ReleaseDetail() {
                 <CardDescription>Toutes les procédures des projets de cette release regroupées par repository</CardDescription>
               </CardHeader>
               <CardContent>
-                {isProceduresLoading ? (
+                {isVersionsLoading ? (
                   <div className="animate-pulse space-y-4">
                     <div className="h-4 bg-gray-300 rounded w-1/4"></div>
                     <div className="h-32 bg-gray-300 rounded"></div>
                   </div>
-                ) : releaseProcedures && releaseProcedures.projects?.length > 0 ? (
+                ) : projectVersions && projectVersions.length > 0 ? (
                   <div className="space-y-6">
-                    {releaseProcedures.projects.map((project: any) => (
-                      <div key={project.projectId} className="space-y-4">
+                    {projectVersions.map((projectVersion: any) => (
+                      <div key={projectVersion.id} className="space-y-4">
                         <div className="flex items-center space-x-2">
-                          <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">{project.projectName}</h4>
-                          <Badge variant="outline">{project.versions.length} version(s)</Badge>
+                          <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                            {projectVersion.project?.name} - Version {projectVersion.version}
+                          </h4>
+                          <Badge variant="outline">{projectVersion.gitRepos?.length || 0} repo(s)</Badge>
                         </div>
-                        {project.versions.map((version: any) => (
-                          <div key={version.versionId} className="ml-4 space-y-3">
-                            <h5 className="font-medium text-gray-700 dark:text-gray-300">Version {version.versionName}</h5>
-                            {version.repositories.map((repo: any) => (
-                              <div key={repo.repoId} className="ml-4 border rounded-lg p-4">
-                                <div className="flex items-center space-x-2 mb-3">
-                                  <GitBranch className="w-4 h-4 text-gray-500" />
-                                  <h6 className="font-medium text-gray-900 dark:text-gray-100">{repo.repoName}</h6>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                  {Object.entries(repo.procedures).map(([type, procedures]: [string, any]) => (
-                                    <div key={type} className="space-y-2">
-                                      <h6 className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                        {type.replace('_', ' ')}
-                                      </h6>
-                                      {procedures.length > 0 ? (
-                                        <div className="space-y-1">
-                                          {procedures.map((procedure: any) => (
-                                            <div key={procedure.id} className="flex items-center space-x-2 text-sm">
-                                              {procedure.isCompleted ? (
-                                                <CheckCircle className="w-4 h-4 text-green-500" />
-                                              ) : (
-                                                <Clock className="w-4 h-4 text-yellow-500" />
-                                              )}
-                                              <span className={procedure.isCompleted ? "text-green-700 dark:text-green-300" : "text-gray-600 dark:text-gray-400"}>
-                                                {procedure.title}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <p className="text-xs text-gray-400">Aucune procédure</p>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
+                        
+                        {projectVersion.gitRepos?.map((gitRepo: any) => (
+                          <div key={gitRepo.id} className="ml-4 border rounded-lg p-4">
+                            <div className="flex items-center space-x-2 mb-3">
+                              <GitBranch className="w-4 h-4 text-gray-500" />
+                              <h6 className="font-medium text-gray-900 dark:text-gray-100">{gitRepo.name}</h6>
+                              <Badge variant="outline" className="text-xs">
+                                {gitRepo.procedures?.length || 0} procédure(s)
+                              </Badge>
+                            </div>
+                            
+                            {gitRepo.procedures && gitRepo.procedures.length > 0 ? (
+                              <div className="space-y-2">
+                                {gitRepo.procedures.map((procedure: any) => (
+                                  <div key={procedure.id} className="flex items-center space-x-2 text-sm p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                                    {procedure.isCompleted ? (
+                                      <CheckCircle className="w-4 h-4 text-green-500" />
+                                    ) : (
+                                      <Clock className="w-4 h-4 text-orange-500" />
+                                    )}
+                                    <span className={procedure.isCompleted ? "text-green-700 dark:text-green-300" : "text-gray-600 dark:text-gray-400"}>
+                                      {procedure.title}
+                                    </span>
+                                    <Badge variant="outline" className="text-xs">{procedure.type}</Badge>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            ) : (
+                              <p className="text-sm text-gray-500 dark:text-gray-400">Aucune procédure</p>
+                            )}
                           </div>
                         ))}
                         <Separator />
@@ -262,14 +289,14 @@ export default function ReleaseDetail() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
+                    <Settings className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-500 dark:text-gray-400">Aucune procédure trouvée pour cette release</p>
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
-        </main>
-      </div>
+      </main>
     </div>
   );
 }

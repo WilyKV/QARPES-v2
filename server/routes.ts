@@ -1,8 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { createFixtures } from "./fixtures";
-import { gitRepos } from "@shared/schema";
 import { prisma } from "./db";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -29,17 +27,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
-  // Fixtures route for demo data
-  app.post('/api/fixtures/create', async (req, res) => {
-    try {
-      await createFixtures();
-      res.json({ message: "Fixtures created successfully" });
-    } catch (error) {
-      console.error("Error creating fixtures:", error);
-      res.status(500).json({ message: "Failed to create fixtures" });
     }
   });
 
@@ -211,8 +198,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Release routes
   app.get('/api/releases', async (req, res) => {
     try {
-      const releases = await storage.getReleases();
-      res.json(releases);
+      const { yearMonth } = req.query;
+      
+      if (yearMonth && typeof yearMonth === 'string') {
+        // Filtrer les releases par année-mois pour la génération de releaseId
+        const releases = await storage.getReleasesByYearMonth(yearMonth);
+        res.json(releases);
+      } else {
+        // Récupérer toutes les releases
+        const releases = await storage.getReleases();
+        res.json(releases);
+      }
     } catch (error) {
       console.error("Error fetching releases:", error);
       res.status(500).json({ message: "Failed to fetch releases" });
@@ -286,6 +282,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/releases/:id/project-versions', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const projectVersions = await storage.getReleaseProjectVersions(id);
+      res.json(projectVersions);
+    } catch (error) {
+      console.error("Error fetching release project versions:", error);
+      res.status(500).json({ message: "Failed to fetch release project versions" });
+    }
+  });
+
   // Release-Project routes
   app.post('/api/releases/:releaseId/projects', async (req, res) => {
     try {
@@ -318,33 +325,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const versionId = parseInt(req.params.versionId);
       const { releaseId, createRelease } = req.body;
       
+      console.log('=== ASSOCIATION DEBUG START ===');
+      console.log('Params:', req.params);
+      console.log('Body:', req.body);
+      console.log('Parsed projectId:', projectId);
+      console.log('Parsed versionId:', versionId);
+      console.log('Received releaseId:', releaseId);
+      
       let targetReleaseId = releaseId;
       
       // If createRelease is provided, create a new release first
       if (createRelease) {
-        const releaseData = req.body;
-        const newRelease = await storage.createRelease(releaseData);
+        console.log('Creating new release:', createRelease);
+        const newRelease = await storage.createRelease(createRelease);
         targetReleaseId = newRelease.id;
+        console.log('Created new release with ID:', targetReleaseId);
       }
       
+      console.log('Target release ID:', targetReleaseId);
+      
+      // Verify the version exists before updating
+      const existingVersion = await storage.getProjectVersion(versionId);
+      if (!existingVersion) {
+        console.error('Version not found:', versionId);
+        return res.status(404).json({ message: "Project version not found" });
+      }
+      
+      console.log('Existing version found:', { id: existingVersion.id, currentReleaseId: existingVersion.releaseId });
+      
       // Associate version to release directly
-      await storage.updateProjectVersion(versionId, { releaseId: targetReleaseId });
+      console.log('Updating project version with releaseId:', targetReleaseId);
+      const updatedVersion = await storage.updateProjectVersion(versionId, { releaseId: targetReleaseId });
+      console.log('Updated version result:', { id: updatedVersion.id, newReleaseId: updatedVersion.releaseId });
       
       // Also associate project to release if not already associated
       try {
+        console.log('Adding project to release:', { releaseId: targetReleaseId, projectId });
         await storage.addProjectToRelease({ releaseId: targetReleaseId, projectId });
+        console.log('Project associated to release successfully');
       } catch (error) {
         // Ignore duplicate key errors - project already associated to release
-        console.log("Project already associated to release, skipping...");
+        console.log("Project already associated to release, skipping...", error.message);
       }
       
+      console.log('=== ASSOCIATION DEBUG END ===');
       res.status(201).json({ 
         message: "Project version associated to release successfully",
-        releaseId: targetReleaseId 
+        releaseId: targetReleaseId,
+        versionId: versionId
       });
     } catch (error) {
       console.error("Error associating project version to release:", error);
-      res.status(400).json({ message: "Failed to associate project version to release" });
+      res.status(500).json({ message: "Failed to associate project version to release", error: error.message });
     }
   });
 
@@ -536,6 +568,222 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching release procedures:", error);
       res.status(500).json({ message: "Failed to fetch release procedures" });
+    }
+  });
+
+  // Git repos routes
+  app.get('/api/git-repos/all', async (req, res) => {
+    try {
+      const gitRepos = await storage.getAllGitRepos();
+      res.json(gitRepos);
+    } catch (error) {
+      console.error("Error fetching all git repos:", error);
+      res.status(500).json({ message: "Failed to fetch git repos" });
+    }
+  });
+
+  // Nouvelle route pour récupérer les git repos d'un projet
+  app.get('/api/projects/:projectId/git-repos', async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId);
+      
+      // Récupérer toutes les versions du projet avec leurs git repos
+      const versions = await storage.getProjectVersions(projectId);
+      const gitRepos = versions.flatMap(version => version.gitRepos || []);
+      
+      res.json(gitRepos);
+    } catch (error) {
+      console.error("Error fetching project git repos:", error);
+      res.status(500).json({ message: "Failed to fetch project git repos" });
+    }
+  });
+
+  app.post('/api/projects/:projectId/versions/:versionId/git-repos', async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId);
+      const versionId = parseInt(req.params.versionId);
+      const { name, url, existingRepoId } = req.body;
+
+      let gitRepo;
+      if (existingRepoId) {
+        // Associer un repo existant à la version
+        gitRepo = await storage.associateGitRepoToVersion(existingRepoId, versionId);
+      } else {
+        // Créer un nouveau repo et l'associer à la version
+        gitRepo = await storage.createGitRepoWithAssociation({
+          name,
+          url: url || null,
+          lastCommitHash: null,
+        }, versionId);
+      }
+
+      res.status(201).json(gitRepo);
+    } catch (error) {
+      console.error("Error creating/associating git repo:", error);
+      res.status(400).json({ message: "Failed to create/associate git repo" });
+    }
+  });
+
+  app.put('/api/git-repos/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { name, url } = req.body;
+      const gitRepo = await storage.updateGitRepo(id, { name, url });
+      res.json(gitRepo);
+    } catch (error) {
+      console.error("Error updating git repo:", error);
+      res.status(400).json({ message: "Failed to update git repo" });
+    }
+  });
+
+  app.delete('/api/git-repos/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteGitRepo(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting git repo:", error);
+      res.status(500).json({ message: "Failed to delete git repo" });
+    }
+  });
+
+  // Commit routes
+  // Git repo procedure routes
+  app.get('/api/git-repos/:gitRepoId/procedures', async (req, res) => {
+    try {
+      const gitRepoId = parseInt(req.params.gitRepoId);
+      const procedures = await storage.getProcedures(gitRepoId);
+      res.json(procedures);
+    } catch (error) {
+      console.error("Error fetching procedures:", error);
+      res.status(500).json({ message: "Failed to fetch procedures" });
+    }
+  });
+
+  app.post('/api/git-repos/:gitRepoId/procedures', async (req, res) => {
+    try {
+      const gitRepoId = parseInt(req.params.gitRepoId);
+      
+      // Trouver l'association ProjectVersionGitRepo pour ce gitRepoId
+      // Note: Il peut y avoir plusieurs associations si le repo est utilisé dans plusieurs versions
+      // Pour l'instant, on prend la première trouvée
+      const versionGitRepo = await storage.getVersionGitRepoByGitRepoId(gitRepoId);
+      
+      if (!versionGitRepo) {
+        return res.status(404).json({ message: "Git repo association not found" });
+      }
+      
+      const procedureData = {
+        ...req.body,
+        versionGitRepoId: versionGitRepo.id,
+      };
+      const procedure = await storage.createProcedure(procedureData);
+      res.status(201).json(procedure);
+    } catch (error) {
+      console.error("Error creating procedure:", error);
+      res.status(500).json({ message: "Failed to create procedure" });
+    }
+  });
+
+  app.patch('/api/procedures/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const procedure = await storage.updateProcedure(id, req.body);
+      res.json(procedure);
+    } catch (error) {
+      console.error("Error updating procedure:", error);
+      res.status(500).json({ message: "Failed to update procedure" });
+    }
+  });
+
+  app.delete('/api/procedures/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteProcedure(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting procedure:", error);
+      res.status(500).json({ message: "Failed to delete procedure" });
+    }
+  });
+
+  // Git repo commit routes
+  app.get('/api/git-repos/:gitRepoId/commits', async (req, res) => {
+    try {
+      const gitRepoId = parseInt(req.params.gitRepoId);
+      const commits = await storage.getCommits(gitRepoId);
+      res.json(commits);
+    } catch (error) {
+      console.error("Error fetching commits:", error);
+      res.status(500).json({ message: "Failed to fetch commits" });
+    }
+  });
+
+  // Nouvelle route pour récupérer les commits d'une association spécifique
+  app.get('/api/version-git-repos/:versionGitRepoId/commits', async (req, res) => {
+    try {
+      const versionGitRepoId = parseInt(req.params.versionGitRepoId);
+      const commits = await storage.getCommitsByVersionGitRepo(versionGitRepoId);
+      res.json(commits);
+    } catch (error) {
+      console.error("Error fetching commits for version-git-repo:", error);
+      res.status(500).json({ message: "Failed to fetch commits for version-git-repo" });
+    }
+  });
+
+  // Nouvelle route pour récupérer les procédures d'une association spécifique
+  app.get('/api/version-git-repos/:versionGitRepoId/procedures', async (req, res) => {
+    try {
+      const versionGitRepoId = parseInt(req.params.versionGitRepoId);
+      const procedures = await storage.getProceduresByVersionGitRepo(versionGitRepoId);
+      res.json(procedures);
+    } catch (error) {
+      console.error("Error fetching procedures for version-git-repo:", error);
+      res.status(500).json({ message: "Failed to fetch procedures for version-git-repo" });
+    }
+  });
+
+  // Nouvelle route pour créer un commit dans une association spécifique
+  app.post('/api/version-git-repos/:versionGitRepoId/commits', async (req, res) => {
+    try {
+      const versionGitRepoId = parseInt(req.params.versionGitRepoId);
+      const { hash, message, author, authorEmail } = req.body;
+      
+      const commit = await storage.createCommit({
+        versionGitRepoId,
+        hash,
+        message,
+        author,
+        authorEmail: authorEmail || undefined,
+        committedAt: new Date(),
+      });
+      
+      res.status(201).json(commit);
+    } catch (error) {
+      console.error("Error creating commit for version-git-repo:", error);
+      res.status(500).json({ message: "Failed to create commit for version-git-repo" });
+    }
+  });
+
+  // Nouvelle route pour créer une procédure dans une association spécifique
+  app.post('/api/version-git-repos/:versionGitRepoId/procedures', async (req, res) => {
+    try {
+      const versionGitRepoId = parseInt(req.params.versionGitRepoId);
+      const { type, title, description, content, order } = req.body;
+      
+      const procedure = await storage.createProcedure({
+        versionGitRepoId,
+        type,
+        title,
+        description: description || undefined,
+        content,
+        order: order || undefined,
+      });
+      
+      res.status(201).json(procedure);
+    } catch (error) {
+      console.error("Error creating procedure for version-git-repo:", error);
+      res.status(500).json({ message: "Failed to create procedure for version-git-repo" });
     }
   });
 

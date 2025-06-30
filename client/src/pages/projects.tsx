@@ -11,16 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProjectModal } from "@/components/modals/project-modal";
-import { Plus, Search, Edit, Trash2, ExternalLink, MoreHorizontal, Users, Calendar, ArrowRight } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ExternalLink, MoreHorizontal, Users, Calendar, ArrowRight, FolderOpen, Code2, GitBranch, Activity } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import type { ProjectWithTeam } from "@shared/schema";
 
 const statusColors = {
-  development: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
-  testing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  preproduction: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  production: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
+  development: "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm",
+  testing: "bg-gradient-to-r from-amber-500 to-yellow-600 text-white shadow-sm",
+  preproduction: "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm",
+  production: "bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-sm",
 };
 
 const statusLabels = {
@@ -28,6 +28,13 @@ const statusLabels = {
   testing: "Recette",
   preproduction: "Pré-production",
   production: "Production",
+};
+
+const statusIcons = {
+  development: Code2,
+  testing: Activity,
+  preproduction: GitBranch,
+  production: FolderOpen,
 };
 
 // Composant pour afficher et naviguer vers la dernière version d'un projet
@@ -38,18 +45,13 @@ function ProjectVersionBadge({ projectId }: { projectId: number }) {
     staleTime: 30000,
   });
 
-  console.log('ProjectVersionBadge - projectId:', projectId, 'versions:', versions, 'isLoading:', isLoading, 'error:', error);
-
   if (isLoading) {
     return (
-      <Badge variant="secondary" className="text-xs">
-        ...
-      </Badge>
+      <div className="w-12 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
     );
   }
 
   if (error) {
-    console.error('Error loading versions:', error);
     return null;
   }
 
@@ -57,7 +59,7 @@ function ProjectVersionBadge({ projectId }: { projectId: number }) {
 
   if (!latestVersion) {
     return (
-      <Badge variant="outline" className="text-xs">
+      <Badge variant="outline" className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
         Aucune version
       </Badge>
     );
@@ -66,7 +68,7 @@ function ProjectVersionBadge({ projectId }: { projectId: number }) {
   return (
     <Badge
       variant="default" 
-      className="text-xs cursor-pointer hover:bg-blue-700 bg-blue-600 text-white transition-colors"
+      className="text-xs cursor-pointer hover:scale-105 transition-transform bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-sm"
       onClick={(e) => {
         e.stopPropagation();
         window.location.href = `/projects/${projectId}/versions/${latestVersion.id}`;
@@ -153,9 +155,9 @@ export default function Projects() {
   };
 
   const filteredProjects = Array.isArray(projects) ? projects.filter((project: ProjectWithTeam) =>
-    project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.team?.name.toLowerCase().includes(searchTerm.toLowerCase())
+    String(project.name).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(project.description || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(project.team?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
   ) : [];
 
   const columns = [
@@ -257,7 +259,7 @@ export default function Projects() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
       
       <main className="flex-1 overflow-auto">
@@ -265,31 +267,31 @@ export default function Projects() {
           title="Projets" 
           subtitle="Gestion des projets avec statuts et équipes"
           actions={
-            <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button onClick={() => setIsModalOpen(true)} className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg">
               <Plus className="h-4 w-4 mr-2" />
               Nouveau Projet
             </Button>
           }
         />
 
-        <div className="p-6">
+        <div className="p-6 space-y-6">
           {/* Search and Filters */}
-          <div className="mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="Rechercher par nom, description ou équipe..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
           </div>
 
           {/* Projects Grid */}
           {projectsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => (
                 <Card key={i} className="animate-pulse">
                   <CardHeader>
                     <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
@@ -303,125 +305,114 @@ export default function Projects() {
               ))}
             </div>
           ) : filteredProjects.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                <ExternalLink className="w-8 h-8 text-gray-400" />
+            <div className="text-center py-16">
+              <div className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 rounded-full flex items-center justify-center mb-6">
+                <FolderOpen className="w-10 h-10 text-blue-600 dark:text-blue-400" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                Aucun projet trouvé
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {searchTerm ? "Aucun projet trouvé" : "Aucun projet"}
               </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
-                {searchTerm ? "Aucun projet ne correspond à votre recherche." : "Commencez par créer votre premier projet."}
+              <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-sm mx-auto">
+                {searchTerm ? "Aucun projet ne correspond à votre recherche." : "Commencez par créer votre premier projet pour organiser votre travail."}
               </p>
               {!searchTerm && (
-                <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Button onClick={() => setIsModalOpen(true)} className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg">
                   <Plus className="h-4 w-4 mr-2" />
                   Créer un projet
                 </Button>
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project: ProjectWithTeam) => (
-                <Card key={project.id} className="hover:shadow-lg transition-shadow cursor-pointer group"
-                      onClick={() => window.location.href = `/projects/${project.id}`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <CardTitle className="text-lg group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {project.name}
-                          </CardTitle>
-                          <ProjectVersionBadge projectId={project.id} />
-                        </div>
-                        {project.team && (
-                          <CardDescription className="flex items-center mt-1">
-                            <Users className="w-3 h-3 mr-1" />
-                            {project.team.name}
-                          </CardDescription>
-                        )}
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(project);
-                          }}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Modifier
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={(e) => {
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredProjects.map((project: ProjectWithTeam) => {
+                const StatusIcon = statusIcons[String(project.status) as keyof typeof statusIcons] || Code2;
+                
+                return (
+                  <Card 
+                    key={Number(project.id)} 
+                    className="hover:shadow-xl hover:scale-[1.02] transition-all duration-200 cursor-pointer group bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 border-0 shadow-lg hover:shadow-2xl"
+                    onClick={() => window.location.href = `/projects/${project.id}`}
+                  >
+                    <CardHeader className="pb-3 relative">
+                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation();
-                              handleDelete(project.id);
-                            }}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Supprimer
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {project.description && (
-                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-3 line-clamp-2">
-                        {project.description}
-                      </p>
-                    )}
-                    
-                    <div className="flex items-center justify-between mb-3">
-                      <Badge 
-                        className={statusColors[project.status as keyof typeof statusColors] || statusColors.development}
-                      >
-                        {statusLabels[project.status as keyof typeof statusLabels] || project.status}
-                      </Badge>
+                              handleEdit(project);
+                            }}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              Modifier
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(Number(project.id));
+                              }}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Supprimer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                       
-                      <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                        <Calendar className="w-3 h-3 mr-1" />
-                        {project.createdAt ? new Date(project.createdAt).toLocaleDateString('fr-FR') : '-'}
+                      <div className="flex items-start gap-3">
+                        <div className="p-3 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-200 dark:from-blue-900 dark:to-indigo-800 flex-shrink-0 group-hover:scale-110 transition-transform">
+                          <StatusIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-xl font-semibold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                            {String(project.name)}
+                          </CardTitle>
+                          <div className="flex items-center gap-2 mt-2">
+                            {project.team && (
+                              <CardDescription className="flex items-center text-sm">
+                                <Users className="w-4 h-4 mr-1" />
+                                {String(project.team.name)}
+                              </CardDescription>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.location.href = `/projects/${project.id}`;
-                        }}
-                        className="flex-1"
-                      >
-                        Voir le projet
-                      </Button>
-                    </div>
+                    </CardHeader>
                     
-                    {project.repositoryUrl && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (project.repositoryUrl) {
-                              window.open(project.repositoryUrl, '_blank');
-                            }
-                          }}
-                          className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                    <CardContent className="space-y-4">
+                      {project.description && (
+                        <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3 leading-relaxed">
+                          {String(project.description)}
+                        </p>
+                      )}
+                      
+                      <div className="flex items-center justify-between">
+                        <Badge 
+                          className={statusColors[String(project.status) as keyof typeof statusColors] || statusColors.development}
                         >
-                          <ExternalLink className="w-3 h-3 mr-1" />
-                          Repository
-                        </button>
+                          {statusLabels[String(project.status) as keyof typeof statusLabels] || String(project.status)}
+                        </Badge>
+                        
+                        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                          <Calendar className="w-4 h-4 mr-1" />
+                          {project.createdAt ? new Date(String(project.createdAt)).toLocaleDateString('fr-FR') : '-'}
+                        </div>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+
+                      <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Dernière version :</span>
+                          <ProjectVersionBadge projectId={Number(project.id)} />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>

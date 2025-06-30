@@ -33,7 +33,9 @@ import { useState, useEffect } from "react";
 
 const formSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
-  url: z.string().url("URL invalide").optional(),
+  url: z.string().optional().refine((val) => !val || z.string().url().safeParse(val).success, {
+    message: "URL invalide"
+  }),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -58,7 +60,7 @@ export function GitRepoModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditing = !!gitRepo;
-  const [isCreatingNew, setIsCreatingNew] = useState(!isEditing);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
 
   // Récupérer les détails de la version pour obtenir la release associée
   const { data: version } = useQuery<ProjectVersionWithDetails>({
@@ -85,34 +87,38 @@ export function GitRepoModal({
   useEffect(() => {
     if (isEditing && gitRepo) {
       form.reset({
-        name: gitRepo.name,
-        url: gitRepo.url || "",
+        name: String(gitRepo.name),
+        url: gitRepo.url ? String(gitRepo.url) : "",
       });
-    } else if (!isEditing) {
+    } else if (!isEditing && open) {
+      // Quand la modale s'ouvre en mode création, commencer par la sélection
+      setIsCreatingNew(false);
       form.reset({
         name: "",
         url: "",
       });
     }
-  }, [gitRepo, isEditing, form]);
+  }, [gitRepo, isEditing, form, open]);
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (isEditing) {
         return await apiRequest("PATCH", `/api/git-repos/${gitRepo.id}`, data);
       } else {
-        return await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, data);
+        return await apiRequest("POST", `/api/projects/${projectId}/versions/${versionId}/git-repos`, data);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/git-repos`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions`] });
       toast({
         title: "Succès",
         description: `Repository ${isEditing ? "modifié" : "créé"} avec succès`,
       });
       onOpenChange(false);
       form.reset();
-      setIsCreatingNew(!isEditing);
+      setIsCreatingNew(false);
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -140,16 +146,17 @@ export function GitRepoModal({
       return;
     }
 
-    const selectedRepo = allGitRepos.find(repo => repo.id.toString() === repoId);
+    const selectedRepo = allGitRepos.find(repo => String(repo.id) === repoId);
     if (selectedRepo) {
       try {
         // Associer le repository existant à la version de projet
-        await apiRequest("POST", `/api/project-versions/${projectVersionId}/git-repos`, {
-          name: selectedRepo.name,
-          url: selectedRepo.url,
+        await apiRequest("POST", `/api/projects/${projectId}/versions/${versionId}/git-repos`, {
+          existingRepoId: Number(repoId),
         });
         
         queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/git-repos`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions`] });
         toast({
           title: "Succès",
           description: "Repository associé avec succès",
@@ -192,33 +199,57 @@ export function GitRepoModal({
         {!isEditing && !isCreatingNew && (
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Sélectionner un repository existant</label>
+              <label className="text-sm font-medium">Repository Git</label>
+              <p className="text-xs text-gray-500 mt-1 mb-3">
+                Choisissez un repository existant ou créez-en un nouveau
+              </p>
               <Select onValueChange={handleSelectExistingRepo}>
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Choisir un repository existant ou créer un nouveau" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un repository..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="new">+ Créer un nouveau repository</SelectItem>
-                  {allGitRepos.map((repo) => (
-                    <SelectItem key={repo.id} value={repo.id.toString()}>
-                      {repo.name} ({repo.url || 'Pas d\'URL'})
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="new">✨ Créer un nouveau repository</SelectItem>
+                  {allGitRepos.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-medium text-gray-500 border-b">
+                        Repositories existants
+                      </div>
+                      {allGitRepos.map((repo) => (
+                        <SelectItem key={String(repo.id)} value={String(repo.id)}>
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">{String(repo.name)}</span>
+                            {repo.url && (
+                              <span className="text-xs text-gray-500 truncate max-w-[200px]">
+                                {String(repo.url)}
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
-            
-            {version?.releaseId && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                <p><strong>Release associée:</strong> {version.releaseId}</p>
-                <p className="text-xs mt-1">La branche sera automatiquement générée: release/{version.releaseId}</p>
-              </div>
-            )}
           </div>
         )}
 
         {(isEditing || isCreatingNew) && (
-          <Form {...form}>
+          <div className="space-y-4">
+            {!isEditing && (
+              <div className="flex items-center gap-2 pb-2 border-b">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsCreatingNew(false)}
+                >
+                  ← Retour à la sélection
+                </Button>
+              </div>
+            )}
+            
+            <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
@@ -254,13 +285,6 @@ export function GitRepoModal({
 
 
 
-              {version?.releaseId && (
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <p><strong>Release associée:</strong> {version.releaseId}</p>
-                  <p className="text-xs mt-1">La branche sera automatiquement générée: release/{version.releaseId}</p>
-                </div>
-              )}
-
               <div className="flex justify-end gap-2">
                 <Button 
                   type="button" 
@@ -284,6 +308,7 @@ export function GitRepoModal({
               </div>
             </form>
           </Form>
+          </div>
         )}
       </DialogContent>
     </Dialog>

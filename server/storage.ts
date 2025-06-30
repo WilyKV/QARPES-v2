@@ -1,18 +1,4 @@
 import {
-  users,
-  teams,
-  teamMembers,
-  projects,
-  releases,
-  releaseProjects,
-  arb,
-  projectVersions,
-  gitRepos,
-  commits,
-  cab,
-  procedures,
-  projectPvs,
-  pvFiles,
   type User,
   type UpsertUser,
   type Team,
@@ -31,6 +17,8 @@ import {
   type InsertProjectVersion,
   type GitRepo,
   type InsertGitRepo,
+  type ProjectVersionGitRepo,
+  type InsertProjectVersionGitRepo,
   type Commit,
   type InsertCommit,
   type Cab,
@@ -44,6 +32,7 @@ import {
   type TeamWithMembers,
   type ProjectWithTeam,
   type ProjectVersionWithDetails,
+  type ProjectVersionGitRepoWithDetails,
   type GitRepoWithDetails,
   type CabWithDetails,
   type ProceduresByType,
@@ -81,6 +70,7 @@ export interface IStorage {
   
   // Release operations
   getReleases(): Promise<ReleaseWithProjects[]>;
+  getReleasesByYearMonth(yearMonth: string): Promise<ReleaseWithProjects[]>;
   getRelease(id: number): Promise<ReleaseWithProjects | undefined>;
   createRelease(release: InsertRelease): Promise<Release>;
   updateRelease(id: number, release: Partial<InsertRelease>): Promise<Release>;
@@ -89,6 +79,7 @@ export interface IStorage {
   // Release-Project operations
   addProjectToRelease(releaseProject: InsertReleaseProject): Promise<ReleaseProject>;
   removeProjectFromRelease(releaseId: number, projectId: number): Promise<void>;
+  getReleaseProjectVersions(releaseId: number): Promise<ProjectVersionWithDetails[]>;
   
   // Project Version operations
   getProjectVersions(projectId: number): Promise<ProjectVersionWithDetails[]>;
@@ -99,12 +90,23 @@ export interface IStorage {
   
   // Git Repository operations
   getGitRepos(projectVersionId: number): Promise<GitRepoWithDetails[]>;
+  getAllGitRepos(): Promise<GitRepoWithDetails[]>;
   createGitRepo(gitRepo: InsertGitRepo): Promise<GitRepo>;
   updateGitRepo(id: number, gitRepo: Partial<InsertGitRepo>): Promise<GitRepo>;
   deleteGitRepo(id: number): Promise<void>;
   
+  // ProjectVersionGitRepo operations (association many-to-many)
+  associateGitRepoToVersion(gitRepoId: number, projectVersionId: number): Promise<any>;
+  removeGitRepoFromVersion(projectVersionId: number, gitRepoId: number): Promise<void>;
+  createGitRepoWithAssociation(gitRepo: InsertGitRepo, projectVersionId: number): Promise<any>;
+  getVersionGitRepoByGitRepoId(gitRepoId: number): Promise<any>;
+  getVersionGitRepos(projectVersionId: number): Promise<ProjectVersionGitRepoWithDetails[]>;
+  getVersionGitRepo(versionGitRepoId: number): Promise<ProjectVersionGitRepoWithDetails | undefined>;
+  
   // Commit operations
   getCommits(gitRepoId: number): Promise<Commit[]>;
+  // Nouvelles méthodes pour récupérer par association spécifique
+  getCommitsByVersionGitRepo(versionGitRepoId: number): Promise<Commit[]>;
   createCommit(commit: InsertCommit): Promise<Commit>;
   updateCommit(id: number, commit: Partial<InsertCommit>): Promise<Commit>;
   deleteCommit(id: number): Promise<void>;
@@ -117,6 +119,8 @@ export interface IStorage {
   
   // Procedure operations (4 types organized by Git repository)
   getProcedures(gitRepoId: number): Promise<ProceduresByType>;
+  // Nouvelles méthodes pour récupérer par association spécifique
+  getProceduresByVersionGitRepo(versionGitRepoId: number): Promise<ProceduresByType>;
   getProceduresByType(gitRepoId: number, type: string): Promise<Procedure[]>;
   createProcedure(procedure: InsertProcedure): Promise<Procedure>;
   updateProcedure(id: number, procedure: Partial<InsertProcedure>): Promise<Procedure>;
@@ -158,7 +162,8 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    return prisma.user.findUnique({ where: { id } }) || undefined;
+    const user = await prisma.user.findUnique({ where: { id } });
+    return user ?? undefined;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
@@ -219,7 +224,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeTeamMember(teamId: number, userId: string): Promise<void> {
-    await prisma.teamMember.delete({ where: { teamId_userId: { teamId, userId } } });
+    await prisma.teamMember.deleteMany({ 
+      where: { 
+        teamId: teamId,
+        userId: userId
+      } 
+    });
   }
 
   async getTeamMembers(teamId: number): Promise<(TeamMember & { user: User })[]> {
@@ -264,34 +274,55 @@ export class DatabaseStorage implements IStorage {
     return prisma.release.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        releaseProjects: { include: { project: true } },
+        projectVersions: { include: { project: true } },
       },
     });
+  }
+
+  async getReleasesByYearMonth(yearMonth: string): Promise<ReleaseWithProjects[]> {
+    return prisma.release.findMany({
+      where: {
+        releaseId: {
+          startsWith: yearMonth
+        }
+      },
+      orderBy: { releaseId: 'desc' },
+      include: {
+        // projectVersions: { include: { project: true } },
+      },
+    }) as any;
   }
 
   async getRelease(id: number): Promise<ReleaseWithProjects | undefined> {
     return prisma.release.findUnique({
       where: { id },
       include: {
-        releaseProjects: { include: { project: true } },
+        projectVersions: { include: { project: true } },
       },
     }) || undefined;
   }
 
   async createRelease(release: InsertRelease): Promise<Release> {
-    // Génération de releaseId automatique (YYYYMM-NN)
-    const now = new Date();
-    const yearMonth = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-    const last = await prisma.release.findFirst({
-      where: { releaseId: { startsWith: yearMonth } },
-      orderBy: { releaseId: 'desc' },
-    });
-    let nextNumber = 1;
-    if (last && last.releaseId) {
-      const lastNumber = parseInt(last.releaseId.split('-')[1]);
-      nextNumber = lastNumber + 1;
+    // Génération de releaseId automatique (YYYYMM-NN) basée sur la date de production
+    let releaseId = release.releaseId;
+    
+    if (!releaseId) {
+      // Utiliser la date de production pour générer le releaseId
+      const productionDate = release.productionDate ? new Date(release.productionDate) : new Date();
+      const yearMonth = `${productionDate.getFullYear()}${(productionDate.getMonth() + 1).toString().padStart(2, '0')}`;
+      
+      const last = await prisma.release.findFirst({
+        where: { releaseId: { startsWith: yearMonth } },
+        orderBy: { releaseId: 'desc' },
+      });
+      
+      let nextNumber = 1;
+      if (last && last.releaseId) {
+        const lastNumber = parseInt(last.releaseId.split('-')[1]);
+        nextNumber = lastNumber + 1;
+      }
+      releaseId = `${yearMonth}-${nextNumber.toString().padStart(2, '0')}`;
     }
-    const releaseId = `${yearMonth}-${nextNumber.toString().padStart(2, '0')}`;
 
     // Correction : parser les dates si elles sont au format YYYY-MM-DD
     const parseDate = (d: any) => {
@@ -392,10 +423,11 @@ export class DatabaseStorage implements IStorage {
       where: { projectId },
       orderBy: { createdAt: 'desc' },
       include: {
-        gitRepos: {
+        versionGitRepos: {
           include: {
-            commits: true,
+            gitRepo: true,
             procedures: true,
+            commits: true,
           },
         },
         cabs: true,
@@ -409,13 +441,25 @@ export class DatabaseStorage implements IStorage {
     return prisma.projectVersion.findUnique({
       where: { id },
       include: {
-        gitRepos: {
+        project: {
           include: {
-            commits: true,
+            team: true,
+          },
+        },
+        release: true,
+        versionGitRepos: {
+          include: {
+            gitRepo: true,
             procedures: true,
+            commits: true,
           },
         },
         cabs: true,
+        pvs: {
+          include: {
+            files: true,
+          },
+        },
       },
     }) || undefined;
   }
@@ -488,13 +532,21 @@ export class DatabaseStorage implements IStorage {
 
   // Git Repository operations
   async getGitRepos(projectVersionId: number): Promise<GitRepoWithDetails[]> {
-    return prisma.gitRepo.findMany({
+    const versionGitRepos = await prisma.projectVersionGitRepo.findMany({
       where: { projectVersionId },
       include: {
+        gitRepo: true,
         commits: true,
         procedures: true,
       },
     });
+    
+    // Transformer pour retourner la structure attendue
+    return versionGitRepos.map(vgr => ({
+      ...vgr.gitRepo,
+      commits: vgr.commits,
+      procedures: vgr.procedures,
+    }));
   }
 
   async createGitRepo(gitRepo: InsertGitRepo): Promise<GitRepo> {
@@ -511,8 +563,36 @@ export class DatabaseStorage implements IStorage {
 
   // Commit operations
   async getCommits(gitRepoId: number): Promise<Commit[]> {
+    // Récupérer tous les commits de ce repo via les associations ProjectVersionGitRepo
+    const commits = await prisma.commit.findMany({
+      where: {
+        versionGitRepo: {
+          gitRepoId: gitRepoId
+        }
+      },
+      include: {
+        versionGitRepo: {
+          include: {
+            projectVersion: {
+              include: {
+                project: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { committedAt: 'desc' },
+    });
+    
+    return commits;
+  }
+
+  async getCommitsByVersionGitRepo(versionGitRepoId: number): Promise<Commit[]> {
+    // Récupérer uniquement les commits de cette association spécifique
     return prisma.commit.findMany({
-      where: { gitRepoId },
+      where: {
+        versionGitRepoId: versionGitRepoId
+      },
       orderBy: { committedAt: 'desc' },
     });
   }
@@ -552,15 +632,52 @@ export class DatabaseStorage implements IStorage {
 
   // Procedure operations (4 types organized by Git repository)
   async getProcedures(gitRepoId: number): Promise<ProceduresByType> {
-    const allProcedures = await prisma.procedure.findMany({
+    // Trouver toutes les associations versionGitRepo pour ce gitRepoId
+    const versionGitRepos = await prisma.projectVersionGitRepo.findMany({
       where: { gitRepoId },
-      orderBy: { order: 'asc' },
+      include: {
+        procedures: {
+          orderBy: { order: 'asc' },
+        },
+      },
     });
+
+    // Collecter toutes les procédures de toutes les associations
+    const allProcedures = versionGitRepos.flatMap(vgr => vgr.procedures);
+
     return {
       environment_variables: allProcedures.filter((p: any) => p.type === 'environment_variables'),
       service_verification: allProcedures.filter((p: any) => p.type === 'service_verification'),
       command_execution: allProcedures.filter((p: any) => p.type === 'command_execution'),
       data_import: allProcedures.filter((p: any) => p.type === 'data_import'),
+    };
+  }
+
+  async getProceduresByVersionGitRepo(versionGitRepoId: number): Promise<ProceduresByType> {
+    // Récupérer uniquement les procédures de cette association spécifique
+    const association = await prisma.projectVersionGitRepo.findUnique({
+      where: { id: versionGitRepoId },
+      include: {
+        procedures: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (!association) {
+      return {
+        environment_variables: [],
+        service_verification: [],
+        command_execution: [],
+        data_import: [],
+      };
+    }
+
+    return {
+      environment_variables: association.procedures.filter((p: any) => p.type === 'environment_variables'),
+      service_verification: association.procedures.filter((p: any) => p.type === 'service_verification'),
+      command_execution: association.procedures.filter((p: any) => p.type === 'command_execution'),
+      data_import: association.procedures.filter((p: any) => p.type === 'data_import'),
     };
   }
 
@@ -594,37 +711,42 @@ export class DatabaseStorage implements IStorage {
 
   // Release procedures aggregation (exemple simple)
   async getReleaseProcedures(releaseId: number): Promise<Procedure[]> {
-    // On récupère tous les projets de la release, puis tous les PV, puis toutes les procédures
-    const release = await prisma.release.findUnique({
-      where: { id: releaseId },
+    // On récupère toutes les versions de projet de cette release, puis leurs procédures
+    const projectVersions = await prisma.projectVersion.findMany({
+      where: { releaseId },
       include: {
-        releaseProjects: {
-          include: {
-            project: {
-              include: {
-                versions: {
-                  include: {
-                    gitRepos: {
-                      include: { procedures: true },
-                    },
-                  },
-                },
-              },
-            },
-          },
+        gitRepos: {
+          include: { procedures: true },
         },
       },
     });
-    if (!release) return [];
+    
     const procedures: Procedure[] = [];
-    for (const rp of release.releaseProjects) {
-      for (const version of rp.project.versions) {
-        for (const repo of version.gitRepos) {
-          procedures.push(...repo.procedures);
-        }
+    for (const version of projectVersions) {
+      for (const repo of version.gitRepos) {
+        procedures.push(...repo.procedures);
       }
     }
     return procedures;
+  }
+
+  // Get project versions associated to a release
+  async getReleaseProjectVersions(releaseId: number): Promise<ProjectVersionWithDetails[]> {
+    const projectVersions = await prisma.projectVersion.findMany({
+      where: { releaseId },
+      include: {
+        project: { include: { team: true } },
+        gitRepos: {
+          include: {
+            commits: { orderBy: { committedAt: 'desc' }, take: 10 },
+            procedures: { orderBy: { order: 'asc' } },
+          },
+        },
+        cabs: true,
+        pvs: { include: { files: true } },
+      },
+    });
+    return projectVersions as any;
   }
   
   // Dashboard stats
@@ -652,6 +774,156 @@ export class DatabaseStorage implements IStorage {
       activeArb,
       projectsByStatus: projectsByStatus.map((p: { status: string; _count: { status: number } }) => ({ status: p.status, count: p._count.status })),
     };
+  }
+
+  // Git Repository operations - méthodes manquantes
+  async getAllGitRepos(): Promise<GitRepoWithDetails[]> {
+    return prisma.gitRepo.findMany({
+      include: {
+        versionGitRepos: {
+          include: {
+            commits: { orderBy: { committedAt: 'desc' }, take: 10 },
+            procedures: { orderBy: { order: 'asc' } },
+            projectVersion: {
+              include: {
+                project: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+    }) as any;
+  }
+
+  // PV operations
+  async getProjectPvs(projectVersionId: number): Promise<(ProjectPv & { files: PvFile[] })[]> {
+    return prisma.projectPv.findMany({
+      where: { projectVersionId },
+      include: { files: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getProjectPv(id: number): Promise<(ProjectPv & { files: PvFile[] }) | undefined> {
+    return prisma.projectPv.findUnique({
+      where: { id },
+      include: { files: true },
+    }) || undefined;
+  }
+
+  async createProjectPv(pvData: InsertProjectPv): Promise<ProjectPv> {
+    return prisma.projectPv.create({ data: pvData });
+  }
+
+  async updateProjectPv(id: number, pvData: Partial<InsertProjectPv>): Promise<ProjectPv> {
+    return prisma.projectPv.update({ where: { id }, data: { ...pvData, updatedAt: new Date() } });
+  }
+
+  async deleteProjectPv(id: number): Promise<void> {
+    await prisma.projectPv.delete({ where: { id } });
+  }
+
+  // PV File operations
+  async addPvFile(file: InsertPvFile): Promise<PvFile> {
+    return prisma.pvFile.create({ data: file });
+  }
+
+  async removePvFile(id: number): Promise<void> {
+    await prisma.pvFile.delete({ where: { id } });
+  }
+
+  async getPvFiles(pvId: number): Promise<PvFile[]> {
+    return prisma.pvFile.findMany({
+      where: { projectPvId: pvId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  // Nouvelles méthodes pour gérer les associations ProjectVersionGitRepo
+  async createGitRepoWithAssociation(gitRepo: InsertGitRepo, projectVersionId: number): Promise<any> {
+    // Créer le GitRepo d'abord
+    const newGitRepo = await prisma.gitRepo.create({ data: gitRepo });
+    
+    // Puis créer l'association
+    const association = await prisma.projectVersionGitRepo.create({
+      data: {
+        projectVersionId,
+        gitRepoId: newGitRepo.id,
+      },
+      include: {
+        gitRepo: true,
+        projectVersion: true,
+      },
+    });
+    
+    return association;
+  }
+
+  async associateGitRepoToVersion(gitRepoId: number, projectVersionId: number): Promise<any> {
+    return prisma.projectVersionGitRepo.create({
+      data: {
+        projectVersionId,
+        gitRepoId,
+      },
+      include: {
+        gitRepo: true,
+        projectVersion: true,
+      },
+    });
+  }
+
+  async removeGitRepoFromVersion(projectVersionId: number, gitRepoId: number): Promise<void> {
+    await prisma.projectVersionGitRepo.deleteMany({
+      where: {
+        projectVersionId,
+        gitRepoId,
+      },
+    });
+  }
+
+  async getVersionGitRepoByGitRepoId(gitRepoId: number): Promise<any> {
+    return prisma.projectVersionGitRepo.findFirst({
+      where: {
+        gitRepoId,
+      },
+      include: {
+        gitRepo: true,
+        projectVersion: true,
+      },
+    });
+  }
+
+  async getVersionGitRepos(projectVersionId: number): Promise<ProjectVersionGitRepoWithDetails[]> {
+    const versionGitRepos = await prisma.projectVersionGitRepo.findMany({
+      where: { projectVersionId },
+      include: {
+        gitRepo: true,
+        projectVersion: true,
+        procedures: true,
+        commits: {
+          orderBy: { committedAt: 'desc' },
+        },
+      },
+    });
+    
+    return versionGitRepos as any;
+  }
+
+  async getVersionGitRepo(versionGitRepoId: number): Promise<ProjectVersionGitRepoWithDetails | undefined> {
+    const versionGitRepo = await prisma.projectVersionGitRepo.findUnique({
+      where: { id: versionGitRepoId },
+      include: {
+        gitRepo: true,
+        projectVersion: true,
+        procedures: true,
+        commits: {
+          orderBy: { committedAt: 'desc' },
+        },
+      },
+    });
+    
+    return versionGitRepo as any || undefined;
   }
 }
 

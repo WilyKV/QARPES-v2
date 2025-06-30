@@ -4,184 +4,174 @@
 // import { createInsertSchema } from "drizzle-zod";
 // import { z } from "zod";
 
-// Session storage table
-export const sessions = {
-  sid: String,
-  sess: Object,
-  expire: Date,
+// Types basés sur Prisma
+export type User = {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+  role: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// User storage table
-export const users = {
-  id: String,
-  email: String,
-  firstName: String,
-  lastName: String,
-  profileImageUrl: String,
-  role: String, // admin, manager, dev, ops, viewer
-  createdAt: Date,
-  updatedAt: Date,
+export type Team = {
+  id: number;
+  name: string;
+  description: string | null;
+  leaderId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// Teams table
-export const teams = {
-  id: Number,
-  name: String,
-  description: String,
-  leaderId: String,
-  createdAt: Date,
-  updatedAt: Date,
+export type TeamMember = {
+  id: number;
+  teamId: number;
+  userId: string;
+  role: string;
+  joinedAt: Date;
 };
 
-// Team members junction table
-export const teamMembers = {
-  id: Number,
-  teamId: Number,
-  userId: String,
-  role: String, // lead, senior, member
-  joinedAt: Date,
+export type Project = {
+  id: number;
+  name: string;
+  description: string | null;
+  status: string;
+  teamId: number | null;
+  repositoryUrl: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// Projects table
-export const projects = {
-  id: Number,
-  name: String,
-  description: String,
-  status: String, // development, testing, preproduction, production
-  teamId: Number,
-  repositoryUrl: String,
-  createdAt: Date,
-  updatedAt: Date,
+export type Release = {
+  id: number;
+  releaseId: string;
+  name: string;
+  description: string | null;
+  status: string;
+  recetteDate: Date | null;
+  preprodDate: Date | null;
+  productionDate: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// Releases table
-export const releases = {
-  id: Number,
-  releaseId: String, // Format: YYYYMM-NN (auto-generated)
-  name: String,
-  description: String,
-  status: String, // 0, 1, 2, 3, 4, 5, Annulé
-  recetteDate: Date, // Date de mise en recette
-  preprodDate: Date, // Date de mise en préprod
-  productionDate: Date, // Date de mise en production
-  createdAt: Date,
-  updatedAt: Date,
+export type ReleaseProject = {
+  id: number;
+  releaseId: number;
+  projectId: number;
+  addedAt: Date;
 };
 
-// Release-Project junction table
-export const releaseProjects = {
-  id: Number,
-  releaseId: Number,
-  projectId: Number,
-  addedAt: Date,
+export type ProjectVersion = {
+  id: number;
+  projectId: number;
+  version: string;
+  status: string;
+  description: string | null;
+  releaseId: number | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// Project versions table for detailed version management
-export const projectVersions = {
-  id: Number,
-  projectId: Number,
-  version: String,
-  description: String,
-  status: String, // 0, 1, 2, 3, 4, 5, Annulé
-  releaseId: Number,
-  isActive: Boolean,
-  createdAt: Date,
-  updatedAt: Date,
+export type Commit = {
+  id: number;
+  gitRepoId: number;
+  hash: string;
+  message: string;
+  author: string;
+  authorEmail: string | null;
+  committedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  projectVersionId: number | null;
 };
 
-// Git repositories for project versions
-export const gitRepos = {
-  id: Number,
-  projectVersionId: Number,
-  name: String,
-  url: String,
-  lastCommitHash: String,
-  createdAt: Date,
-  updatedAt: Date,
+export type Cab = {
+  id: number;
+  projectVersionId: number;
+  ticketNumber: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  assigneeId: string | null;
+  dueDate: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// Commits for git repositories (specific to project version)
-export const commits = {
-  id: Number,
-  gitRepoId: Number,
-  hash: String,
-  message: String,
-  author: String,
-  authorEmail: String,
-  committedAt: Date,
-  createdAt: Date,
+export type Procedure = {
+  id: number;
+  versionGitRepoId: number;
+  type: string;
+  title: string;
+  description: string | null;
+  content: any;
+  order: number | null;
+  isCompleted: boolean | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// CAB tickets for project versions
-export const cab = {
-  id: Number,
-  projectVersionId: Number,
-  ticketNumber: String,
-  title: String,
-  description: String,
-  status: String, // open, in_progress, approved, rejected, closed
-  priority: String, // low, medium, high, critical
-  assigneeId: String,
-  dueDate: Date,
-  createdAt: Date,
-  updatedAt: Date,
+export type ProjectPv = {
+  id: number;
+  projectVersionId: number;
+  type: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// Procedures organized by type and git repository
-export const procedures = {
-  id: Number,
-  gitRepoId: Number,
-  type: String, // environment_variables, service_verification, command_execution, data_import
-  title: String,
-  description: String,
-  content: Object, // Structured content based on type
-  order: Number,
-  isCompleted: Boolean,
-  createdAt: Date,
-  updatedAt: Date,
+export type PvFile = {
+  id: number;
+  pvId: number;
+  fileName: string;
+  filePath: string;
+  fileSize: number | null;
+  mimeType: string | null;
+  uploadedAt: Date;
 };
 
-// Process Verbals (PVs) - 4 types per project version
-export const projectPvs = {
-  id: Number,
-  projectVersionId: Number,
-  type: String, // pv_fonctionnel_recette, pv_metier_recette, pv_conformite_preprod, pv_tests_homologation_preprod
-  status: String, // draft, completed, approved
-  createdAt: Date,
-  updatedAt: Date,
+export type Arb = {
+  id: number;
+  title: string;
+  description: string | null;
+  type: string;
+  status: string;
+  requesterId: string;
+  approverId: string | null;
+  teamId: number | null;
+  projectId: number | null;
+  budget: number | null;
+  priority: string;
+  dueDate: Date | null;
+  approvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// Files for PVs
-export const pvFiles = {
-  id: Number,
-  pvId: Number,
-  fileName: String,
-  filePath: String,
-  fileSize: Number,
-  mimeType: String,
-  uploadedAt: Date,
+export type GitRepo = {
+  id: number;
+  name: string;
+  url: string | null;
+  branch: string | null;
+  lastCommitHash: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// ARB (Access/Responsibilities/Budgets) table
-export const arb = {
-  id: Number,
-  title: String,
-  description: String,
-  type: String, // access, responsibility, budget
-  status: String, // pending, approved, rejected, in_review
-  requesterId: String,
-  approverId: String,
-  teamId: Number,
-  projectId: Number,
-  budget: Number, // Amount in cents if type is budget
-  priority: String, // low, medium, high, critical
-  dueDate: Date,
-  approvedAt: Date,
-  createdAt: Date,
-  updatedAt: Date,
+export type ProjectVersionGitRepo = {
+  id: number;
+  projectVersionId: number;
+  gitRepoId: number;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-// Types
+// Insert types for creating new records
 export type UpsertUser = {
   id: string;
   email?: string;
@@ -191,21 +181,18 @@ export type UpsertUser = {
   role?: string;
 };
 
-export type User = typeof users;
 export type InsertTeam = {
   name: string;
   description?: string;
   leaderId?: string;
 };
 
-export type Team = typeof teams;
 export type InsertTeamMember = {
   teamId: number;
   userId: string;
   role?: string;
 };
 
-export type TeamMember = typeof teamMembers;
 export type InsertProject = {
   name: string;
   description?: string;
@@ -214,7 +201,6 @@ export type InsertProject = {
   repositoryUrl?: string;
 };
 
-export type Project = typeof projects;
 export type InsertProjectVersion = {
   projectId: number;
   version: string;
@@ -224,17 +210,20 @@ export type InsertProjectVersion = {
   isActive?: boolean;
 };
 
-export type ProjectVersion = typeof projectVersions;
 export type InsertGitRepo = {
-  projectVersionId: number;
   name: string;
-  url: string;
-  lastCommitHash?: string;
+  url?: string | null;
+  branch?: string | null;
+  lastCommitHash?: string | null;
 };
 
-export type GitRepo = typeof gitRepos;
-export type InsertCommit = {
+export type InsertProjectVersionGitRepo = {
+  projectVersionId: number;
   gitRepoId: number;
+};
+
+export type InsertCommit = {
+  versionGitRepoId: number;
   hash: string;
   message: string;
   author: string;
@@ -242,7 +231,6 @@ export type InsertCommit = {
   committedAt: Date;
 };
 
-export type Commit = typeof commits;
 export type InsertCab = {
   projectVersionId: number;
   ticketNumber: string;
@@ -254,18 +242,16 @@ export type InsertCab = {
   dueDate?: Date;
 };
 
-export type Cab = typeof cab;
 export type InsertProcedure = {
-  gitRepoId: number;
+  versionGitRepoId: number;
   type: string;
   title: string;
   description?: string;
-  content: Object;
+  content: any;
   order?: number;
   isCompleted?: boolean;
 };
 
-export type Procedure = typeof procedures;
 export type InsertRelease = {
   releaseId: string;
   name: string;
@@ -276,20 +262,17 @@ export type InsertRelease = {
   productionDate?: Date;
 };
 
-export type Release = typeof releases;
 export type InsertReleaseProject = {
   releaseId: number;
   projectId: number;
 };
 
-export type ReleaseProject = typeof releaseProjects;
 export type InsertProjectPv = {
   projectVersionId: number;
   type: string;
   status?: string;
 };
 
-export type ProjectPv = typeof projectPvs;
 export type InsertPvFile = {
   pvId: number;
   fileName: string;
@@ -298,7 +281,6 @@ export type InsertPvFile = {
   mimeType?: string;
 };
 
-export type PvFile = typeof pvFiles;
 export type InsertArb = {
   title: string;
   description?: string;
@@ -312,8 +294,6 @@ export type InsertArb = {
   priority?: string;
   dueDate?: Date;
 };
-
-export type Arb = typeof arb;
 
 // Extended types for UI
 export type TeamWithMembers = Team & {
@@ -329,13 +309,13 @@ export type ProjectWithTeam = Project & {
 
 export type ProjectVersionWithDetails = ProjectVersion & {
   project?: Project & { team?: Team };
-  gitRepos?: GitRepoWithDetails[];
+  versionGitRepos?: ProjectVersionGitRepoWithDetails[];
   cabs?: CabWithDetails[];
   pvs?: (ProjectPv & { files: PvFile[] })[];
 };
 
-export type GitRepoWithDetails = GitRepo & {
-  commits?: Commit[];
+export type ProjectVersionGitRepoWithDetails = ProjectVersionGitRepo & {
+  gitRepo?: GitRepoWithDetails;
   procedures?: Procedure[];
   proceduresByType?: ProceduresByType;
 };
@@ -359,9 +339,12 @@ export type ReleaseProceduresAggregated = {
     versions: {
       versionId: number;
       version: string;
-      gitRepos: {
-        repoId: number;
-        repoName: string;
+      versionGitRepos: {
+        versionGitRepoId: number;
+        gitRepo: {
+          repoId: number;
+          repoName: string;
+        };
         procedures: ProceduresByType;
       }[];
     }[];
@@ -369,7 +352,7 @@ export type ReleaseProceduresAggregated = {
 };
 
 export type ReleaseWithProjects = Release & {
-  releaseProjects?: (ReleaseProject & { project: Project })[];
+  projectVersions?: (ProjectVersion & { project: Project })[];
 };
 
 export type ArbWithDetails = Arb & {
@@ -377,6 +360,10 @@ export type ArbWithDetails = Arb & {
   approver?: User;
   team?: Team;
   project?: Project;
+};
+
+export type GitRepoWithDetails = GitRepo & {
+  commits?: Commit[];
 };
 
 // Les schémas de validation insert*Schema ne sont plus exportés ici (Drizzle/zod supprimés)

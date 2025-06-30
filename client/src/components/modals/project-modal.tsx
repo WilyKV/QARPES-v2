@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -29,31 +29,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { type ProjectWithTeam } from "@shared/schema";
-import { STATUS_OPTIONS } from "@/lib/constants";
 import { z } from "zod";
+import type { ProjectWithTeam, Team } from "@shared/schema";
 
-// Schéma de validation local pour un projet
-const projectSchema = z.object({
-  name: z.string().min(2, "Le nom est requis"),
-  description: z.string().optional().nullable(),
-  status: z.enum(["development", "testing", "preproduction", "production"]),
-  teamId: z
-    .union([
-      z.number(),
-      z.string().regex(/^\d+$/).transform(Number),
-    ])
-    .optional()
-    .nullable(),
-  repositoryUrl: z
-    .string()
-    .url("URL invalide")
-    .optional()
-    .or(z.literal(""))
-    .nullable(),
+const formSchema = z.object({
+  name: z.string().min(1, "Le nom est requis"),
+  description: z.string().optional(),
+  status: z.string().optional().default("development"),
+  teamId: z.number().optional(),
+  repositoryUrl: z.string().url().optional().or(z.literal("")),
 });
 
-type FormData = z.infer<typeof projectSchema>;
+type FormData = z.infer<typeof formSchema>;
 
 interface ProjectModalProps {
   open: boolean;
@@ -66,8 +53,14 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
   const queryClient = useQueryClient();
   const isEditing = !!project;
 
+  // Récupérer les équipes pour le select
+  const { data: teams = [] } = useQuery<Team[]>({
+    queryKey: ["/api/teams"],
+    enabled: open,
+  });
+
   const form = useForm<FormData>({
-    resolver: zodResolver(projectSchema),
+    resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       description: "",
@@ -77,27 +70,23 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
     },
   });
 
-  const { data: teams = [] } = useQuery({
-    queryKey: ["/api/teams"],
-    retry: false,
-  });
-
   useEffect(() => {
     if (project) {
       form.reset({
-        name: project.name,
-        description: project.description || "",
-        status: project.status,
-        teamId: project.teamId || undefined,
-        repositoryUrl: project.repositoryUrl || "",
+        name: String(project.name || ""),
+        description: String(project.description || ""),
+        status: String(project.status || "development"),
+        teamId: project.teamId ? Number(project.teamId) : undefined,
+        repositoryUrl: String(project.repositoryUrl || ""),
       });
     } else {
+      // Pour un nouveau projet, on ne définit que les champs nécessaires
       form.reset({
         name: "",
         description: "",
-        status: "development",
+        status: "development", // Statut par défaut fixe
         teamId: undefined,
-        repositoryUrl: "",
+        repositoryUrl: "", // Pas de repository lors de la création
       });
     }
   }, [project, form]);
@@ -106,8 +95,10 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
     mutationFn: async (data: FormData) => {
       const payload = {
         ...data,
+        // Pour un nouveau projet, on force le statut à "development" et on retire l'URL
+        status: isEditing ? data.status : "development",
+        repositoryUrl: isEditing ? (data.repositoryUrl || null) : null,
         teamId: data.teamId || null,
-        repositoryUrl: data.repositoryUrl || null,
       };
 
       if (isEditing) {
@@ -149,31 +140,40 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
     mutation.mutate(data);
   };
 
+  const statusOptions = [
+    { value: "development", label: "Développement" },
+    { value: "testing", label: "Recette" },
+    { value: "preproduction", label: "Pré-production" },
+    { value: "production", label: "Production" },
+    { value: "archived", label: "Archivé" },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+      <DialogContent className="max-w-md w-full">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Modifier le Projet" : "Nouveau Projet"}
+            {isEditing ? "Modifier le projet" : "Nouveau projet"}
           </DialogTitle>
         </DialogHeader>
-
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Nom du projet */}
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nom du Projet</FormLabel>
+                  <FormLabel>Nom du projet *</FormLabel>
                   <FormControl>
-                    <Input placeholder="Nom du projet" {...field} />
+                    <Input placeholder="Mon super projet" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            {/* Description */}
             <FormField
               control={form.control}
               name="description"
@@ -182,10 +182,9 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
                   <FormLabel>Description</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Description du projet"
+                      placeholder="Description du projet (optionnel)" 
                       rows={3}
-                      {...field}
-                      value={field.value || ""}
+                      {...field} 
                     />
                   </FormControl>
                   <FormMessage />
@@ -193,51 +192,64 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
               )}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Statut</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un statut" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {STATUS_OPTIONS.project.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Information pour la création */}
+            {!isEditing && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700">
+                <p className="font-medium">ℹ️ Information</p>
+                <p>Le statut sera automatiquement défini sur "Développement". Les repositories Git seront gérés au niveau des versions de projet.</p>
+              </div>
+            )}
+
+            {/* Statut et Équipe */}
+            <div className={isEditing ? "grid grid-cols-2 gap-4" : "block"}>
+              {/* Statut - Uniquement visible lors de l'édition */}
+              {isEditing && (
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Statut</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Statut" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {statusOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
                 name="teamId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Équipe Assignée</FormLabel>
+                    <FormLabel>Équipe</FormLabel>
                     <Select 
-                      onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))} 
-                      defaultValue={field.value?.toString() || "none"}
+                      onValueChange={(value) => field.onChange(value === "none" ? undefined : Number(value))} 
+                      value={field.value ? String(field.value) : "none"}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une équipe" />
+                          <SelectValue placeholder="Choisir..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {Array.isArray(teams) && teams.map((team: any) => (
-                          <SelectItem key={team.id} value={team.id.toString()}>
-                            {team.name}
+                        <SelectItem value="none">Aucune équipe</SelectItem>
+                        {teams.map((team) => (
+                          <SelectItem key={Number(team.id)} value={String(Number(team.id))}>
+                            {String(team.name)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -248,39 +260,36 @@ export function ProjectModal({ open, onOpenChange, project }: ProjectModalProps)
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="repositoryUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>URL du Repository</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="https://github.com/..."
-                      type="url"
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Repository URL - Uniquement visible lors de l'édition */}
+            {isEditing && (
+              <FormField
+                control={form.control}
+                name="repositoryUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL du repository</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="https://github.com/user/repo (optionnel)" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
-            <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
+            {/* Boutons */}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Annuler
               </Button>
-              <Button
-                type="submit"
-                disabled={mutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {mutation.isPending ? "En cours..." : (isEditing ? "Modifier" : "Créer")}
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending 
+                  ? (isEditing ? "Modification..." : "Création...") 
+                  : (isEditing ? "Modifier" : "Créer")
+                }
               </Button>
             </div>
           </form>

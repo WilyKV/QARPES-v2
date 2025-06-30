@@ -36,20 +36,20 @@ import { z } from "zod";
 import { type ReleaseWithProjects } from "@shared/schema";
 import { STATUS_OPTIONS } from "@/lib/constants";
 
-const releaseFormSchema = z.object({
+const existingReleaseSchema = z.object({
+  releaseId: z.string().min(1, "Veuillez sélectionner une release"),
+});
+
+const newReleaseSchema = z.object({
   name: z.string().optional(),
   status: z.enum(["0", "1", "2", "3", "4", "5", "Annulé"]),
-  recetteDate: z.string().min(1, "La date de recette est requise"),
-  preprodDate: z.string().min(1, "La date de préprod est requise"),
+  recetteDate: z.string().optional(),
+  preprodDate: z.string().optional(), 
   productionDate: z.string().min(1, "La date de production est requise"),
 });
 
-const associationSchema = z.object({
-  releaseId: z.number().optional(),
-  createRelease: releaseFormSchema.optional(),
-});
-
-type FormData = z.infer<typeof associationSchema>;
+type ExistingReleaseFormData = z.infer<typeof existingReleaseSchema>;
+type NewReleaseFormData = z.infer<typeof newReleaseSchema>;
 
 interface VersionReleaseModalProps {
   open: boolean;
@@ -57,6 +57,7 @@ interface VersionReleaseModalProps {
   projectId: number;
   versionId: number;
   versionName: string;
+  currentReleaseId?: number | null;
 }
 
 const statusColors = {
@@ -76,23 +77,30 @@ export function VersionReleaseModal({
   onOpenChange, 
   projectId, 
   versionId, 
-  versionName 
+  versionName,
+  currentReleaseId
 }: VersionReleaseModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("existing");
 
-  const form = useForm<FormData>({
-    resolver: zodResolver(associationSchema),
+  // Formulaire pour release existante
+  const existingForm = useForm<ExistingReleaseFormData>({
+    resolver: zodResolver(existingReleaseSchema),
     defaultValues: {
-      releaseId: undefined,
-      createRelease: {
-        name: "",
-        status: "0",
-        recetteDate: "",
-        preprodDate: "",
-        productionDate: "",
-      },
+      releaseId: currentReleaseId ? currentReleaseId.toString() : "",
+    },
+  });
+
+  // Formulaire pour nouvelle release
+  const newForm = useForm<NewReleaseFormData>({
+    resolver: zodResolver(newReleaseSchema),
+    defaultValues: {
+      name: "",
+      status: "0",
+      recetteDate: "",
+      preprodDate: "",
+      productionDate: "",
     },
   });
 
@@ -102,32 +110,44 @@ export function VersionReleaseModal({
     retry: false,
   });
 
-  const mutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      const payload: any = {};
-      
-      if (activeTab === "existing" && data.releaseId) {
-        payload.releaseId = data.releaseId;
-      } else if (activeTab === "new" && data.createRelease) {
-        payload.createRelease = {
-          ...data.createRelease,
-          recetteDate: data.createRelease.recetteDate || null,
-          preprodDate: data.createRelease.preprodDate || null,
-          productionDate: data.createRelease.productionDate || null,
-        };
-      }
+  console.log("📋 Available releases:", releases);
 
-      return await apiRequest("POST", `/api/projects/${projectId}/versions/${versionId}/release`, payload);
+  // Remettre à jour le formulaire quand le modal s'ouvre
+  useEffect(() => {
+    if (open) {
+      existingForm.setValue("releaseId", currentReleaseId ? currentReleaseId.toString() : "");
+    }
+  }, [open, currentReleaseId, existingForm]);
+
+  const mutation = useMutation({
+    mutationFn: async (payload: any) => {
+      console.log("🚀 Mutation called with payload:", payload);
+      
+      console.log("🚀 Sending request to:", `/api/projects/${projectId}/versions/${versionId}/release`);
+      const response = await apiRequest("POST", `/api/projects/${projectId}/versions/${versionId}/release`, payload);
+      console.log("🚀 Response status:", response.status);
+      const result = await response.json();
+      console.log("🚀 Response data:", result);
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Mutation success:', data);
+      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/releases"] });
+      if (data.releaseId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/releases/${data.releaseId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/releases/${data.releaseId}/project-versions`] });
+      }
+      
       toast({
         title: "Succès",
         description: `Version ${versionName} associée à la release avec succès`,
       });
       onOpenChange(false);
-      form.reset();
+      existingForm.reset();
+      newForm.reset();
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -149,26 +169,31 @@ export function VersionReleaseModal({
     },
   });
 
-  const onSubmit = (data: FormData) => {
-    if (activeTab === "existing" && !data.releaseId) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez sélectionner une release existante",
-        variant: "destructive",
-      });
-      return;
-    }
+  const onSubmitExisting = (data: ExistingReleaseFormData) => {
+    console.log("🎯 onSubmitExisting called with data:", data);
     
-    if (activeTab === "new" && (!data.createRelease?.name || !data.createRelease?.productionDate)) {
-      toast({
-        title: "Erreur", 
-        description: "Veuillez remplir au minimum le nom et la date de production",
-        variant: "destructive",
-      });
-      return;
-    }
+    const payload = {
+      releaseId: parseInt(data.releaseId, 10)
+    };
+    
+    console.log("✅ Existing release validation passed, calling mutation with:", payload);
+    mutation.mutate(payload);
+  };
 
-    mutation.mutate(data);
+  const onSubmitNew = (data: NewReleaseFormData) => {
+    console.log("🎯 onSubmitNew called with data:", data);
+    
+    const payload = {
+      createRelease: {
+        ...data,
+        recetteDate: data.recetteDate || null,
+        preprodDate: data.preprodDate || null,
+        productionDate: data.productionDate || null,
+      }
+    };
+    
+    console.log("✅ New release validation passed, calling mutation with:", payload);
+    mutation.mutate(payload);
   };
 
   return (
@@ -192,16 +217,22 @@ export function VersionReleaseModal({
             </TabsTrigger>
           </TabsList>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <TabsContent value="existing" className="space-y-4">
+          <TabsContent value="existing" className="space-y-4">
+            <Form {...existingForm}>
+              <form onSubmit={existingForm.handleSubmit(onSubmitExisting)} className="space-y-4">
                 <FormField
-                  control={form.control}
+                  control={existingForm.control}
                   name="releaseId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Sélectionner une release</FormLabel>
-                      <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
+                      <Select 
+                        onValueChange={(value) => {
+                          console.log("🔧 Select value changed:", value, "type:", typeof value);
+                          field.onChange(value);
+                        }} 
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Choisissez une release existante" />
@@ -226,12 +257,29 @@ export function VersionReleaseModal({
                     </FormItem>
                   )}
                 />
-              </TabsContent>
 
-              <TabsContent value="new" className="space-y-4">
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Annuler
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={mutation.isPending}
+                    onClick={() => console.log("🎯 Existing Button clicked!")}
+                  >
+                    {mutation.isPending ? "Association..." : "Associer"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </TabsContent>
+
+          <TabsContent value="new" className="space-y-4">
+            <Form {...newForm}>
+              <form onSubmit={newForm.handleSubmit(onSubmitNew)} className="space-y-4">
                 <FormField
-                  control={form.control}
-                  name="createRelease.name"
+                  control={newForm.control}
+                  name="name"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Nom de la release (optionnel)</FormLabel>
@@ -244,8 +292,8 @@ export function VersionReleaseModal({
                 />
 
                 <FormField
-                  control={form.control}
-                  name="createRelease.status"
+                  control={newForm.control}
+                  name="status"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Statut</FormLabel>
@@ -270,8 +318,8 @@ export function VersionReleaseModal({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField
-                    control={form.control}
-                    name="createRelease.recetteDate"
+                    control={newForm.control}
+                    name="recetteDate"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Date de recette</FormLabel>
@@ -288,8 +336,8 @@ export function VersionReleaseModal({
                   />
 
                   <FormField
-                    control={form.control}
-                    name="createRelease.preprodDate"
+                    control={newForm.control}
+                    name="preprodDate"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Date de préprod</FormLabel>
@@ -306,8 +354,8 @@ export function VersionReleaseModal({
                   />
 
                   <FormField
-                    control={form.control}
-                    name="createRelease.productionDate"
+                    control={newForm.control}
+                    name="productionDate"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Date de production *</FormLabel>
@@ -327,21 +375,22 @@ export function VersionReleaseModal({
                 <p className="text-sm text-muted-foreground">
                   La version sera automatiquement générée au format YYYYMM-NN
                 </p>
-              </TabsContent>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Annuler
-                </Button>
-                <Button type="submit" disabled={mutation.isPending}>
-                  {mutation.isPending 
-                    ? "Association..." 
-                    : (activeTab === "existing" ? "Associer" : "Créer et associer")
-                  }
-                </Button>
-              </div>
-            </form>
-          </Form>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Annuler
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={mutation.isPending}
+                    onClick={() => console.log("🎯 New Button clicked!")}
+                  >
+                    {mutation.isPending ? "Création..." : "Créer et associer"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>

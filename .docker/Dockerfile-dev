@@ -19,6 +19,9 @@ ENV NODE_ENV=development
 # Installation des dépendances (dev incluses)
 RUN npm install --dev
 
+# Génère le client Prisma après l'installation des dépendances
+RUN npx prisma generate
+
 # Copie le code source (sera monté en volume en dev, mais nécessaire pour build image)
 COPY server ./server
 COPY client ./client

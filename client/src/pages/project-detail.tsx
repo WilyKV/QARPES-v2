@@ -1,11 +1,10 @@
 import React, { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, Settings, Database, Terminal, Upload, GitBranch, Users, Plus, Link as LinkIcon } from "lucide-react";
+import { ArrowLeft, Calendar, FileText, Users, Plus, Link as LinkIcon, Activity, Layers, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -14,37 +13,33 @@ import { VersionModal } from "@/components/modals/version-modal";
 import { VersionReleaseModal } from "@/components/modals/version-release-modal";
 import type { 
   ProjectWithTeam, 
-  ProjectVersionWithDetails, 
-  GitRepoWithDetails, 
-  CabWithDetails, 
-  ProceduresByType,
-  Procedure 
+  ProjectVersionWithDetails
 } from "@shared/schema";
 
-const procedureTypeIcons = {
-  environment_variables: Settings,
-  service_verification: CheckCircle,
-  command_execution: Terminal,
-  data_import: Upload,
-};
-
-const procedureTypeLabels = {
-  environment_variables: "Variables d'environnement",
-  service_verification: "Vérification des services",
-  command_execution: "Exécution des commandes",
-  data_import: "Import des données",
-};
-
+// Status styling with modern gradients and colors
 const statusColors = {
-  development: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
-  testing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  preproduction: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  production: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-  open: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-  in_progress: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  approved: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
-  closed: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
+  development: "bg-gradient-to-r from-blue-50 to-indigo-100 text-blue-800 border-blue-200 dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-200 dark:border-blue-700",
+  testing: "bg-gradient-to-r from-yellow-50 to-amber-100 text-yellow-800 border-yellow-200 dark:from-yellow-900/30 dark:to-amber-900/30 dark:text-yellow-200 dark:border-yellow-700",
+  preproduction: "bg-gradient-to-r from-purple-50 to-violet-100 text-purple-800 border-purple-200 dark:from-purple-900/30 dark:to-violet-900/30 dark:text-purple-200 dark:border-purple-700",
+  production: "bg-gradient-to-r from-green-50 to-emerald-100 text-green-800 border-green-200 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-200 dark:border-green-700",
+  archived: "bg-gradient-to-r from-gray-50 to-slate-100 text-gray-800 border-gray-200 dark:from-gray-900/30 dark:to-slate-900/30 dark:text-gray-200 dark:border-gray-700",
+  open: "bg-gradient-to-r from-blue-50 to-indigo-100 text-blue-800 border-blue-200 dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-200 dark:border-blue-700",
+  in_progress: "bg-gradient-to-r from-yellow-50 to-amber-100 text-yellow-800 border-yellow-200 dark:from-yellow-900/30 dark:to-amber-900/30 dark:text-yellow-200 dark:border-yellow-700",
+  approved: "bg-gradient-to-r from-green-50 to-emerald-100 text-green-800 border-green-200 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-200 dark:border-green-700",
+  rejected: "bg-gradient-to-r from-red-50 to-rose-100 text-red-800 border-red-200 dark:from-red-900/30 dark:to-rose-900/30 dark:text-red-200 dark:border-red-700",
+  closed: "bg-gradient-to-r from-gray-50 to-slate-100 text-gray-800 border-gray-200 dark:from-gray-900/30 dark:to-slate-900/30 dark:text-gray-200 dark:border-gray-700",
+  // Version statuses with enhanced styling
+  en_cours_arb: "bg-gradient-to-r from-orange-50 to-amber-100 text-orange-800 border-orange-200 dark:from-orange-900/30 dark:to-amber-900/30 dark:text-orange-200 dark:border-orange-700",
+  en_developpement: "bg-gradient-to-r from-blue-50 to-cyan-100 text-blue-800 border-blue-200 dark:from-blue-900/30 dark:to-cyan-900/30 dark:text-blue-200 dark:border-blue-700",
+  a_deployer_recette: "bg-gradient-to-r from-violet-50 to-purple-100 text-violet-800 border-violet-200 dark:from-violet-900/30 dark:to-purple-900/30 dark:text-violet-200 dark:border-violet-700",
+  recette_en_cours: "bg-gradient-to-r from-indigo-50 to-blue-100 text-indigo-800 border-indigo-200 dark:from-indigo-900/30 dark:to-blue-900/30 dark:text-indigo-200 dark:border-indigo-700",
+  a_deployer_preprod: "bg-gradient-to-r from-teal-50 to-cyan-100 text-teal-800 border-teal-200 dark:from-teal-900/30 dark:to-cyan-900/30 dark:text-teal-200 dark:border-teal-700",
+  preprod_en_cours: "bg-gradient-to-r from-emerald-50 to-green-100 text-emerald-800 border-emerald-200 dark:from-emerald-900/30 dark:to-green-900/30 dark:text-emerald-200 dark:border-emerald-700",
+  a_deployer_production: "bg-gradient-to-r from-green-50 to-lime-100 text-green-800 border-green-200 dark:from-green-900/30 dark:to-lime-900/30 dark:text-green-200 dark:border-green-700",
+  merge_git_a_faire: "bg-gradient-to-r from-purple-50 to-pink-100 text-purple-800 border-purple-200 dark:from-purple-900/30 dark:to-pink-900/30 dark:text-purple-200 dark:border-purple-700",
+  annule: "bg-gradient-to-r from-red-50 to-rose-100 text-red-800 border-red-200 dark:from-red-900/30 dark:to-rose-900/30 dark:text-red-200 dark:border-red-700",
+  hotfix_a_prevoir: "bg-gradient-to-r from-amber-50 to-orange-100 text-amber-800 border-amber-200 dark:from-amber-900/30 dark:to-orange-900/30 dark:text-amber-200 dark:border-amber-700",
+  termine: "bg-gradient-to-r from-green-50 to-emerald-100 text-green-800 border-green-200 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-200 dark:border-green-700",
 };
 
 const statusLabels = {
@@ -52,6 +47,7 @@ const statusLabels = {
   testing: "Recette",
   preproduction: "Pré-production",
   production: "Production",
+  archived: "Archivé",
   open: "Ouvert",
   in_progress: "En cours",
   approved: "Approuvé",
@@ -71,147 +67,27 @@ const statusLabels = {
   termine: "Terminé",
 };
 
-const priorityColors = {
-  low: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-  medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  high: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100",
-  critical: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
+// Enhanced version status icons
+const getVersionStatusIcon = (status: string) => {
+  switch (status) {
+    case 'en_cours_arb':
+      return <Activity className="w-4 h-4" />;
+    case 'en_developpement':
+      return <Layers className="w-4 h-4" />;
+    case 'a_deployer_recette':
+    case 'recette_en_cours':
+      return <Target className="w-4 h-4" />;
+    case 'a_deployer_preprod':
+    case 'preprod_en_cours':
+      return <Target className="w-4 h-4" />;
+    case 'a_deployer_production':
+      return <Target className="w-4 h-4" />;
+    case 'termine':
+      return <Target className="w-4 h-4" />;
+    default:
+      return <Activity className="w-4 h-4" />;
+  }
 };
-
-function ProcedureCard({ procedure, repoName }: { procedure: Procedure; repoName: string }) {
-  const Icon = procedureTypeIcons[procedure.type as keyof typeof procedureTypeIcons];
-  
-  return (
-    <Card className={`border-l-4 ${procedure.isCompleted ? 'border-l-green-500 bg-green-50 dark:bg-green-950' : 'border-l-blue-500'}`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <Icon className="w-4 h-4" />
-            <CardTitle className="text-sm">{procedure.title}</CardTitle>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-xs">
-              {repoName}
-            </Badge>
-            {procedure.isCompleted ? (
-              <CheckCircle className="w-4 h-4 text-green-600" />
-            ) : (
-              <Clock className="w-4 h-4 text-yellow-600" />
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      {procedure.description && (
-        <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-300">{procedure.description}</p>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
-
-function GitRepoSection({ repo }: { repo: GitRepoWithDetails }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  
-  return (
-    <Card>
-      <CardHeader 
-        className="cursor-pointer"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <GitBranch className="w-4 h-4" />
-            <CardTitle className="text-lg">{repo.name}</CardTitle>
-
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="p-1">
-              {isExpanded ? (
-                <ArrowLeft className="w-4 h-4 rotate-90" />
-              ) : (
-                <ArrowLeft className="w-4 h-4 -rotate-90" />
-              )}
-            </Button>
-          </div>
-        </div>
-        {repo.url && (
-          <CardDescription>
-            <a 
-              href={repo.url} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {repo.url}
-            </a>
-          </CardDescription>
-        )}
-      </CardHeader>
-      {isExpanded && (
-        <CardContent>
-          <Tabs defaultValue="commits" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="commits">Commits</TabsTrigger>
-            <TabsTrigger value="environment_variables">Variables env.</TabsTrigger>
-            <TabsTrigger value="service_verification">Services</TabsTrigger>
-            <TabsTrigger value="command_execution">Commandes</TabsTrigger>
-            <TabsTrigger value="data_import">Import</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="commits" className="space-y-3">
-            {repo.commits && repo.commits.length > 0 ? (
-              repo.commits.map((commit) => (
-                <Card key={commit.id} className="border-l-4 border-l-purple-500">
-                  <CardContent className="pt-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <GitCommit className="w-3 h-3" />
-                          <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                            {commit.hash.substring(0, 8)}
-                          </code>
-                        </div>
-                        <p className="text-sm font-medium">{commit.message}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {commit.author} • {commit.committedAt ? formatDate(commit.committedAt) : 'Date inconnue'}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                Aucun commit trouvé
-              </p>
-            )}
-          </TabsContent>
-
-          {Object.entries(procedureTypeLabels).map(([type, label]) => (
-            <TabsContent key={type} value={type} className="space-y-3">
-              <div className="flex items-center gap-2 mb-4">
-                {React.createElement(procedureTypeIcons[type as keyof typeof procedureTypeIcons], { className: "w-4 h-4" })}
-                <h3 className="font-medium">{label}</h3>
-              </div>
-              {repo.proceduresByType?.[type as keyof ProceduresByType] && repo.proceduresByType[type as keyof ProceduresByType].length > 0 ? (
-                repo.proceduresByType[type as keyof ProceduresByType].map((procedure) => (
-                  <ProcedureCard key={procedure.id} procedure={procedure} repoName={repo.name} />
-                ))
-              ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                  Aucune procédure de type "{label}" trouvée
-                </p>
-              )}
-            </TabsContent>
-          ))}
-        </Tabs>
-      </CardContent>
-      )}
-    </Card>
-  );
-}
 
 export default function ProjectDetail() {
   const params = useParams();
@@ -221,6 +97,7 @@ export default function ProjectDetail() {
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [selectedVersionName, setSelectedVersionName] = useState<string>("");
+  const [currentReleaseId, setCurrentReleaseId] = useState<number | null>(null);
 
   const { data: project, isLoading: projectLoading } = useQuery<ProjectWithTeam>({
     queryKey: [`/api/projects/${projectId}`],
@@ -232,27 +109,26 @@ export default function ProjectDetail() {
     enabled: !!projectId,
   });
 
+  const { data: releases = [] } = useQuery<any[]>({
+    queryKey: ["/api/releases"],
+    enabled: !!projectId,
+  });
+
   if (projectLoading || versionsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <Sidebar />
         <main className="flex-1 overflow-auto">
           <Header 
             title="Chargement..." 
             subtitle="Chargement des détails du projet"
           />
-          <div className="p-6 space-y-6">
-            {[...Array(3)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-6 w-1/3" />
-                  <Skeleton className="h-4 w-1/2" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-32 w-full" />
-                </CardContent>
-              </Card>
-            ))}
+          <div className="p-4 md:p-6 lg:p-8 space-y-6">
+            <div className="space-y-4">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-48 w-full" />
+              <Skeleton className="h-64 w-full" />
+            </div>
           </div>
         </main>
       </div>
@@ -261,24 +137,29 @@ export default function ProjectDetail() {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <Sidebar />
         <main className="flex-1 overflow-auto">
           <Header 
             title="Projet introuvable" 
             subtitle="Le projet demandé n'existe pas"
           />
-          <div className="p-6">
-            <Card>
+          <div className="p-4 md:p-6 lg:p-8">
+            <Card className="max-w-md mx-auto shadow-lg border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80">
               <CardContent className="pt-6 text-center">
-                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                <div className="w-16 h-16 bg-gradient-to-br from-red-100 to-rose-200 dark:from-red-900/30 dark:to-rose-800/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
                   Projet introuvable
                 </h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                <p className="text-gray-600 dark:text-gray-400 mb-6">
                   Le projet avec l'ID {projectId} n'existe pas ou vous n'avez pas les permissions pour y accéder.
                 </p>
-                <Button onClick={() => setLocation("/projects")}>
+                <Button 
+                  onClick={() => setLocation("/projects")}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg"
+                >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Retour aux projets
                 </Button>
@@ -290,252 +171,245 @@ export default function ProjectDetail() {
     );
   }
 
+  // Get next action for version status
+  const getNextAction = (status: string) => {
+    switch(status) {
+      case 'en_cours_arb':
+        return 'ARB en cours';
+      case 'en_developpement':
+        return 'En développement';
+      case 'a_deployer_recette':
+        return 'Déploiement recette à faire';
+      case 'recette_en_cours':
+        return 'Recette en cours';
+      case 'a_deployer_preprod':
+        return 'Déploiement préprod à faire';
+      case 'preprod_en_cours':
+        return 'Préprod en cours';
+      case 'a_deployer_production':
+        return 'Déploiement production à faire';
+      case 'merge_git_a_faire':
+        return 'Merge git à faire';
+      case 'termine':
+        return 'Terminé';
+      case 'annule':
+        return 'Annulé';
+      case 'hotfix_a_prevoir':
+        return 'Hotfix à prévoir';
+      default:
+        return 'Statut inconnu';
+    }
+  };
+
+  const getVersionProgress = (status: string) => {
+    const progressMap: { [key: string]: number } = {
+      'en_cours_arb': 10,
+      'en_developpement': 25,
+      'a_deployer_recette': 40,
+      'recette_en_cours': 55,
+      'a_deployer_preprod': 70,
+      'preprod_en_cours': 85,
+      'a_deployer_production': 95,
+      'termine': 100,
+      'annule': 0,
+      'hotfix_a_prevoir': 90,
+      'merge_git_a_faire': 80,
+    };
+    return progressMap[status] || 0;
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
-      
       <main className="flex-1 overflow-auto">
         <Header 
-          title={project.name}
-          subtitle={project.description || "Détails du projet"}
-          actions={
-            <Button variant="outline" onClick={() => setLocation("/projects")}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Retour
-            </Button>
-          }
+          title={String(project?.name || '')}
+          subtitle="Détails du projet"
         />
-
-        <div className="p-6 space-y-6">
-          {/* Project Info */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-2xl">{project.name}</CardTitle>
-                  <CardDescription className="text-base mt-1">
-                    {project.description}
-                  </CardDescription>
+        
+        <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+          {/* Project Header Card */}
+          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 h-2"></div>
+            <CardHeader className="pb-4">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div className="flex-1">
+                  <CardTitle className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+                    {String(project?.name || '')}
+                  </CardTitle>
+                  {project?.description && (
+                    <CardDescription className="text-base md:text-lg mt-2 text-gray-600 dark:text-gray-400">
+                      {String(project.description)}
+                    </CardDescription>
+                  )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge className={statusColors[project.status as keyof typeof statusColors] || statusColors.development}>
-                    {statusLabels[project.status as keyof typeof statusLabels] || project.status}
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge className={`px-4 py-2 text-sm font-medium border ${statusColors[String(project?.status) as keyof typeof statusColors] || statusColors.development}`}>
+                    {statusLabels[String(project?.status) as keyof typeof statusLabels] || String(project?.status)}
                   </Badge>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {project.team && (
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm">Équipe: {project.team.name}</span>
+                  <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
+                      <Users className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Équipe</p>
+                      <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                        {String(project?.team?.name || 'Non définie')}
+                      </p>
+                    </div>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Créé le: {project.createdAt ? formatDate(project.createdAt) : 'Date inconnue'}</span>
+                <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-100 dark:border-green-800">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Créé le</p>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {project?.createdAt ? formatDate(String(project.createdAt)) : 'Date inconnue'}
+                    </p>
+                  </div>
                 </div>
-                {project.repositoryUrl && (
-                  <div className="flex items-center gap-2">
-                    <GitBranch className="w-4 h-4 text-gray-500" />
-                    <a 
-                      href={project.repositoryUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      Repository principal
-                    </a>
+                <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-lg border border-purple-100 dark:border-purple-800">
+                  <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-violet-500 rounded-full flex items-center justify-center">
+                    <Layers className="w-5 h-5 text-white" />
                   </div>
-                )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Versions</p>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {versions?.length || 0} version{(versions?.length || 0) > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Project Versions */}
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Versions du projet</h2>
-              <Button onClick={() => setVersionModalOpen(true)}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Versions du projet</h2>
+              <Button 
+                onClick={() => setVersionModalOpen(true)}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Nouvelle version
               </Button>
             </div>
             
             {versions && versions.length > 0 ? (
-              versions.map((version) => (
-                <Card key={version.id} className="border-2">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle 
-                          className="text-lg hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"
-                          onClick={() => setLocation(`/projects/${projectId}/versions/${version.id}`)}
-                        >
-                          Version {version.version}
-                        </CardTitle>
-                        <CardDescription>{version.description}</CardDescription>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedVersionId(version.id);
-                            setSelectedVersionName(version.version);
-                            setReleaseModalOpen(true);
-                          }}
-                        >
-                          <LinkIcon className="w-4 h-4 mr-2" />
-                          Associer à une release
-                        </Button>
-                        <Badge className={statusColors[version.status as keyof typeof statusColors] || statusColors.development}>
-                          {statusLabels[version.status as keyof typeof statusLabels] || version.status}
-                        </Badge>
-                        <span className="text-xs text-gray-500">
-                          {version.createdAt ? formatDate(version.createdAt) : 'Date inconnue'}
-                        </span>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Tabs defaultValue="repositories" className="w-full">
-                      <TabsList>
-                        <TabsTrigger value="repositories">Repositories Git</TabsTrigger>
-                        <TabsTrigger value="pvs">PVs</TabsTrigger>
-                        <TabsTrigger value="cab">Tickets CAB</TabsTrigger>
-                      </TabsList>
-                      
-                      <TabsContent value="repositories" className="space-y-4">
-                        {version.gitRepos && version.gitRepos.length > 0 ? (
-                          version.gitRepos.map((repo) => (
-                            <GitRepoSection key={repo.id} repo={repo} />
-                          ))
-                        ) : (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                            Aucun repository Git trouvé pour cette version
-                          </p>
-                        )}
-                      </TabsContent>
-                      
-                      <TabsContent value="pvs" className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {["pv_fonctionnel_recette", "pv_metier_recette", "pv_conformite_preprod", "pv_tests_homologation_preprod"].map((pvType) => {
-                            const pvTypeLabels = {
-                              pv_fonctionnel_recette: "PV Fonctionnel Recette",
-                              pv_metier_recette: "PV Métier Recette", 
-                              pv_conformite_preprod: "PV Conformité Préprod",
-                              pv_tests_homologation_preprod: "PV Tests Homologation IT Préprod"
-                            };
-                            
-                            const pv = version.pvs?.find(p => p.type === pvType);
-                            
-                            return (
-                              <Card key={pvType} className={`border-l-4 ${pv?.status === 'completed' ? 'border-l-green-500 bg-green-50 dark:bg-green-950' : 'border-l-orange-500'}`}>
-                                <CardHeader className="pb-3">
-                                  <div className="flex items-start justify-between">
-                                    <div>
-                                      <CardTitle className="text-sm">{pvTypeLabels[pvType as keyof typeof pvTypeLabels]}</CardTitle>
-                                      <CardDescription className="text-xs">
-                                        {pv ? `Status: ${pv.status}` : 'Non créé'}
-                                      </CardDescription>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      {pv?.status === 'completed' ? (
-                                        <CheckCircle className="w-4 h-4 text-green-600" />
-                                      ) : (
-                                        <Clock className="w-4 h-4 text-orange-600" />
-                                      )}
-                                    </div>
-                                  </div>
-                                </CardHeader>
-                                {pv?.files && pv.files.length > 0 && (
-                                  <CardContent>
-                                    <div className="space-y-2">
-                                      <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                                        Fichiers attachés ({pv.files.length})
-                                      </p>
-                                      {pv.files.slice(0, 3).map((file) => (
-                                        <div key={file.id} className="flex items-center gap-2 text-xs">
-                                          <FileText className="w-3 h-3" />
-                                          <span className="truncate">{file.fileName}</span>
-                                          <span className="text-gray-400">
-                                            ({Math.round((file.fileSize || 0) / 1024)} KB)
-                                          </span>
-                                        </div>
-                                      ))}
-                                      {pv.files.length > 3 && (
-                                        <p className="text-xs text-gray-500">
-                                          +{pv.files.length - 3} autres fichiers
-                                        </p>
-                                      )}
-                                    </div>
-                                  </CardContent>
-                                )}
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </TabsContent>
-                      
-                      <TabsContent value="cab" className="space-y-3">
-                        {version.cabs && version.cabs.length > 0 ? (
-                          version.cabs.map((cab) => (
-                            <Card key={cab.id} className="border-l-4 border-l-blue-500">
-                              <CardHeader className="pb-3">
-                                <div className="flex items-start justify-between">
-                                  <div>
-                                    <CardTitle className="text-sm">{cab.ticketNumber}</CardTitle>
-                                    <CardDescription className="text-sm">{cab.title}</CardDescription>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Badge className={statusColors[cab.status as keyof typeof statusColors] || statusColors.open}>
-                                      {statusLabels[cab.status as keyof typeof statusLabels] || cab.status}
-                                    </Badge>
-                                    <Badge className={priorityColors[cab.priority as keyof typeof priorityColors] || priorityColors.medium}>
-                                      {cab.priority}
-                                    </Badge>
-                                  </div>
+              <div className="grid gap-4">
+                {versions.map((version, index) => {
+                  const progress = getVersionProgress(String(version.status));
+                  
+                  return (
+                    <Card key={String(version.id)} className="shadow-lg border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 hover:shadow-xl transition-all duration-200 cursor-pointer group" onClick={() => setLocation(`/projects/${projectId}/versions/${String(version.id)}`)}>
+                      <CardContent className="p-6">
+                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
+                                  <span className="text-white font-bold text-lg">v{String(version.version)}</span>
                                 </div>
-                              </CardHeader>
-                              {cab.description && (
-                                <CardContent>
-                                  <p className="text-sm text-gray-600 dark:text-gray-300">{cab.description}</p>
-                                  {cab.assignee && (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                      Assigné à: {cab.assignee.email}
-                                    </p>
-                                  )}
-                                  {cab.dueDate && (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                      Échéance: {formatDate(cab.dueDate)}
-                                    </p>
-                                  )}
-                                </CardContent>
-                              )}
-                            </Card>
-                          ))
-                        ) : (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                            Aucun ticket CAB trouvé pour cette version
-                          </p>
-                        )}
-                      </TabsContent>
-                    </Tabs>
-                  </CardContent>
-                </Card>
-              ))
+                                <div>
+                                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                                    Version {String(version.version)}
+                                  </h3>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    {getNextAction(String(version.status))}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge className={`px-3 py-1 text-xs font-medium border ${statusColors[String(version.status) as keyof typeof statusColors] || statusColors.development}`}>
+                                  {getVersionStatusIcon(String(version.status))}
+                                  <span className="ml-1">{statusLabels[String(version.status) as keyof typeof statusLabels] || String(version.status)}</span>
+                                </Badge>
+                                {version.releaseId && String(version.releaseId) !== '0' ? (
+                                  <Badge 
+                                    variant="secondary" 
+                                    className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 cursor-pointer hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const release = releases.find(r => r.id === Number(version.releaseId));
+                                      if (release) {
+                                        window.location.href = `/releases/${release.id}`;
+                                      }
+                                    }}
+                                    title="Cliquer pour voir la release"
+                                  >
+                                    Release: {releases.find(r => r.id === Number(version.releaseId))?.releaseId || String(version.releaseId)}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-gray-500 border-gray-300 dark:text-gray-400 dark:border-gray-600">
+                                    Aucune release
+                                  </Badge>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="ml-auto group-hover:bg-blue-50 group-hover:border-blue-200 dark:group-hover:bg-blue-900/20 dark:group-hover:border-blue-700 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVersionId(Number(version.id));
+                                    setSelectedVersionName(String(version.version));
+                                    setCurrentReleaseId(version.releaseId && String(version.releaseId) !== '0' ? Number(version.releaseId) : null);
+                                    setReleaseModalOpen(true);
+                                  }}
+                                >
+                                  <LinkIcon className="w-4 h-4 mr-2" />
+                                  Changer de release
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Progress Bar */}
+                            <div className="mb-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Progression</span>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{progress}%</span>
+                              </div>
+                              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div 
+                                  className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300" 
+                                  style={{ width: `${progress}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             ) : (
-              <Card>
-                <CardContent className="pt-6 text-center">
-                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+              <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80">
+                <CardContent className="pt-12 pb-12 text-center">
+                  <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <FileText className="w-10 h-10 text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-3">
                     Aucune version
                   </h3>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    Ce projet n'a pas encore de versions définies.
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    Ce projet n'a pas encore de versions définies. Créez votre première version pour commencer.
                   </p>
+                  <Button 
+                    onClick={() => setVersionModalOpen(true)}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Créer la première version
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -557,6 +431,7 @@ export default function ProjectDetail() {
           projectId={projectId}
           versionId={selectedVersionId}
           versionName={selectedVersionName}
+          currentReleaseId={currentReleaseId}
         />
       )}
     </div>

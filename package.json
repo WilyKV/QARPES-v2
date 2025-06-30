@@ -103,6 +103,6 @@
     "bufferutil": "^4.0.8"
   },
   "prisma": {
-    "seed": "tsx server/fixtures.ts"
+    "seed": "tsx server/fixtures-complete.ts"
   }
 }

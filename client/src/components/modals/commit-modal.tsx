@@ -42,7 +42,7 @@ type FormData = z.infer<typeof formSchema>;
 interface CommitModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  gitRepoId: number;
+  versionGitRepoId: number;
   projectId: number;
   versionId: number;
   commit?: Commit;
@@ -51,7 +51,7 @@ interface CommitModalProps {
 export function CommitModal({
   open,
   onOpenChange,
-  gitRepoId,
+  versionGitRepoId,
   projectId,
   versionId,
   commit,
@@ -105,7 +105,7 @@ export function CommitModal({
       } else {
         return await apiRequest(
           "POST",
-          `/api/git-repos/${gitRepoId}/commits`,
+          `/api/version-git-repos/${versionGitRepoId}/commits`,
           payload
         );
       }

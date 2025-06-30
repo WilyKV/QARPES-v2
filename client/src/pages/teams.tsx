@@ -184,7 +184,7 @@ export default function Teams() {
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-2 text-gray-600 dark:text-gray-400">Chargement...</p>
@@ -194,7 +194,7 @@ export default function Teams() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
       
       <main className="flex-1 overflow-auto">
@@ -202,14 +202,17 @@ export default function Teams() {
           title="Équipes" 
           subtitle="Gestion des équipes avec membres et rôles"
           actions={
-            <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button 
+              onClick={() => setIsModalOpen(true)} 
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Nouvelle Équipe
             </Button>
           }
         />
 
-        <div className="p-6">
+        <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
           {/* Search and Filters */}
           <div className="mb-6">
             <div className="relative">
@@ -218,18 +221,20 @@ export default function Teams() {
                 placeholder="Rechercher par nom, description ou chef d'équipe..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 border-0 shadow-lg"
               />
             </div>
           </div>
 
           {/* Data Table */}
-          <DataTable
-            columns={columns}
-            data={filteredTeams}
-            loading={teamsLoading}
-            emptyMessage="Aucune équipe trouvée"
-          />
+          <div className="bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 rounded-lg shadow-lg border-0">
+            <DataTable
+              columns={columns}
+              data={filteredTeams}
+              loading={teamsLoading}
+              emptyMessage="Aucune équipe trouvée"
+            />
+          </div>
         </div>
       </main>
 

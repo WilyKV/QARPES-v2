@@ -51,6 +51,8 @@ model TeamMember {
   joinedAt  DateTime @default(now())
   team      Team     @relation(fields: [teamId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
+  
+  @@unique([teamId, userId])
 }
 
 model Project {
@@ -80,6 +82,7 @@ model Release {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now())
   releaseProjects ReleaseProject[]
+  projectVersions ProjectVersion[]
 }
 
 model ReleaseProject {
@@ -89,6 +92,8 @@ model ReleaseProject {
   addedAt    DateTime @default(now())
   release    Release  @relation(fields: [releaseId], references: [id])
   project    Project  @relation(fields: [projectId], references: [id])
+  
+  @@unique([releaseId, projectId])
 }
 
 model Arb {
@@ -119,43 +124,28 @@ model ProjectVersion {
   version     String
   status      String    @default("development")
   description String?
+  releaseId   Int?
+  isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now())
   project     Project   @relation(fields: [projectId], references: [id])
-  gitRepos    GitRepo[]
-  commits     Commit[]
+  release     Release?  @relation(fields: [releaseId], references: [id])
+  versionGitRepos ProjectVersionGitRepo[]
   cabs        Cab[]
-  procedures  Procedure[]
   pvs         ProjectPv[]
 }
 
-model GitRepo {
-  id                Int       @id @default(autoincrement())
-  projectVersionId  Int
-  name              String
-  url               String
-  branch            String?
-  lastCommitHash    String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @default(now())
-  projectVersion    ProjectVersion @relation(fields: [projectVersionId], references: [id])
-  commits           Commit[]
-  procedures        Procedure[]
-}
-
 model Commit {
-  id         Int      @id @default(autoincrement())
-  gitRepoId  Int
-  hash       String
-  message    String
-  author     String
-  authorEmail String?
-  committedAt DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now())
-  gitRepo    GitRepo  @relation(fields: [gitRepoId], references: [id])
-  projectVersion   ProjectVersion? @relation(fields: [projectVersionId], references: [id])
-  projectVersionId Int?
+  id                   Int      @id @default(autoincrement())
+  versionGitRepoId     Int
+  hash                 String
+  message              String
+  author               String
+  authorEmail          String?
+  committedAt          DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now())
+  versionGitRepo       ProjectVersionGitRepo @relation(fields: [versionGitRepoId], references: [id])
 }
 
 model Cab {
@@ -175,7 +165,7 @@ model Cab {
 
 model Procedure {
   id          Int      @id @default(autoincrement())
-  gitRepoId   Int
+  versionGitRepoId Int
   type        String
   title       String
   description String?
@@ -184,9 +174,7 @@ model Procedure {
   isCompleted Boolean? @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now())
-  gitRepo     GitRepo  @relation(fields: [gitRepoId], references: [id])
-  projectVersion   ProjectVersion? @relation(fields: [projectVersionId], references: [id])
-  projectVersionId Int?
+  versionGitRepo ProjectVersionGitRepo @relation(fields: [versionGitRepoId], references: [id])
 }
 
 model ProjectPv {
@@ -209,4 +197,30 @@ model PvFile {
   mimeType String?
   uploadedAt DateTime @default(now())
   pv       ProjectPv @relation(fields: [pvId], references: [id])
+}
+
+model GitRepo {
+  id               Int      @id @default(autoincrement())
+  name             String   @db.VarChar(255)
+  url              String?
+  branch           String?  @db.VarChar(255)
+  lastCommitHash   String?  @db.VarChar(255)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+  versionGitRepos  ProjectVersionGitRepo[]
+}
+
+// Table d'association many-to-many entre ProjectVersion et GitRepo
+model ProjectVersionGitRepo {
+  id               Int      @id @default(autoincrement())
+  projectVersionId Int
+  gitRepoId        Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+  projectVersion   ProjectVersion @relation(fields: [projectVersionId], references: [id])
+  gitRepo          GitRepo @relation(fields: [gitRepoId], references: [id])
+  procedures       Procedure[]
+  commits          Commit[]
+  
+  @@unique([projectVersionId, gitRepoId])
 }

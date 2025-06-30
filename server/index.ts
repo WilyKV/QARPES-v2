@@ -53,6 +53,29 @@ app.use((req, res, next) => {
     // Import dynamique pour éviter d'inclure vite en production
     const { setupVite } = await import("./" + "viteDev.js");
     await setupVite(app, server);
+    
+    // Créer automatiquement les fixtures en mode développement si la base est vide ou si forcé
+    try {
+      const { prisma } = await import("./db");
+      const userCount = await prisma.user.count();
+      const forceReload = (globalThis as any).process?.env?.FORCE_FIXTURES === "true";
+      
+      if (userCount === 0 || forceReload) {
+        if (userCount > 0) {
+          log("� Rechargement forcé des fixtures (FORCE_FIXTURES=true)...");
+        } else {
+          log("�📦 Base de données vide, chargement des fixtures...");
+        }
+        const { createCompleteFixtures } = await import("./fixtures-complete");
+        await createCompleteFixtures();
+        log("✅ Fixtures complètes créées automatiquement en mode développement");
+      } else {
+        log(`📊 Base de données déjà initialisée (${userCount} utilisateurs trouvés)`);
+        log("💡 Pour recharger les fixtures, utilisez FORCE_FIXTURES=true");
+      }
+    } catch (error) {
+      log("❌ Erreur lors de la création des fixtures:", error);
+    }
   } else {
     const { serveStatic } = await import("./" + "vite.js");
     serveStatic(app);

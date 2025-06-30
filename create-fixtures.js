@@ -1,4 +1,4 @@
-const { createFixtures } = require('./server/fixtures.ts');
+import { createFixtures } from './server/fixtures.js';
 
 createFixtures()
   .then(() => console.log('✅ Fixtures created successfully!'))

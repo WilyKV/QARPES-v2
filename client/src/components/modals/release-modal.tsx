@@ -31,6 +31,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { z } from "zod";
 import { STATUS_OPTIONS } from "@/lib/constants";
+import type { ReleaseWithProjects } from "@shared/schema";
 
 const formSchema = z.object({
   name: z.string().optional(),
@@ -64,14 +65,31 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
     },
   });
 
+  // Fonction utilitaire pour convertir une date en format YYYY-MM-DD
+  const formatDateForInput = (date: any) => {
+    if (!date) return "";
+    if (typeof date === "string") {
+      // Si c'est déjà une string, on prend seulement la partie date (sans l'heure)
+      return date.split('T')[0];
+    }
+    if (date instanceof Date) {
+      return date.toISOString().split('T')[0];
+    }
+    // Si c'est un objet avec une méthode toISOString
+    if (typeof date === "object" && typeof date.toISOString === "function") {
+      return date.toISOString().split('T')[0];
+    }
+    return "";
+  };
+
   useEffect(() => {
     if (release) {
       form.reset({
-        name: release.name,
-        status: release.status,
-        recetteDate: release.recetteDate || "",
-        preprodDate: release.preprodDate || "",
-        productionDate: release.productionDate || "",
+        name: String(release.name || ""),
+        status: String(release.status || "0"),
+        recetteDate: formatDateForInput(release.recetteDate),
+        preprodDate: formatDateForInput(release.preprodDate),
+        productionDate: formatDateForInput(release.productionDate),
       });
     } else {
       form.reset({
@@ -84,14 +102,52 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
     }
   }, [release, form]);
 
+  // Fonction pour générer le releaseId basé sur la date de production
+  const generateReleaseId = async (productionDate: string): Promise<string> => {
+    if (!productionDate) {
+      throw new Error("La date de production est requise pour générer l'ID de release");
+    }
+    
+    const date = new Date(productionDate);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const yearMonth = `${year}${month}`;
+    
+    // Récupérer les releases existantes pour ce mois
+    const response = await apiRequest("GET", `/api/releases?yearMonth=${yearMonth}`);
+    const existingReleases = Array.isArray(response) ? response : [];
+    
+    // Trouver le plus grand numéro de séquence pour ce mois
+    let maxSequence = 0;
+    existingReleases.forEach((rel: any) => {
+      const releaseId = String(rel.releaseId || '');
+      if (releaseId.startsWith(yearMonth + '-')) {
+        const sequence = parseInt(releaseId.split('-')[1] || '0', 10);
+        if (sequence > maxSequence) {
+          maxSequence = sequence;
+        }
+      }
+    });
+    
+    // Générer le nouveau numéro de séquence
+    const newSequence = String(maxSequence + 1).padStart(2, '0');
+    return `${yearMonth}-${newSequence}`;
+  };
+
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const payload = {
+      let payload = {
         ...data,
         recetteDate: data.recetteDate || null,
         preprodDate: data.preprodDate || null,
         productionDate: data.productionDate || null,
       };
+
+      // Si c'est une nouvelle release, générer automatiquement le releaseId
+      if (!isEditing && data.productionDate) {
+        const generatedReleaseId = await generateReleaseId(data.productionDate);
+        payload = { ...payload, releaseId: generatedReleaseId };
+      }
 
       if (isEditing) {
         await apiRequest("PUT", `/api/releases/${release.id}`, payload);
@@ -141,7 +197,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
           </DialogTitle>
           {!isEditing && (
             <p className="text-sm text-muted-foreground">
-              La version sera automatiquement générée au format YYYYMM-NN
+              La version sera automatiquement générée au format YYYYMM-NN basée sur la date de production
             </p>
           )}
         </DialogHeader>

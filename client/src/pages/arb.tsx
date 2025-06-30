@@ -295,7 +295,7 @@ export default function ARBPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
       
       <main className="flex-1 overflow-auto">
@@ -303,7 +303,10 @@ export default function ARBPage() {
           title="ARB" 
           subtitle="Gestion des Accès, Responsabilités et Budgets"
           actions={
-            <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button 
+              onClick={() => setIsModalOpen(true)} 
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Nouveau ARB
             </Button>

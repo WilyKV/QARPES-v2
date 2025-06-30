@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,10 +30,9 @@ import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { useState, useEffect, useMemo } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { InfoIcon, Table, Bold, Italic, List } from "lucide-react";
+import { InfoIcon, Table, Bold, Italic, List, Eye, Code } from "lucide-react";
 
 const procedureSchema = z.object({
-  title: z.string().min(1, "Le titre est obligatoire"),
   description: z.string().optional(),
   type: z.enum(["environment_variables", "service_verification", "command_execution", "data_import"]),
   content: z.string().min(1, "Le contenu est obligatoire"),
@@ -43,7 +43,7 @@ type FormData = z.infer<typeof procedureSchema>;
 interface ProcedureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  gitRepoId: number;
+  versionGitRepoId: number;
   type?: string;
   existingProcedure?: any;
   onSuccess?: () => void;
@@ -52,7 +52,7 @@ interface ProcedureModalProps {
 export default function ProcedureModal({
   isOpen,
   onClose,
-  gitRepoId,
+  versionGitRepoId,
   type,
   existingProcedure,
   onSuccess,
@@ -60,17 +60,17 @@ export default function ProcedureModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [content, setContent] = useState(existingProcedure?.content || "");
+  const [activeTab, setActiveTab] = useState("preview");
   
   // Récupérer les procédures existantes pour vérifier les doublons
   const { data: procedures } = useQuery({
-    queryKey: [`/api/git-repos/${gitRepoId}/procedures`],
-    enabled: !!gitRepoId && isOpen,
+    queryKey: [`/api/version-git-repos/${versionGitRepoId}/procedures`],
+    enabled: !!versionGitRepoId && isOpen,
   });
 
   const form = useForm<FormData>({
     resolver: zodResolver(procedureSchema),
     defaultValues: {
-      title: existingProcedure?.title || "",
       description: existingProcedure?.description || "",
       type: type as any || existingProcedure?.type || "environment_variables",
       content: existingProcedure?.content || "",
@@ -99,7 +99,6 @@ export default function ProcedureModal({
     if (isOpen && existingProcedure) {
       setContent(existingProcedure.content || "");
       form.reset({
-        title: existingProcedure.title || "",
         description: existingProcedure.description || "",
         type: existingProcedure.type || "environment_variables",
         content: existingProcedure.content || "",
@@ -113,10 +112,11 @@ export default function ProcedureModal({
     mutationFn: async (data: FormData) => {
       const procedureData = {
         ...data,
-        gitRepoId,
+        title: getTypeLabel(data.type), // Ajouter le title automatiquement
         content,
+        // Note: gitRepoId n'est plus envoyé, il sera résolu côté serveur
       };
-      const response = await fetch(`/api/git-repos/${gitRepoId}/procedures`, {
+      const response = await fetch(`/api/version-git-repos/${versionGitRepoId}/procedures`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(procedureData),
@@ -129,7 +129,7 @@ export default function ProcedureModal({
         title: "Procédure créée",
         description: "La procédure a été créée avec succès.",
       });
-      queryClient.invalidateQueries({ queryKey: [`/api/git-repos/${gitRepoId}/procedures`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/version-git-repos/${versionGitRepoId}/procedures`] });
       queryClient.invalidateQueries({ queryKey: [`/api/project-versions`] });
       onSuccess?.();
       handleClose();
@@ -162,7 +162,7 @@ export default function ProcedureModal({
         title: "Procédure mise à jour",
         description: "La procédure a été mise à jour avec succès.",
       });
-      queryClient.invalidateQueries({ queryKey: [`/api/git-repos/${gitRepoId}/procedures`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/version-git-repos/${versionGitRepoId}/procedures`] });
       queryClient.invalidateQueries({ queryKey: [`/api/project-versions`] });
       onSuccess?.();
       handleClose();
@@ -179,6 +179,7 @@ export default function ProcedureModal({
   const handleClose = () => {
     form.reset();
     setContent("");
+    setActiveTab("preview");
     onClose();
   };
 
@@ -212,27 +213,42 @@ export default function ProcedureModal({
     return labels[type as keyof typeof labels] || type;
   };
 
+  // Déterminer quels champs afficher selon le type
+  const shouldShowDescription = (type: string) => {
+    // Pour les variables d'environnement, la description est optionnelle (informations hors release)
+    return true;
+  };
+
+  const getDescriptionLabel = (type: string) => {
+    if (type === "environment_variables") {
+      return "Informations hors Release (optionnelle)";
+    }
+    return "Description (optionnelle)";
+  };
+
+  const getDescriptionPlaceholder = (type: string) => {
+    if (type === "environment_variables") {
+      return "Informations sur les variables d'environnement qui ne sont pas spécifiques à une release...";
+    }
+    return "Description courte de la procédure...";
+  };
+
   // Fonctions d'aide pour le formatage
   const insertTable = () => {
     const tableHTML = `
 <table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
   <thead>
     <tr>
-      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 1</th>
-      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 2</th>
-      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">En-tête 3</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Variable</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Valeur</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Description</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 1</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 2</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 3</td>
-    </tr>
-    <tr>
-      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 4</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 5</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">Cellule 6</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">DATABASE_URL</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">postgresql://...</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">URL de connexion à la base de données</td>
     </tr>
   </tbody>
 </table>
@@ -269,9 +285,9 @@ export default function ProcedureModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto bg-white dark:bg-gray-900">
+      <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto bg-white dark:bg-gray-900">
         <DialogHeader className="pb-6 border-b border-gray-200 dark:border-gray-700">
-          <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white">
+          <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             {existingProcedure ? "Modifier la procédure" : "Ajouter une procédure"}
           </DialogTitle>
           <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -280,7 +296,7 @@ export default function ProcedureModal({
         </DialogHeader>
 
         {existingProcedureOfType && !existingProcedure && (
-          <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20">
+          <Alert className="mb-6 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 dark:border-orange-800 dark:bg-orange-900/20">
             <InfoIcon className="h-4 w-4 text-orange-600 dark:text-orange-400" />
             <AlertDescription className="text-orange-800 dark:text-orange-200">
               Une procédure de type "{getTypeLabel(selectedType)}" existe déjà. 
@@ -291,64 +307,31 @@ export default function ProcedureModal({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Le type est défini automatiquement et masqué à l'utilisateur */}
+            <input type="hidden" {...form.register("type")} />
+            
+            {shouldShowDescription(selectedType) && (
               <FormField
                 control={form.control}
-                name="type"
+                name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Type de procédure</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={!!type || !!existingProcedure}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="environment_variables">Variables d'environnement</SelectItem>
-                        <SelectItem value="service_verification">Vérification des services</SelectItem>
-                        <SelectItem value="command_execution">Exécution de commandes</SelectItem>
-                        <SelectItem value="data_import">Import de données</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Titre</FormLabel>
+                    <FormLabel className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      {getDescriptionLabel(selectedType)}
+                    </FormLabel>
                     <FormControl>
-                      <Input placeholder="Titre de la procédure" {...field} />
+                      <Textarea 
+                        placeholder={getDescriptionPlaceholder(selectedType)}
+                        className="resize-none bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-900/20"
+                        rows={2}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description (optionnelle)</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Description courte de la procédure..."
-                      className="resize-none"
-                      rows={2}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            )}
 
             <FormField
               control={form.control}
@@ -359,63 +342,113 @@ export default function ProcedureModal({
                     Contenu de la procédure
                   </FormLabel>
                   <FormControl>
-                    <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                      <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-600 p-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => formatText('bold')}
-                            className="h-8 px-3"
-                          >
-                            <Bold className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => formatText('italic')}
-                            className="h-8 px-3"
-                          >
-                            <Italic className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => formatText('list')}
-                            className="h-8 px-3"
-                          >
-                            <List className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={insertTable}
-                            className="h-8 px-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
-                          >
-                            <Table className="h-4 w-4 mr-1" />
-                            Insérer un tableau
-                          </Button>
+                    <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+                      <Tabs value={activeTab} onValueChange={setActiveTab}>
+                        <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-900/20 border-b border-gray-300 dark:border-gray-600 p-3">
+                          <div className="flex items-center justify-between">
+                            <TabsList className="bg-white/50 dark:bg-gray-800/50">
+                              <TabsTrigger value="preview" className="flex items-center gap-2">
+                                <Eye className="w-4 h-4" />
+                                Aperçu & Édition
+                              </TabsTrigger>
+                              <TabsTrigger value="editor" className="flex items-center gap-2">
+                                <Code className="w-4 h-4" />
+                                Code HTML
+                              </TabsTrigger>
+                            </TabsList>
+                            
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => formatText('bold')}
+                                className="h-8 px-3"
+                              >
+                                <Bold className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => formatText('italic')}
+                                className="h-8 px-3"
+                              >
+                                <Italic className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => formatText('list')}
+                                className="h-8 px-3"
+                              >
+                                <List className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={insertTable}
+                                className="h-8 px-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
+                              >
+                                <Table className="h-4 w-4 mr-1" />
+                                Tableau
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <Textarea
-                        value={content}
-                        onChange={(e) => {
-                          setContent(e.target.value);
-                          form.setValue("content", e.target.value);
-                        }}
-                        placeholder="Décrivez les étapes de la procédure... Vous pouvez utiliser du HTML pour le formatage."
-                        className="min-h-[400px] border-0 resize-none focus:ring-0 focus:border-0"
-                        style={{ fontFamily: 'monospace' }}
-                      />
+                        
+                        <TabsContent value="preview" className="m-0">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 h-[400px]">
+                            {/* Zone d'édition */}
+                            <div className="border-r border-gray-300 dark:border-gray-600">
+                              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600">
+                                Édition
+                              </div>
+                              <Textarea
+                                value={content}
+                                onChange={(e) => {
+                                  setContent(e.target.value);
+                                  form.setValue("content", e.target.value);
+                                }}
+                                placeholder="Décrivez les étapes de la procédure... Utilisez du HTML pour le formatage."
+                                className="h-[352px] border-0 resize-none focus:ring-0 focus:border-0 rounded-none bg-white dark:bg-gray-900"
+                                style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", monospace' }}
+                              />
+                            </div>
+                            
+                            {/* Zone d'aperçu */}
+                            <div>
+                              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600">
+                                Aperçu en temps réel
+                              </div>
+                              <div 
+                                className="h-[352px] p-4 prose prose-sm max-w-none dark:prose-invert overflow-auto bg-white dark:bg-gray-900"
+                                dangerouslySetInnerHTML={{ __html: content || '<p class="text-gray-500 dark:text-gray-400 italic">Commencez à taper pour voir l\'aperçu...</p>' }}
+                              />
+                            </div>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="editor" className="m-0">
+                          <Textarea
+                            value={content}
+                            onChange={(e) => {
+                              setContent(e.target.value);
+                              form.setValue("content", e.target.value);
+                            }}
+                            placeholder="Code HTML de la procédure..."
+                            className="min-h-[400px] border-0 resize-none focus:ring-0 focus:border-0 rounded-none"
+                            style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", monospace' }}
+                          />
+                        </TabsContent>
+                      </Tabs>
                     </div>
                   </FormControl>
                   <FormMessage />
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Astuce: Sélectionnez du texte puis cliquez sur les boutons de formatage, ou utilisez le bouton "Insérer un tableau" pour ajouter des tableaux structurés.
+                    Astuce: L'onglet "Aperçu & Édition" vous permet de voir et modifier le contenu en temps réel. Utilisez les boutons de formatage ou l'onglet "Code HTML" pour des modifications avancées.
                   </div>
                 </FormItem>
               )}
@@ -433,7 +466,7 @@ export default function ProcedureModal({
               <Button 
                 type="submit" 
                 disabled={createMutation.isPending || updateMutation.isPending || (existingProcedureOfType && !existingProcedure)}
-                className="px-6 bg-blue-600 hover:bg-blue-700 text-white"
+                className="px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
               >
                 {createMutation.isPending || updateMutation.isPending ? "Enregistrement..." : 
                  existingProcedure ? "Mettre à jour" : "Ajouter"}

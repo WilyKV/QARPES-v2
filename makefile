@@ -5,10 +5,11 @@ up:
 	docker compose up -d --build
 
 reload-app:
-	docker compose up -d --build app && \
-	docker compose exec app npx prisma generate && \
-	docker compose exec app npx prisma migrate deploy && \
-	docker compose exec app npx prisma db push && \
+	docker compose up -d --build app
+	docker compose exec app npx prisma generate
+	docker compose exec app npx prisma migrate deploy
+	docker compose exec app npx prisma db push
+	docker compose exec app npx prisma db seed
 	docker compose exec app npm run dev
 
 run-dev:

@@ -22,6 +22,37 @@ const ALL_STATUS_LABELS = STATUS_OPTIONS.release.reduce((acc, cur) => { acc[cur.
 
 const statusColors = STATUS_COLORS;
 
+const TABLES = [
+  {
+    title: "En développement",
+    statuses: ["0"],
+  },
+  {
+    title: "A déployer",
+    statuses: ["1"],
+  },
+  {
+    title: "Recette en cours",
+    statuses: ["2"],
+  },
+  {
+    title: "En préproduction",
+    statuses: ["3"],
+  },
+  {
+    title: "Mis en production",
+    statuses: ["4"],
+  },
+  {
+    title: "Merge final",
+    statuses: ["5"],
+  },
+  {
+    title: "Annulé",
+    statuses: ["Annulé"],
+  },
+];
+
 const statusLabels = {
   testing: "Recette",
   preproduction: "Préprod",
@@ -254,7 +285,7 @@ export default function Releases() {
                       const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
                       return (
                         <tr key={rowId} className="hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                          <td className="px-4 py-3 font-mono text-sm font-medium text-blue-600 dark:text-blue-400">{displayName}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-blue-600 dark:text-blue-400">{displayName}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
                               {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
@@ -291,7 +322,7 @@ export default function Releases() {
             </div>
           </div>
 
-          {/* Tableau 2 : Développement, À déployer, Recette */}
+          {/* Tableau 2 : Développement, A déployer, Recette */}
           <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl p-6 shadow-lg border border-amber-200 dark:border-amber-700">
             <h2 className="text-xl font-bold mb-4 text-amber-800 dark:text-amber-200 flex items-center">
               <div className="w-2 h-8 bg-gradient-to-b from-amber-500 to-orange-500 rounded-full mr-3"></div>
@@ -311,52 +342,52 @@ export default function Releases() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {releasesDevDeployRecette.map((row) => {
-                      const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
-                      const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
-                      const name = typeof row.name === "string" ? row.name : "";
-                      const status = typeof row.status === "string" ? row.status : "";
-                      const safeDate = (d: any) => {
-                        if (!d) return "";
-                        if (typeof d === "string") return d.slice(0, 10);
-                        if (d instanceof Date) return d.toISOString().slice(0, 10);
-                        if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
-                        return "";
-                      };
-                      const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
-                      return (
-                        <tr key={rowId} className="hover:bg-amber-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                          <td className="px-4 py-3 text-sm font-medium text-amber-600 dark:text-amber-400">{displayName}</td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                              {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <EditableCell value={safeDate(row.preprodDate)} onSave={v => updateField(rowId!, "preprodDate", v)} type="date" />
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleViewRelease(rowId!)} className="h-8 w-8 p-0 hover:bg-amber-100 dark:hover:bg-amber-900">
-                                <Eye className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-yellow-100 dark:hover:bg-yellow-900">
-                                <Edit className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending} className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900">
-                                <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  {releasesDevDeployRecette.map((row) => {
+                    const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
+                    const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
+                    const name = typeof row.name === "string" ? row.name : "";
+                    const status = typeof row.status === "string" ? row.status : "";
+                    const safeDate = (d: any) => {
+                      if (!d) return "";
+                      if (typeof d === "string") return d.slice(0, 10);
+                      if (d instanceof Date) return d.toISOString().slice(0, 10);
+                      if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
+                      return "";
+                    };
+                    const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
+                    return (
+                      <tr key={rowId} className="hover:bg-amber-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                        <td className="px-4 py-3 text-sm font-medium text-amber-600 dark:text-amber-400">{displayName}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                            {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <EditableCell value={safeDate(row.preprodDate)} onSave={v => updateField(rowId!, "preprodDate", v)} type="date" />
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleViewRelease(rowId!)} className="h-8 w-8 p-0 hover:bg-amber-100 dark:hover:bg-amber-900">
+                              <Eye className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-yellow-100 dark:hover:bg-yellow-900">
+                              <Edit className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending} className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900">
+                              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   </tbody>
                 </table>
               </div>
@@ -387,46 +418,172 @@ export default function Releases() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {releasesAutres.map((row) => {
-                      const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
-                      const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
-                      const name = typeof row.name === "string" ? row.name : "";
-                      const status = typeof row.status === "string" ? row.status : "";
-                      const safeDate = (d: any) => {
-                        if (!d) return "";
-                        if (typeof d === "string") return d.slice(0, 10);
-                        if (d instanceof Date) return d.toISOString().slice(0, 10);
-                        if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
-                        return "";
-                      };
-                      const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
-                      return (
-                        <tr key={rowId} className="hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                          <td className="px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400">{displayName}</td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                              {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleViewRelease(rowId!)} className="h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-slate-900">
-                                <Eye className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-yellow-100 dark:hover:bg-yellow-900">
-                                <Edit className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending} className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900">
-                                <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  {releasesAutres.map((row) => {
+                    const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
+                    const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
+                    const name = typeof row.name === "string" ? row.name : "";
+                    const status = typeof row.status === "string" ? row.status : "";
+                    const safeDate = (d: any) => {
+                      if (!d) return "";
+                      if (typeof d === "string") return d.slice(0, 10);
+                      if (d instanceof Date) return d.toISOString().slice(0, 10);
+                      if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
+                      return "";
+                    };
+                    const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
+                    return (
+                      <tr key={rowId} className="hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                        <td className="px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400">{displayName}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                            {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleViewRelease(rowId!)} className="h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-slate-900">
+                              <Eye className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-yellow-100 dark:hover:bg-yellow-900">
+                              <Edit className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending} className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900">
+                              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  </tbody>
+                </table>
+              </div>
+              {releasesAutres.length === 0 && (
+                <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+                  <div className="text-4xl mb-2">📁</div>
+                  <p>Aucune autre release</p>
+                </div>
+              )}
+            </div>
+          </div>
+                    const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
+                    const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
+                    const name = typeof row.name === "string" ? row.name : "";
+                    const status = typeof row.status === "string" ? row.status : "";
+                    const safeDate = (d: any) => {
+                      if (!d) return "";
+                      if (typeof d === "string") return d.slice(0, 10);
+                      if (d instanceof Date) return d.toISOString().slice(0, 10);
+                      if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
+                      return "";
+                    };
+                    const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
+                    return (
+                      <tr key={rowId} className="hover:bg-amber-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                        <td className="px-4 py-3 text-sm font-medium text-amber-600 dark:text-amber-400">{displayName}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                            {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <EditableCell value={safeDate(row.preprodDate)} onSave={v => updateField(rowId!, "preprodDate", v)} type="date" />
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleViewRelease(rowId!)} className="h-8 w-8 p-0 hover:bg-amber-100 dark:hover:bg-amber-900">
+                              <Eye className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-yellow-100 dark:hover:bg-yellow-900">
+                              <Edit className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending} className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900">
+                              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  </tbody>
+                </table>
+              </div>
+              {releasesDevDeployRecette.length === 0 && (
+                <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+                  <div className="text-4xl mb-2">�</div>
+                  <p>Aucune release en développement, à déployer ou en recette</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tableau 3 : Autres */}
+          <div className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900/20 dark:to-gray-900/20 rounded-xl p-6 shadow-lg border border-slate-200 dark:border-slate-700">
+            <h2 className="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200 flex items-center">
+              <div className="w-2 h-8 bg-gradient-to-b from-slate-500 to-gray-500 rounded-full mr-3"></div>
+              Autres
+            </h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden border border-gray-200 dark:border-gray-700">
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100 text-sm">Release</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100 text-sm">Statut</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100 text-sm">Production</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100 text-sm">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {releasesAutres.map((row) => {
+                    const rowId = typeof row.id === "number" ? row.id : (typeof row.id === "string" ? parseInt(row.id, 10) : undefined);
+                    const releaseId = typeof row.releaseId === "string" ? row.releaseId : (row.releaseId ? String(row.releaseId) : "");
+                    const name = typeof row.name === "string" ? row.name : "";
+                    const status = typeof row.status === "string" ? row.status : "";
+                    const safeDate = (d: any) => {
+                      if (!d) return "";
+                      if (typeof d === "string") return d.slice(0, 10);
+                      if (d instanceof Date) return d.toISOString().slice(0, 10);
+                      if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
+                      return "";
+                    };
+                    const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
+                    return (
+                      <tr key={rowId} className="hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                        <td className="px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400">{displayName}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                            {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleViewRelease(rowId!)} className="h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-slate-900">
+                              <Eye className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-yellow-100 dark:hover:bg-yellow-900">
+                              <Edit className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(rowId!)} disabled={deleteMutation.isPending} className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900">
+                              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   </tbody>
                 </table>
               </div>
