@@ -86,7 +86,7 @@ export function Sidebar() {
   ];
 
   return (
-    <nav className="w-64 h-screen bg-white dark:bg-gray-800 shadow-sm border-r border-gray-200 dark:border-gray-700 flex flex-col z-50 shrink-0">
+    <nav className="fixed left-0 top-0 w-64 h-screen bg-white dark:bg-gray-800 shadow-sm border-r border-gray-200 dark:border-gray-700 flex flex-col z-50 shrink-0">
       {/* Logo */}
       <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">

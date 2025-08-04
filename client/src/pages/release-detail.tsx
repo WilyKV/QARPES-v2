@@ -67,7 +67,7 @@ export default function ReleaseDetail() {
     return (
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
         <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden ml-64">
           <Header />
           <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-6">
             <div className="animate-pulse space-y-4">
@@ -84,7 +84,7 @@ export default function ReleaseDetail() {
     return (
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
         <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden ml-64">
           <Header />
           <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-6">
             <div className="text-center py-12">
@@ -108,7 +108,7 @@ export default function ReleaseDetail() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto ml-64">
         <Header />
         <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
             {/* Header */}

@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -24,22 +24,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { type Cab } from "@shared/schema";
 import { z } from "zod";
 
 const formSchema = z
   .object({
-    ticketNumber: z.string().min(1, "Le numéro de ticket est requis"),
-    title: z.string().min(1, "Le titre est requis"),
-    status: z.string().min(1, "Le statut est requis"),
-    priority: z.string().min(1, "La priorité est requise"),
+    environment: z.enum(["preprod", "prod"], {
+      required_error: "L'environnement est requis",
+    }),
+    helpdeskUrl: z.string().url("L'URL doit être valide").min(1, "L'URL Helpdesk est requise"),
+    status: z.enum(["cree", "demande", "valide", "refuse"], {
+      required_error: "Le statut est requis",
+    }),
   })
   .strict();
 
 type FormData = z.infer<typeof formSchema>;
+
+const environmentLabels = {
+  preprod: "Pré-production",
+  prod: "Production",
+};
+
+const statusLabels = {
+  cree: "Créé",
+  demande: "Demandé", 
+  valide: "Validé",
+  refuse: "Refusé",
+};
 
 interface CabModalProps {
   open: boolean;
@@ -60,65 +75,52 @@ export function CabModal({
 }: CabModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const isEditing = !!cab;
-
-  const { data: users = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-    enabled: open,
-    retry: false,
-  });
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      ticketNumber: cab?.ticketNumber || "",
-      title: cab?.title || "",
-      description: cab?.description || "",
-      status: cab?.status || "open",
-      priority: cab?.priority || "medium",
-      assigneeId: cab?.assigneeId || "",
-      dueDate: cab?.dueDate ? new Date(cab.dueDate).toISOString().split("T")[0] : "",
+      environment: cab?.environment || "preprod",
+      helpdeskUrl: cab?.helpdeskUrl || "",
+      status: cab?.status || "cree",
     },
   });
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const payload = {
-        ...data,
-        assigneeId: data.assigneeId === "none" ? null : data.assigneeId,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      };
-
-      if (isEditing) {
-        return await apiRequest("PATCH", `/api/cabs/${cab.id}`, payload);
-      } else {
-        return await apiRequest("POST", `/api/project-versions/${projectVersionId}/cabs`, payload);
-      }
+      const url = cab
+        ? `/api/projects/${projectId}/versions/${versionId}/pvs/${projectVersionId}/cabs/${cab.id}`
+        : `/api/projects/${projectId}/versions/${versionId}/pvs/${projectVersionId}/cabs`;
+      
+      const method = cab ? "PUT" : "POST";
+      
+      return apiRequest(method, url, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+      queryClient.invalidateQueries({
+        queryKey: ["project-version", projectVersionId],
+      });
       toast({
-        title: "Succès",
-        description: `Ticket CAB ${isEditing ? "modifié" : "créé"} avec succès`,
+        title: cab ? "CAB modifié" : "CAB créé",
+        description: cab ? "Le CAB a été modifié avec succès." : "Le CAB a été créé avec succès.",
       });
       onOpenChange(false);
       form.reset();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       if (isUnauthorizedError(error)) {
         toast({
-          title: "Non autorisé",
-          description: "Vous êtes déconnecté. Reconnexion en cours...",
+          title: "Session expirée",
+          description: "Veuillez vous reconnecter.",
           variant: "destructive",
         });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
         return;
       }
+
       toast({
         title: "Erreur",
-        description: `Impossible de ${isEditing ? "modifier" : "créer"} le ticket CAB`,
+        description: cab 
+          ? "Une erreur est survenue lors de la modification du CAB."
+          : "Une erreur est survenue lors de la création du CAB.",
         variant: "destructive",
       });
     },
@@ -130,81 +132,80 @@ export function CabModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Modifier le ticket CAB" : "Nouveau ticket CAB"}
-          </DialogTitle>
+          <DialogTitle>{cab ? "Modifier le CAB" : "Créer un CAB"}</DialogTitle>
         </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="environment"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Environnement</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un environnement" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Object.entries(environmentLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="ticketNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Numéro de ticket</FormLabel>
-                  <FormControl>
-                    <Input placeholder="CAB-2024-001" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="helpdeskUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL Helpdesk</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="https://helpdesk.example.com/ticket/123"
+                        type="url"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Titre</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Titre du ticket CAB" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Description détaillée..."
-                      rows={3}
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="status"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Statut</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Statut" />
+                          <SelectValue placeholder="Sélectionner un statut" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="open">Ouvert</SelectItem>
-                        <SelectItem value="in_progress">En cours</SelectItem>
-                        <SelectItem value="approved">Approuvé</SelectItem>
-                        <SelectItem value="rejected">Rejeté</SelectItem>
-                        <SelectItem value="closed">Fermé</SelectItem>
+                        {Object.entries(statusLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -212,88 +213,25 @@ export function CabModal({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="priority"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Priorité</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Priorité" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="low">Basse</SelectItem>
-                        <SelectItem value="medium">Moyenne</SelectItem>
-                        <SelectItem value="high">Haute</SelectItem>
-                        <SelectItem value="critical">Critique</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="assigneeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Assigné à</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un utilisateur" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">Aucun</SelectItem>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="dueDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date d'échéance</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="date"
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Annuler
-              </Button>
-              <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending
-                  ? (isEditing ? "Modification..." : "Création...")
-                  : (isEditing ? "Modifier" : "Créer")
-                }
-              </Button>
-            </div>
-          </form>
-        </Form>
+              <div className="flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending
+                    ? "En cours..."
+                    : cab
+                    ? "Modifier"
+                    : "Créer"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </div>
       </DialogContent>
     </Dialog>
   );

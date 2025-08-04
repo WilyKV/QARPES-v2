@@ -45,7 +45,10 @@ const procedureTypeLabels = {
 };
 
 // Composant séparé pour éviter les hooks dans une boucle
-function RepoCommitsCard({ versionGitRepo }: { versionGitRepo: any }) {
+function RepoCommitsCard({ versionGitRepo, onAddCommit }: { 
+  versionGitRepo: any; 
+  onAddCommit: (versionGitRepoId: number) => void;
+}) {
   const { data: commits } = useQuery({
     queryKey: [`/api/version-git-repos/${versionGitRepo.id}/commits`],
     enabled: !!versionGitRepo.id,
@@ -59,9 +62,20 @@ function RepoCommitsCard({ versionGitRepo }: { versionGitRepo: any }) {
             <GitBranch className="w-4 h-4" />
             <CardTitle className="text-base">{versionGitRepo.gitRepo?.name}</CardTitle>
           </div>
-          <Badge variant="outline" className="text-xs">
-            {commits && Array.isArray(commits) ? commits.length : 0} commit(s)
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              {commits && Array.isArray(commits) ? commits.length : 0} commit(s)
+            </Badge>
+            <Button 
+              variant="default" 
+              size="sm" 
+              onClick={() => onAddCommit(versionGitRepo.id)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Commit
+            </Button>
+          </div>
         </div>
       </CardHeader>
       
@@ -154,11 +168,15 @@ const priorityColors = {
   critical: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
 };
 
-function ProcedureCard({ procedure, repoName }: { procedure: Procedure; repoName: string }) {
+function ProcedureCard({ procedure, repoName, onEdit }: { 
+  procedure: Procedure; 
+  repoName: string; 
+  onEdit?: (procedure: Procedure) => void;
+}) {
   const Icon = procedureTypeIcons[procedure.type as keyof typeof procedureTypeIcons];
   
   return (
-    <Card className={`border-l-4 ${procedure.isCompleted ? 'border-l-green-500 bg-green-50 dark:bg-green-950' : 'border-l-blue-500'}`}>
+    <Card className={`border-l-4 ${procedure.isCompleted ? 'border-l-green-500 bg-green-50 dark:bg-green-950' : 'border-l-blue-500'} hover:shadow-md transition-shadow duration-200`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
@@ -169,6 +187,16 @@ function ProcedureCard({ procedure, repoName }: { procedure: Procedure; repoName
             <Badge variant="outline" className="text-xs">
               {repoName}
             </Badge>
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(procedure)}
+                className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/20"
+              >
+                <Edit className="w-3 h-3" />
+              </Button>
+            )}
             {procedure.isCompleted ? (
               <CheckCircle className="w-4 h-4 text-green-600" />
             ) : (
@@ -189,18 +217,13 @@ function ProcedureCard({ procedure, repoName }: { procedure: Procedure; repoName
   );
 }
 
-function GitRepoSection({ versionGitRepo, onAddCommit, onAddProcedure }: { 
+function GitRepoSection({ versionGitRepo, onAddProcedure, onEditProcedure }: { 
   versionGitRepo: any; 
-  onAddCommit: (versionGitRepoId: number) => void;
   onAddProcedure: (versionGitRepoId: number, type: string) => void;
+  onEditProcedure: (procedure: Procedure, versionGitRepoId: number) => void;
 }) {
   const { data: procedures } = useQuery<ProceduresByType>({
     queryKey: [`/api/version-git-repos/${versionGitRepo.id}/procedures`],
-    enabled: !!versionGitRepo.id,
-  });
-  
-  const { data: commits } = useQuery({
-    queryKey: [`/api/version-git-repos/${versionGitRepo.id}/commits`],
     enabled: !!versionGitRepo.id,
   });
 
@@ -222,22 +245,10 @@ function GitRepoSection({ versionGitRepo, onAddCommit, onAddProcedure }: {
                     {versionGitRepo.gitRepo.lastCommitHash.substring(0, 7)}
                   </span>
                 ) : 'Aucun commit'}
-                {commits && Array.isArray(commits) && (
-                  <span className="ml-2">• {commits.length} commit(s)</span>
-                )}
               </CardDescription>
             </div>
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => onAddCommit(versionGitRepo.id)}
-              className="hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-blue-900/20"
-            >
-              <GitCommit className="w-4 h-4 mr-2" />
-              Commit
-            </Button>
             {versionGitRepo.gitRepo?.url && (
               <Button variant="outline" size="sm" asChild className="hover:bg-green-50 hover:border-green-200 dark:hover:bg-green-900/20">
                 <a href={versionGitRepo.gitRepo.url} target="_blank" rel="noopener noreferrer">
@@ -253,28 +264,26 @@ function GitRepoSection({ versionGitRepo, onAddCommit, onAddProcedure }: {
       <CardContent>
         <div className="space-y-6">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Settings className="w-4 h-4 text-purple-500" />
-                Procédures de déploiement
-              </h4>
-              <div className="flex gap-2 flex-wrap">
-                {Object.keys(procedureTypeLabels).map((type) => {
-                  const Icon = procedureTypeIcons[type as keyof typeof procedureTypeIcons];
-                  return (
-                    <Button
-                      key={type}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onAddProcedure(versionGitRepo.id, type)}
-                      className="text-xs hover:bg-purple-50 hover:border-purple-200 dark:hover:bg-purple-900/20"
-                    >
-                      <Icon className="w-3 h-3 mr-1" />
-                      {procedureTypeLabels[type as keyof typeof procedureTypeLabels]}
-                    </Button>
-                  );
-                })}
-              </div>
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
+              <Settings className="w-4 h-4 text-purple-500" />
+              Procédures de déploiement
+            </h4>
+            <div className="flex gap-2 flex-wrap mb-4">
+              {Object.keys(procedureTypeLabels).map((type) => {
+                const Icon = procedureTypeIcons[type as keyof typeof procedureTypeIcons];
+                return (
+                  <Button
+                    key={type}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onAddProcedure(versionGitRepo.id, type)}
+                    className="text-xs hover:bg-purple-50 hover:border-purple-200 dark:hover:bg-purple-900/20"
+                  >
+                    <Icon className="w-3 h-3 mr-1" />
+                    {procedureTypeLabels[type as keyof typeof procedureTypeLabels]}
+                  </Button>
+                );
+              })}
             </div>
           </div>
           
@@ -289,12 +298,13 @@ function GitRepoSection({ versionGitRepo, onAddCommit, onAddProcedure }: {
                         {procedureList.length}
                       </Badge>
                     </h5>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                       {procedureList.map((procedure) => (
                         <ProcedureCard 
                           key={procedure.id} 
                           procedure={procedure} 
                           repoName={versionGitRepo.gitRepo?.name || ''} 
+                          onEdit={(procedure) => onEditProcedure(procedure, versionGitRepo.id)}
                         />
                       ))}
                     </div>
@@ -311,37 +321,6 @@ function GitRepoSection({ versionGitRepo, onAddCommit, onAddProcedure }: {
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 Cliquez sur les boutons ci-dessus pour ajouter des procédures
               </p>
-            </div>
-          )}
-          
-          {commits && Array.isArray(commits) && commits.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="font-medium">Commits</h4>
-              <div className="space-y-2">
-                {commits.map((commit: any) => (
-                  <Card key={commit.id}>
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-mono text-sm">{commit.hash.substring(0, 7)}</div>
-                          <div className="text-sm text-gray-600 dark:text-gray-300">{commit.message}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {commit.author} • {formatDate(commit.committedAt)}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
             </div>
           )}
         </div>
@@ -407,11 +386,18 @@ export default function VersionDetail() {
     setProcedureModalOpen(true);
   };
 
+  const handleEditProcedure = (procedure: Procedure, versionGitRepoId: number) => {
+    setSelectedGitRepoForProcedure(versionGitRepoId);
+    setSelectedProcedureType(procedure.type);
+    setSelectedProcedure(procedure);
+    setProcedureModalOpen(true);
+  };
+
   if (versionLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto ml-64">
           <Header 
             title="Chargement..." 
             subtitle="Chargement des détails de la version"
@@ -438,7 +424,7 @@ export default function VersionDetail() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto ml-64">
           <Header 
             title="Version introuvable" 
             subtitle="Cette version n'existe pas"
@@ -469,7 +455,7 @@ export default function VersionDetail() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
       
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto ml-64">
         <Header 
           title={`Version ${version.version}`}
           subtitle={version.description || "Détails de la version"}
@@ -596,12 +582,13 @@ export default function VersionDetail() {
                 </Button>
               </div>
               
-              {version.versionGitRepos && version.versionGitRepos.length > 0 ? (                version.versionGitRepos.map((versionGitRepo) => (
+              {version.versionGitRepos && version.versionGitRepos.length > 0 ? (
+                version.versionGitRepos.map((versionGitRepo) => (
                   <GitRepoSection 
                     key={versionGitRepo.id} 
                     versionGitRepo={versionGitRepo}
-                    onAddCommit={handleAddCommit}
                     onAddProcedure={handleAddProcedure}
+                    onEditProcedure={handleEditProcedure}
                   />
                 ))
               ) : (
@@ -626,7 +613,11 @@ export default function VersionDetail() {
               
               {version.versionGitRepos && version.versionGitRepos.length > 0 ? (
                 version.versionGitRepos.map((versionGitRepo) => (
-                  <RepoCommitsCard key={versionGitRepo.id} versionGitRepo={versionGitRepo} />
+                  <RepoCommitsCard 
+                    key={versionGitRepo.id} 
+                    versionGitRepo={versionGitRepo} 
+                    onAddCommit={handleAddCommit}
+                  />
                 ))
               ) : (
                 <Card>
@@ -659,84 +650,94 @@ export default function VersionDetail() {
               </div>
               
               {version.pvs && version.pvs.length > 0 ? (
-                version.pvs.map((pv) => (
-                  <Card key={pv.id} className="border-l-4 border-l-purple-500">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-sm">PV #{pv.id} - {pv.type}</CardTitle>
-                          <CardDescription className="text-sm">
-                            Statut: {pv.status} | {pv.files?.length || 0} fichier(s)
-                          </CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedPv(pv);
-                              setPvModalOpen(true);
-                            }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              if (confirm('Êtes-vous sûr de vouloir supprimer ce PV ?')) {
-                                try {
-                                  await apiRequest("DELETE", `/api/project-pvs/${pv.id}`);
-                                  queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
-                                  toast({
-                                    title: "Succès",
-                                    description: "PV supprimé avec succès",
-                                  });
-                                } catch (error) {
-                                  toast({
-                                    title: "Erreur",
-                                    description: "Impossible de supprimer le PV",
-                                    variant: "destructive",
-                                  });
+                version.pvs.map((pv) => {
+                  const categoryLabels = {
+                    pv_fonctionnel_recette: "PV fonctionnel [Recette]",
+                    pv_metier_recette: "PV métier [Recette]", 
+                    pv_conformite_preprod: "PV de conformité [Préprod]",
+                    pv_tests_homologation_preprod: "PV de tests d'homologation IT [Préprod]",
+                  };
+                  
+                  return (
+                    <Card key={pv.id} className="border-l-4 border-l-purple-500">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-sm">PV #{pv.id}</CardTitle>
+                            <CardDescription className="text-sm">
+                              {categoryLabels[pv.category as keyof typeof categoryLabels] || pv.category}
+                            </CardDescription>
+                            {pv.files && pv.files.length > 0 && (
+                              <CardDescription className="text-xs text-muted-foreground mt-1">
+                                {pv.files.length} fichier(s) attaché(s)
+                              </CardDescription>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedPv(pv);
+                                setPvModalOpen(true);
+                              }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                if (confirm('Êtes-vous sûr de vouloir supprimer ce PV ?')) {
+                                  try {
+                                    await apiRequest("DELETE", `/api/project-pvs/${pv.id}`);
+                                    queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+                                    toast({
+                                      title: "Succès",
+                                      description: "PV supprimé avec succès",
+                                    });
+                                  } catch (error) {
+                                    toast({
+                                      title: "Erreur",
+                                      description: "Impossible de supprimer le PV",
+                                      variant: "destructive",
+                                    });
+                                  }
                                 }
-                              }
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                          {pv?.status === 'completed' ? (
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                             <CheckCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <Clock className="w-4 h-4 text-orange-600" />
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    </CardHeader>
-                    {pv?.files && pv.files.length > 0 && (
-                      <CardContent>
-                        <div className="space-y-2">
-                          <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                            Fichiers attachés ({pv.files.length})
-                          </p>
-                          {pv.files.slice(0, 3).map((file) => (
-                            <div key={file.id} className="flex items-center gap-2 text-xs">
-                              <FileText className="w-3 h-3" />
-                              <span className="truncate">{file.fileName}</span>
-                              <span className="text-gray-400">
-                                ({Math.round((file.fileSize || 0) / 1024)} KB)
-                              </span>
-                            </div>
-                          ))}
-                          {pv.files.length > 3 && (
-                            <p className="text-xs text-gray-500">
-                              +{pv.files.length - 3} fichier(s) supplémentaire(s)
+                      </CardHeader>
+                      {pv?.files && pv.files.length > 0 && (
+                        <CardContent>
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                              Fichiers attachés ({pv.files.length})
                             </p>
-                          )}
-                        </div>
-                      </CardContent>
-                    )}
-                  </Card>
-                ))
+                            {pv.files.slice(0, 3).map((file: any) => (
+                              <div key={file.id} className="flex items-center gap-2 text-xs">
+                                <FileText className="w-3 h-3" />
+                                <span className="truncate">{file.fileName}</span>
+                                <span className="text-gray-400">
+                                  ({Math.round((file.fileSize || 0) / 1024)} KB)
+                                </span>
+                              </div>
+                            ))}
+                            {pv.files.length > 3 && (
+                              <p className="text-xs text-gray-500">
+                                +{pv.files.length - 3} fichier(s) supplémentaire(s)
+                              </p>
+                            )}
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+                  );
+                })
               ) : (
                 <Card>
                   <CardContent className="pt-6 text-center">

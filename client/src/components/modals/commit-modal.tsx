@@ -19,6 +19,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { type Commit } from "@shared/schema";
 import { z } from "zod";
@@ -31,9 +32,6 @@ const formSchema = z
       .min(1, "Le hash est requis")
       .max(40, "Maximum 40 caractères"),
     message: z.string().min(1, "Le message est requis"),
-    author: z.string().min(1, "L'auteur est requis"),
-    authorEmail: z.string().email("Email invalide").optional(),
-    committedAt: z.string().min(1, "La date est requise"),
   })
   .strict();
 
@@ -58,6 +56,7 @@ export function CommitModal({
 }: CommitModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const isEditing = !!commit;
 
   const form = useForm<FormData>({
@@ -65,10 +64,6 @@ export function CommitModal({
     defaultValues: {
       hash: commit?.hash || "",
       message: commit?.message || "",
-      author: commit?.author || "",
-      authorEmail: commit?.authorEmail || "",
-      committedAt:
-        commit?.committedAt?.toString().slice(0, 16) || "",
     },
   });
 
@@ -77,18 +72,11 @@ export function CommitModal({
       form.reset({
         hash: commit.hash,
         message: commit.message,
-        author: commit.author,
-        authorEmail: commit.authorEmail || "",
-        committedAt:
-          commit.committedAt?.toString().slice(0, 16) || "",
       });
     } else if (!isEditing) {
       form.reset({
         hash: "",
         message: "",
-        author: "",
-        authorEmail: "",
-        committedAt: "",
       });
     }
   }, [commit, isEditing, form]);
@@ -97,7 +85,9 @@ export function CommitModal({
     mutationFn: async (data: FormData) => {
       const payload = {
         ...data,
-        committedAt: new Date(data.committedAt).toISOString(),
+        author: user ? `${user.firstName} ${user.lastName}` : 'Utilisateur inconnu',
+        authorEmail: user?.email || '',
+        committedAt: new Date().toISOString(),
       };
 
       if (isEditing) {
@@ -111,9 +101,16 @@ export function CommitModal({
       }
     },
     onSuccess: () => {
+      // Invalider la requête de la version complète
       queryClient.invalidateQueries({
         queryKey: [`/api/projects/${projectId}/versions/${versionId}`],
       });
+      
+      // Invalider spécifiquement la requête des commits pour ce repository
+      queryClient.invalidateQueries({
+        queryKey: [`/api/version-git-repos/${versionGitRepoId}/commits`],
+      });
+      
       toast({
         title: "Succès",
         description: isEditing
@@ -183,57 +180,11 @@ export function CommitModal({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="author"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Auteur</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Nom de l'auteur"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="authorEmail"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email de l'auteur (optionnel)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="email@example.com"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="committedAt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date du commit</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="datetime-local"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="text-sm text-gray-600 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <p><strong>Auteur:</strong> {user ? `${user.firstName} ${user.lastName}` : 'Utilisateur inconnu'}</p>
+              <p><strong>Email:</strong> {user?.email || 'Non disponible'}</p>
+              <p><strong>Date:</strong> {new Date().toLocaleString('fr-FR')}</p>
+            </div>
 
             <div className="flex justify-end gap-2">
               <Button

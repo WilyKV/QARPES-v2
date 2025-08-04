@@ -262,7 +262,7 @@ export default function Projects() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
       
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto ml-64">
         <Header 
           title="Projets" 
           subtitle="Gestion des projets avec statuts et équipes"

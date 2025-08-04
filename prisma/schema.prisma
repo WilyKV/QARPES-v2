@@ -151,13 +151,9 @@ model Commit {
 model Cab {
   id               Int      @id @default(autoincrement())
   projectVersionId Int
-  ticketNumber     String
-  title            String
-  description      String?
-  status           String   @default("open")
-  priority         String   @default("medium")
-  assigneeId       String?
-  dueDate          DateTime?
+  environment      String   // "preprod" ou "prod"
+  helpdeskUrl      String
+  status           String   @default("cree") // "cree", "demande", "valide", "refuse"
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now())
   projectVersion   ProjectVersion @relation(fields: [projectVersionId], references: [id])
@@ -180,8 +176,8 @@ model Procedure {
 model ProjectPv {
   id               Int      @id @default(autoincrement())
   projectVersionId Int
-  type             String
-  status           String   @default("draft")
+  category         String   @default("pv_fonctionnel_recette")
+  status           String   @default("en_cours") // "en_cours", "validation", "valide", "refuse"
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now())
   projectVersion   ProjectVersion @relation(fields: [projectVersionId], references: [id])

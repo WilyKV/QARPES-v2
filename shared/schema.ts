@@ -92,13 +92,9 @@ export type Commit = {
 export type Cab = {
   id: number;
   projectVersionId: number;
-  ticketNumber: string;
-  title: string;
-  description: string | null;
-  status: string;
-  priority: string;
-  assigneeId: string | null;
-  dueDate: Date | null;
+  environment: "preprod" | "prod";
+  helpdeskUrl: string;
+  status: "cree" | "demande" | "valide" | "refuse";
   createdAt: Date;
   updatedAt: Date;
 };
@@ -119,8 +115,8 @@ export type Procedure = {
 export type ProjectPv = {
   id: number;
   projectVersionId: number;
-  type: string;
-  status: string;
+  category: "pv_fonctionnel_recette" | "pv_metier_recette" | "pv_conformite_preprod" | "pv_tests_homologation_preprod";
+  status: "en_cours" | "validation" | "valide" | "refuse";
   createdAt: Date;
   updatedAt: Date;
 };
@@ -233,13 +229,9 @@ export type InsertCommit = {
 
 export type InsertCab = {
   projectVersionId: number;
-  ticketNumber: string;
-  title: string;
-  description?: string;
-  status?: string;
-  priority?: string;
-  assigneeId?: string;
-  dueDate?: Date;
+  environment: "preprod" | "prod";
+  helpdeskUrl: string;
+  status?: "cree" | "demande" | "valide" | "refuse";
 };
 
 export type InsertProcedure = {
@@ -269,8 +261,8 @@ export type InsertReleaseProject = {
 
 export type InsertProjectPv = {
   projectVersionId: number;
-  type: string;
-  status?: string;
+  category: "pv_fonctionnel_recette" | "pv_metier_recette" | "pv_conformite_preprod" | "pv_tests_homologation_preprod";
+  status?: "en_cours" | "validation" | "valide" | "refuse";
 };
 
 export type InsertPvFile = {
