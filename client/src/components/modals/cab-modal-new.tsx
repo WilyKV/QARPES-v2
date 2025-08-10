@@ -91,9 +91,13 @@ export function CabModal({
         ? `/api/projects/${projectId}/versions/${versionId}/pvs/${projectVersionId}/cabs/${cab.id}`
         : `/api/projects/${projectId}/versions/${versionId}/pvs/${projectVersionId}/cabs`;
       
-      const method = cab ? "PUT" : "POST";
-      
-      return apiRequest(method, url, data);
+      return apiRequest(url, {
+        method: cab ? "PUT" : "POST",
+        body: JSON.stringify(data),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

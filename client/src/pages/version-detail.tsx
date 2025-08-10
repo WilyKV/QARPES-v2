@@ -213,6 +213,14 @@ function ProcedureCard({ procedure, repoName, onEdit }: {
           <p className="text-sm text-gray-600 dark:text-gray-300">{procedure.description}</p>
         </CardContent>
       )}
+      {procedure.content && (
+        <CardContent className="pt-0">
+          <div
+            className="prose prose-sm max-w-none dark:prose-invert"
+            dangerouslySetInnerHTML={{ __html: procedure.content }}
+          />
+        </CardContent>
+      )}
     </Card>
   );
 }

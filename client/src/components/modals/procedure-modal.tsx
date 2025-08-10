@@ -22,15 +22,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Onglets supprimés pour unifier édition et affichage dans un seul champ
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import type React from "react";
+import type { FormEvent } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { InfoIcon, Table, Bold, Italic, List, Eye, Code } from "lucide-react";
+import { InfoIcon, Table, Bold, Italic, List, Plus, Minus } from "lucide-react";
 
 const procedureSchema = z.object({
   description: z.string().optional(),
@@ -59,8 +61,43 @@ export default function ProcedureModal({
 }: ProcedureModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [content, setContent] = useState(existingProcedure?.content || "");
-  const [activeTab, setActiveTab] = useState("preview");
+  const DEFAULT_TABLE_GENERIC = `
+<table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Étape</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Action</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Détails</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">1</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Initialisation</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Décrire l'étape d'initialisation...</td>
+    </tr>
+  </tbody>
+</table>`;
+  const DEFAULT_TABLE_ENVVARS = `
+<table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Variable</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Valeur</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">DATABASE_URL</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">postgresql://user:pass@host:5432/db</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">URL de connexion à la base</td>
+    </tr>
+  </tbody>
+</table>`;
+  const defaultTableByType = (t?: string) => (t === "environment_variables" ? DEFAULT_TABLE_ENVVARS : DEFAULT_TABLE_GENERIC);
+  const [content, setContent] = useState(existingProcedure?.content || defaultTableByType(type));
+  const editorRef = useRef<HTMLDivElement | null>(null);
   
   // Récupérer les procédures existantes pour vérifier les doublons
   const { data: procedures } = useQuery({
@@ -73,7 +110,7 @@ export default function ProcedureModal({
     defaultValues: {
       description: existingProcedure?.description || "",
       type: type as any || existingProcedure?.type || "environment_variables",
-      content: existingProcedure?.content || "",
+      content: existingProcedure?.content || defaultTableByType(type || existingProcedure?.type),
     },
   });
 
@@ -97,16 +134,35 @@ export default function ProcedureModal({
   // Initialiser le contenu quand le modal s'ouvre
   useEffect(() => {
     if (isOpen && existingProcedure) {
-      setContent(existingProcedure.content || "");
+      const initial = existingProcedure.content || defaultTableByType(existingProcedure.type);
+      setContent(initial);
       form.reset({
         description: existingProcedure.description || "",
         type: existingProcedure.type || "environment_variables",
-        content: existingProcedure.content || "",
+        content: initial,
       });
-    } else if (isOpen && type) {
-      form.setValue("type", type as any);
+      // Injecte le HTML dans l'éditeur sans re-render pour préserver le curseur
+      if (editorRef.current) editorRef.current.innerHTML = initial;
+    } else if (isOpen) {
+      // Nouvelle procédure: préremplir avec le tableau par défaut
+      const preset = defaultTableByType(type);
+      setContent(preset);
+      form.setValue("content", preset);
+      if (editorRef.current) editorRef.current.innerHTML = preset;
+      if (type) {
+        form.setValue("type", type as any);
+      }
     }
   }, [isOpen, existingProcedure, type, form]);
+
+  // S'assure que le contenu par défaut est bien injecté quand l'éditeur est monté
+  useEffect(() => {
+    if (!isOpen) return;
+    const el = editorRef.current;
+    if (el && !el.innerHTML) {
+      el.innerHTML = content || defaultTableByType(type);
+    }
+  }, [isOpen, editorRef, content, type]);
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -134,7 +190,7 @@ export default function ProcedureModal({
       onSuccess?.();
       handleClose();
     },
-    onError: (error) => {
+  onError: (_error: unknown) => {
       toast({
         title: "Erreur",
         description: "Impossible de créer la procédure.",
@@ -167,7 +223,7 @@ export default function ProcedureModal({
       onSuccess?.();
       handleClose();
     },
-    onError: (error) => {
+  onError: (_error: unknown) => {
       toast({
         title: "Erreur",
         description: "Impossible de mettre à jour la procédure.",
@@ -178,8 +234,7 @@ export default function ProcedureModal({
 
   const handleClose = () => {
     form.reset();
-    setContent("");
-    setActiveTab("preview");
+  setContent(defaultTableByType(type || form.getValues("type")));
     onClose();
   };
 
@@ -235,57 +290,167 @@ export default function ProcedureModal({
 
   // Fonctions d'aide pour le formatage
   const insertTable = () => {
-    const tableHTML = `
-<table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
-  <thead>
-    <tr>
-      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Variable</th>
-      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Valeur</th>
-      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Description</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="border: 1px solid #ddd; padding: 8px;">DATABASE_URL</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">postgresql://...</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">URL de connexion à la base de données</td>
-    </tr>
-  </tbody>
-</table>
-`;
-    setContent(content + tableHTML);
-    form.setValue("content", content + tableHTML);
+    const tableHTML = defaultTableByType(form.getValues("type"));
+    // Insère au curseur pour éviter de réinitialiser l'éditeur
+    try {
+      document.execCommand('insertHTML', false, tableHTML);
+    } catch {}
+    syncEditorContent();
   };
 
-  const formatText = (tag: string) => {
-    const selection = window.getSelection();
-    if (selection && selection.toString()) {
-      const selectedText = selection.toString();
-      let formattedText = "";
-      
-      switch (tag) {
-        case 'bold':
-          formattedText = `<strong>${selectedText}</strong>`;
-          break;
-        case 'italic':
-          formattedText = `<em>${selectedText}</em>`;
-          break;
-        case 'list':
-          formattedText = `<ul><li>${selectedText}</li></ul>`;
-          break;
-        default:
-          formattedText = selectedText;
-      }
-      
-      const newContent = content.replace(selectedText, formattedText);
-      setContent(newContent);
-      form.setValue("content", newContent);
+  // Utilitaires pour manipuler le tableau sous le curseur
+  const getCurrentCell = (): HTMLTableCellElement | null => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    let node: Node | null = sel.anchorNode;
+    let el: HTMLElement | null = (node as HTMLElement)?.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : (node as ChildNode)?.parentElement || null;
+    while (el && el.tagName !== 'TD' && el.tagName !== 'TH') {
+      el = el.parentElement;
     }
+    return (el as HTMLTableCellElement) || null;
+  };
+
+  const addRow = (after: boolean, baseCell?: HTMLTableCellElement | null) => {
+    const cell = baseCell || getCurrentCell();
+    if (!cell) {
+      toast({ title: "Aucune cellule", description: "Placez le curseur dans un tableau pour ajouter une ligne.", variant: "destructive" });
+      return;
+    }
+    const tr = cell.closest('tr');
+    if (!tr) return;
+    const section = tr.parentElement as HTMLElement | null; // THEAD/TBODY/TFOOT
+    const isHeader = section?.tagName === 'THEAD';
+    const refCells = Array.from(tr.cells);
+    const newTr = document.createElement('tr');
+    refCells.forEach((refCell) => {
+      const tag = isHeader ? 'TH' : 'TD';
+      const newCell = document.createElement(tag);
+      // Copie de styles pour homogénéité
+      (newCell as HTMLElement).style.cssText = (refCell as HTMLElement).style.cssText;
+      newCell.innerHTML = isHeader ? (refCell.textContent ? refCell.textContent : '') : '';
+      newCell.setAttribute('style', (refCell as HTMLElement).getAttribute('style') || '');
+      newTr.appendChild(newCell);
+    });
+    if (after) {
+      tr.insertAdjacentElement('afterend', newTr);
+    } else {
+      tr.insertAdjacentElement('beforebegin', newTr);
+    }
+    syncEditorContent();
+  };
+
+  const removeRow = (baseCell?: HTMLTableCellElement | null) => {
+    const cell = baseCell || getCurrentCell();
+    if (!cell) {
+      toast({ title: "Aucune cellule", description: "Placez le curseur dans un tableau pour supprimer une ligne.", variant: "destructive" });
+      return;
+    }
+    const tr = cell.closest('tr');
+    if (!tr) return;
+    const section = tr.parentElement as HTMLElement | null;
+    // Empêche la suppression de l'en-tête pour garder une structure lisible
+    if (section?.tagName === 'THEAD') {
+      toast({ title: "Action non autorisée", description: "La suppression de la ligne d'en-tête est désactivée.", variant: "destructive" });
+      return;
+    }
+    // Évite de vider complètement le tableau (au moins une ligne dans le tbody)
+    const tbody = tr.closest('tbody');
+    if (tbody && tbody.rows.length <= 1) {
+      toast({ title: "Impossible", description: "Le tableau doit conserver au moins une ligne de données.", variant: "destructive" });
+      return;
+    }
+    tr.remove();
+    syncEditorContent();
+  };
+
+  const addColumn = (after: boolean, baseCell?: HTMLTableCellElement | null) => {
+    const cell = baseCell || getCurrentCell();
+    if (!cell) {
+      toast({ title: "Aucune cellule", description: "Placez le curseur dans un tableau pour ajouter une colonne.", variant: "destructive" });
+      return;
+    }
+    const index = (cell as HTMLTableCellElement).cellIndex;
+    const table = cell.closest('table');
+    if (!table) return;
+  const rows: NodeListOf<HTMLTableRowElement> = table.querySelectorAll('tr');
+  rows.forEach((row: HTMLTableRowElement) => {
+      const isHeader = (row.parentElement as HTMLElement | null)?.tagName === 'THEAD';
+      const insertPos = after ? index + 1 : index;
+      const refCell = row.cells[Math.min(index, row.cells.length - 1)] as HTMLElement | undefined;
+      if (isHeader) {
+        const th = document.createElement('th');
+        if (refCell) th.style.cssText = refCell.style.cssText;
+        th.setAttribute('style', refCell?.getAttribute('style') || '');
+        th.innerHTML = refCell?.textContent ? refCell.textContent : 'Nouvelle colonne';
+        row.insertBefore(th, row.children[insertPos] || null);
+      } else {
+        const td = document.createElement('td');
+        if (refCell) td.style.cssText = refCell.style.cssText;
+        td.setAttribute('style', refCell?.getAttribute('style') || '');
+        td.innerHTML = '';
+        row.insertBefore(td, row.children[insertPos] || null);
+      }
+    });
+    syncEditorContent();
+  };
+
+  const removeColumn = (baseCell?: HTMLTableCellElement | null) => {
+    const cell = baseCell || getCurrentCell();
+    if (!cell) {
+      toast({ title: "Aucune cellule", description: "Placez le curseur dans un tableau pour supprimer une colonne.", variant: "destructive" });
+      return;
+    }
+    const index = (cell as HTMLTableCellElement).cellIndex;
+    const table = cell.closest('table');
+    if (!table) return;
+    // Évite de supprimer la dernière colonne
+    const headerRow = table.querySelector('thead tr') || table.querySelector('tbody tr');
+    if (headerRow && headerRow.children.length <= 1) {
+      toast({ title: "Impossible", description: "Le tableau doit conserver au moins une colonne.", variant: "destructive" });
+      return;
+    }
+    const rows = table.querySelectorAll('tr');
+    rows.forEach((row) => {
+      if (row.children[index]) {
+        row.removeChild(row.children[index]);
+      }
+    });
+    syncEditorContent();
+  };
+
+  const syncEditorContent = () => {
+    const el = editorRef.current;
+    if (el) {
+      const html = el.innerHTML;
+      setContent(html);
+      form.setValue('content', html);
+    }
+  };
+
+  const formatText = (action: 'bold' | 'italic' | 'list') => {
+    try {
+      if (action === 'list') {
+        document.execCommand('insertUnorderedList');
+      } else if (action === 'bold') {
+        document.execCommand('bold');
+      } else if (action === 'italic') {
+        document.execCommand('italic');
+      }
+      // Récupère le HTML après l'action
+      const editor = document.getElementById('procedure-editor');
+      if (editor) {
+        const html = editor.innerHTML;
+        setContent(html);
+        form.setValue('content', html);
+      }
+    } catch {}
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto bg-white dark:bg-gray-900">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900">
         <DialogHeader className="pb-6 border-b border-gray-200 dark:border-gray-700">
           <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             {existingProcedure ? "Modifier la procédure" : "Ajouter une procédure"}
@@ -305,7 +470,7 @@ export default function ProcedureModal({
           </Alert>
         )}
 
-        <Form {...form}>
+  <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Le type est défini automatiquement et masqué à l'utilisateur */}
             <input type="hidden" {...form.register("type")} />
@@ -314,7 +479,7 @@ export default function ProcedureModal({
               <FormField
                 control={form.control}
                 name="description"
-                render={({ field }) => (
+                render={({ field }: { field: any }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                       {getDescriptionLabel(selectedType)}
@@ -336,120 +501,57 @@ export default function ProcedureModal({
             <FormField
               control={form.control}
               name="content"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <FormLabel className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                    Contenu de la procédure
+                    Contenu de la procédure (un seul champ éditable)
                   </FormLabel>
-                  <FormControl>
-                    <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-                      <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-900/20 border-b border-gray-300 dark:border-gray-600 p-3">
-                          <div className="flex items-center justify-between">
-                            <TabsList className="bg-white/50 dark:bg-gray-800/50">
-                              <TabsTrigger value="preview" className="flex items-center gap-2">
-                                <Eye className="w-4 h-4" />
-                                Aperçu & Édition
-                              </TabsTrigger>
-                              <TabsTrigger value="editor" className="flex items-center gap-2">
-                                <Code className="w-4 h-4" />
-                                Code HTML
-                              </TabsTrigger>
-                            </TabsList>
-                            
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => formatText('bold')}
-                                className="h-8 px-3"
-                              >
-                                <Bold className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => formatText('italic')}
-                                className="h-8 px-3"
-                              >
-                                <Italic className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => formatText('list')}
-                                className="h-8 px-3"
-                              >
-                                <List className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={insertTable}
-                                className="h-8 px-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
-                              >
-                                <Table className="h-4 w-4 mr-1" />
-                                Tableau
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <TabsContent value="preview" className="m-0">
-                          <div className="grid grid-cols-1 lg:grid-cols-2 h-[400px]">
-                            {/* Zone d'édition */}
-                            <div className="border-r border-gray-300 dark:border-gray-600">
-                              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600">
-                                Édition
-                              </div>
-                              <Textarea
-                                value={content}
-                                onChange={(e) => {
-                                  setContent(e.target.value);
-                                  form.setValue("content", e.target.value);
-                                }}
-                                placeholder="Décrivez les étapes de la procédure... Utilisez du HTML pour le formatage."
-                                className="h-[352px] border-0 resize-none focus:ring-0 focus:border-0 rounded-none bg-white dark:bg-gray-900"
-                                style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", monospace' }}
-                              />
-                            </div>
-                            
-                            {/* Zone d'aperçu */}
-                            <div>
-                              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600">
-                                Aperçu en temps réel
-                              </div>
-                              <div 
-                                className="h-[352px] p-4 prose prose-sm max-w-none dark:prose-invert overflow-auto bg-white dark:bg-gray-900"
-                                dangerouslySetInnerHTML={{ __html: content || '<p class="text-gray-500 dark:text-gray-400 italic">Commencez à taper pour voir l\'aperçu...</p>' }}
-                              />
-                            </div>
-                          </div>
-                        </TabsContent>
-                        
-                        <TabsContent value="editor" className="m-0">
-                          <Textarea
-                            value={content}
-                            onChange={(e) => {
-                              setContent(e.target.value);
-                              form.setValue("content", e.target.value);
-                            }}
-                            placeholder="Code HTML de la procédure..."
-                            className="min-h-[400px] border-0 resize-none focus:ring-0 focus:border-0 rounded-none"
-                            style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", monospace' }}
-                          />
-                        </TabsContent>
-                      </Tabs>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => formatText('bold')}>
+                      <Bold className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => formatText('italic')}>
+                      <Italic className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => formatText('list')}>
+                      <List className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={insertTable}>
+                      <Table className="h-4 w-4 mr-1" /> Ajouter un tableau
+                    </Button>
+                    <div className="border-l pl-2 ml-2 flex items-center gap-1">
+                      <span className="text-xs text-gray-500">Tableau:</span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => addRow(false)} title="Ajouter une ligne au début">
+                        <Plus className="h-3 w-3" />Ligne
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => addRow(true)} title="Ajouter une ligne à la fin">
+                        Ligne<Plus className="h-3 w-3" />
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => addColumn(false)} title="Ajouter une colonne au début">
+                        <Plus className="h-3 w-3" />Col
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => addColumn(true)} title="Ajouter une colonne à la fin">
+                        Col<Plus className="h-3 w-3" />
+                      </Button>
+                      <Button type="button" variant="destructive" size="sm" onClick={() => removeRow()} title="Supprimer la ligne actuelle">
+                        <Minus className="h-3 w-3" />Ligne
+                      </Button>
+                      <Button type="button" variant="destructive" size="sm" onClick={() => removeColumn()} title="Supprimer la colonne actuelle">
+                        <Minus className="h-3 w-3" />Col
+                      </Button>
                     </div>
+                  </div>
+                  <FormControl>
+                    <div
+                      id="procedure-editor"
+                      ref={editorRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      className="relative min-h-[300px] p-3 border rounded-md bg-white dark:bg-gray-900 prose prose-sm max-w-none dark:prose-invert focus:outline-none"
+                      onInput={syncEditorContent}
+                    />
                   </FormControl>
                   <FormMessage />
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Astuce: L'onglet "Aperçu & Édition" vous permet de voir et modifier le contenu en temps réel. Utilisez les boutons de formatage ou l'onglet "Code HTML" pour des modifications avancées.
-                  </div>
                 </FormItem>
               )}
             />

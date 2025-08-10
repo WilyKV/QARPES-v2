@@ -86,29 +86,29 @@ export function Sidebar() {
   ];
 
   return (
-    <nav className="fixed left-0 top-0 w-64 h-screen bg-white dark:bg-gray-800 shadow-sm border-r border-gray-200 dark:border-gray-700 flex flex-col z-50 shrink-0">
+  <nav className="fixed left-0 top-0 w-64 h-screen bg-[hsl(var(--navy-grad-from))] text-[hsl(var(--sidebar-foreground))] shadow-sm flex flex-col z-50 shrink-0">
       {/* Logo */}
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-          <Rocket className="h-5 w-5 text-blue-600 mr-2" />
+  <div className="px-6 py-4 border-b border-[hsl(var(--sidebar-border))]">
+        <h1 className="text-xl font-bold flex items-center">
+          <Rocket className="h-5 w-5 text-[hsl(var(--sidebar-primary))] mr-2" />
           Release Manager
         </h1>
       </div>
 
       {/* User Profile */}
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+  <div className="px-6 py-4 border-b border-[hsl(var(--sidebar-border))]">
         <div className="flex items-center space-x-3">
           <Avatar className="h-8 w-8">
             <AvatarImage src={user?.profileImageUrl} />
-            <AvatarFallback className="bg-blue-600 text-white text-sm font-medium">
+    <AvatarFallback className="bg-[hsl(var(--sidebar-primary))] text-[hsl(var(--sidebar-primary-foreground))] text-sm font-medium">
               {getInitials(user?.firstName, user?.lastName)}
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="text-sm font-medium text-gray-900 dark:text-white">
+    <p className="text-sm font-medium">
               {user?.firstName} {user?.lastName}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+    <p className="text-xs opacity-80 capitalize">
               {user?.role || "viewer"}
             </p>
           </div>
@@ -127,16 +127,16 @@ export function Sidebar() {
                 className={cn(
                   "w-full text-left group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors",
                   item.current
-                    ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-100"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                    ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]"
+                    : "hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))] opacity-90"
                 )}
               >
                 <Icon
                   className={cn(
                     "mr-3 h-4 w-4",
                     item.current
-                      ? "text-blue-500"
-                      : "text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300"
+                      ? "text-[hsl(var(--sidebar-primary))]"
+                      : "opacity-70 group-hover:opacity-100"
                   )}
                 />
                 {item.name}
@@ -148,7 +148,7 @@ export function Sidebar() {
         {/* Admin Section */}
         {user?.role === "admin" && (
           <div className="mt-8">
-            <h3 className="px-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <h3 className="px-2 text-xs font-semibold opacity-70 uppercase tracking-wider">
               Administration
             </h3>
             <nav className="mt-2 space-y-1">
@@ -161,16 +161,16 @@ export function Sidebar() {
                     className={cn(
                       "w-full text-left group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors",
                       item.current
-                        ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-100"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                        ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]"
+                        : "hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))] opacity-90"
                     )}
                   >
                     <Icon
                       className={cn(
                         "mr-3 h-4 w-4",
                         item.current
-                          ? "text-blue-500"
-                          : "text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300"
+                          ? "text-[hsl(var(--sidebar-primary))]"
+                          : "opacity-70 group-hover:opacity-100"
                       )}
                     />
                     {item.name}
@@ -183,11 +183,11 @@ export function Sidebar() {
       </div>
 
       {/* Logout Button */}
-      <div className="px-4 py-4 border-t border-gray-200 dark:border-gray-700">
+    <div className="px-4 py-4 border-t border-[hsl(var(--sidebar-border))]">
         <Button
           variant="ghost"
           onClick={handleLogout}
-          className="w-full justify-start text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+      className="w-full justify-start opacity-80 hover:opacity-100 hover:bg-[hsl(var(--sidebar-accent))]"
         >
           <LogOut className="mr-3 h-4 w-4" />
           Déconnexion

@@ -228,7 +228,7 @@ export default function Dashboard() {
                     {recentReleases.map((release: any) => (
                       <div key={release.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
                         <div className="flex items-center space-x-4">
-                          <Badge variant="outline" className="font-mono">
+                          <Badge variant="secondary" className="font-mono bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100">
                             {release.releaseId}
                           </Badge>
                           <div>

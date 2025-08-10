@@ -40,6 +40,10 @@
   --sidebar-accent-foreground: 210 14% 11%; /* #1F2937 */
   --sidebar-border: 210 11% 89%; /* #E5E7EB */
   --sidebar-ring: 217 91% 60%; /* #3B82F6 */
+
+  /* Dégradé par défaut (devient actif en thème navy) */
+  --navy-grad-from: var(--card);
+  --navy-grad-to: var(--card);
 }
 
 .dark {
@@ -79,6 +83,44 @@
   --sidebar-accent-foreground: 213 31% 91%; /* #E2E8F0 */
   --sidebar-border: 216 34% 17%; /* #334155 */
   --sidebar-ring: 217 91% 60%; /* #3B82F6 */
+}
+
+/* Thème Navy personnalisé */
+.navy {
+  /* Palette bleu un peu plus claire */
+  --background: 220 30% 16%;
+  --foreground: 210 30% 96%;
+  --muted: 220 20% 22%;
+  --muted-foreground: 210 18% 78%;
+  --popover: 220 28% 18%;
+  --popover-foreground: 210 30% 96%;
+  --card: 220 28% 18%;
+  --card-foreground: 210 30% 96%;
+  --border: 220 18% 26%;
+  --input: 220 18% 26%;
+  --primary: 216 92% 65%; /* Bleu plus clair et lumineux */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 20% 22%;
+  --secondary-foreground: 210 30% 96%;
+  --accent: 220 20% 22%;
+  --accent-foreground: 210 30% 96%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --ring: 216 92% 65%;
+
+  /* Sidebar */
+  --sidebar-background: 220 28% 18%;
+  --sidebar-foreground: 210 30% 96%;
+  --sidebar-primary: 216 92% 65%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 22% 22%;
+  --sidebar-accent-foreground: 210 30% 96%;
+  --sidebar-border: 220 18% 26%;
+  --sidebar-ring: 216 92% 65%;
+
+  /* Dégradés doux */
+  --navy-grad-from: 216 80% 28%;
+  --navy-grad-to: 220 50% 20%;
 }
 
 @layer base {

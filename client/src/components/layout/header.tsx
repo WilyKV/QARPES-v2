@@ -1,6 +1,7 @@
-import { Bell } from "lucide-react";
+import { Bell, Paintbrush } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useTheme } from "@/hooks/useTheme";
 
 interface HeaderProps {
   title: string;
@@ -9,16 +10,17 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle, actions }: HeaderProps) {
+  const { cycle, theme } = useTheme();
   return (
-    <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+    <header className="text-[hsl(var(--card-foreground))] shadow-sm border-b border-[hsl(var(--border))] bg-gradient-to-r from-[hsl(var(--navy-grad-from))] to-[hsl(var(--navy-grad-to))]">
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-bold">
               {title}
             </h1>
             {subtitle && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm opacity-80 mt-1">
                 {subtitle}
               </p>
             )}
@@ -26,10 +28,15 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
           <div className="flex items-center space-x-3">
             {/* Notification Bell */}
             <Button variant="ghost" size="sm" className="relative p-2">
-              <Bell className="h-4 w-4 text-gray-400" />
-              <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+              <Bell className="h-4 w-4 opacity-70" />
+              <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center bg-red-500 text-white text-[10px] leading-none">
                 3
               </Badge>
+            </Button>
+
+            {/* Theme toggle */}
+            <Button variant="ghost" size="sm" className="p-2" onClick={cycle} title={`Thème: ${theme}`}>
+              <Paintbrush className="h-4 w-4 text-[hsl(var(--primary))]" />
             </Button>
             
             {/* Action Buttons */}
