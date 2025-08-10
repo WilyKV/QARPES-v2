@@ -95,7 +95,78 @@ export default function ProcedureModal({
     </tr>
   </tbody>
 </table>`;
-  const defaultTableByType = (t?: string) => (t === "environment_variables" ? DEFAULT_TABLE_ENVVARS : DEFAULT_TABLE_GENERIC);
+  const DEFAULT_TABLE_SERVICE_VERIFICATION = `
+<table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Service</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Point de contrôle</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Résultat attendu</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Statut</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">API</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">/health</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">HTTP 200</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">À vérifier</td>
+    </tr>
+  </tbody>
+</table>`;
+
+  const DEFAULT_TABLE_COMMAND_EXECUTION = `
+<table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Commande</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Contexte</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Remarques</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">npm run build</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Dossier racine</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Vérifier l'output</td>
+    </tr>
+  </tbody>
+</table>`;
+
+  const DEFAULT_TABLE_DATA_IMPORT = `
+<table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Source</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Destination</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Format</th>
+      <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Étapes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">CSV</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Base de données</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">UTF-8</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">Nettoyage, mapping, import</td>
+    </tr>
+  </tbody>
+</table>`;
+
+  const defaultTableByType = (t?: string) => {
+    switch (t) {
+      case "environment_variables":
+        return DEFAULT_TABLE_ENVVARS;
+      case "service_verification":
+        return DEFAULT_TABLE_SERVICE_VERIFICATION;
+      case "command_execution":
+        return DEFAULT_TABLE_COMMAND_EXECUTION;
+      case "data_import":
+        return DEFAULT_TABLE_DATA_IMPORT;
+      default:
+        return DEFAULT_TABLE_GENERIC;
+    }
+  };
   const [content, setContent] = useState(existingProcedure?.content || defaultTableByType(type));
   const editorRef = useRef<HTMLDivElement | null>(null);
   
@@ -166,10 +237,14 @@ export default function ProcedureModal({
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
+      const finalType = data.type || (type as any) || "environment_variables";
+      const fallback = defaultTableByType(finalType);
+      const finalContent = (content && content.trim().length > 0) ? content : fallback;
+
       const procedureData = {
         ...data,
         title: getTypeLabel(data.type), // Ajouter le title automatiquement
-        content,
+        content: finalContent,
         // Note: gitRepoId n'est plus envoyé, il sera résolu côté serveur
       };
       const response = await fetch(`/api/version-git-repos/${versionGitRepoId}/procedures`, {
@@ -198,6 +273,20 @@ export default function ProcedureModal({
       });
     },
   });
+
+  // Si l'utilisateur change le type lors d'une création (pas d'édition), injecter le tableau par défaut s'il n'y a rien
+  useEffect(() => {
+    if (!isOpen || existingProcedure) return;
+    const el = editorRef.current;
+    if (!el) return;
+    const current = (el.innerHTML || "").trim();
+    if (current.length === 0) {
+      const preset = defaultTableByType(selectedType);
+      setContent(preset);
+      form.setValue("content", preset);
+      el.innerHTML = preset;
+    }
+  }, [selectedType, isOpen, existingProcedure, form]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {

@@ -70,6 +70,7 @@ export type ProjectVersion = {
   version: string;
   status: string;
   description: string | null;
+  note?: string | null;
   releaseId: number | null;
   isActive: boolean;
   createdAt: Date;
@@ -201,6 +202,7 @@ export type InsertProjectVersion = {
   projectId: number;
   version: string;
   description?: string;
+  note?: string;
   status?: string;
   releaseId?: number;
   isActive?: boolean;

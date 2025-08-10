@@ -124,6 +124,7 @@ model ProjectVersion {
   version     String
   status      String    @default("development")
   description String?
+  note        String?
   releaseId   Int?
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())

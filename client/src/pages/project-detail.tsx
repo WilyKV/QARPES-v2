@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Calendar, FileText, Users, Plus, Link as LinkIcon, Activity, Layers, Target } from "lucide-react";
@@ -8,13 +8,16 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
-import { formatDate } from "@/lib/constants";
+import { formatDate, STATUS_OPTIONS } from "@/lib/constants";
 import { VersionModal } from "@/components/modals/version-modal";
 import { VersionReleaseModal } from "@/components/modals/version-release-modal";
+import { useAuth } from "@/hooks/useAuth";
 import type { 
   ProjectWithTeam, 
   ProjectVersionWithDetails
 } from "@shared/schema";
+import { calculateVersionProgress } from "@shared/progress-utils";
+import { ProgressBar } from "@/components/ui/progress-bar";
 
 // Status styling with modern gradients and colors
 const statusColors = {
@@ -98,21 +101,56 @@ export default function ProjectDetail() {
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [selectedVersionName, setSelectedVersionName] = useState<string>("");
   const [currentReleaseId, setCurrentReleaseId] = useState<number | null>(null);
+  const { user } = useAuth();
 
   const { data: project, isLoading: projectLoading } = useQuery<ProjectWithTeam>({
     queryKey: [`/api/projects/${projectId}`],
     enabled: !!projectId,
   });
 
-  const { data: versions, isLoading: versionsLoading } = useQuery<ProjectVersionWithDetails[]>({
+  const { data: versionsData, isLoading: versionsLoading } = useQuery<ProjectVersionWithDetails[]>({
     queryKey: [`/api/projects/${projectId}/versions`],
     enabled: !!projectId,
   });
+
+  // Sort versions by most recent first (descending order by createdAt)
+  const versions = useMemo(() => {
+    if (!versionsData) return [];
+    return [...versionsData].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [versionsData]);
 
   const { data: releases = [] } = useQuery<any[]>({
     queryKey: ["/api/releases"],
     enabled: !!projectId,
   });
+
+  // Helper function to check if a version has a production release
+  const hasProductionRelease = (version: ProjectVersionWithDetails) => {
+    if (!version.releaseId || String(version.releaseId) === '0') return false;
+    const release = releases.find(r => r.id === Number(version.releaseId));
+    
+    // Find the status values that correspond to production states
+    const productionStatusOption = STATUS_OPTIONS.release.find(option => 
+      option.label === "Mis en production"
+    );
+    const mergeFinalStatusOption = STATUS_OPTIONS.release.find(option => 
+      option.label === "Merge final"
+    );
+    
+    const productionStatusValue = productionStatusOption?.value;
+    const mergeFinalStatusValue = mergeFinalStatusOption?.value;
+    
+    return release?.status === 'production' || 
+           release?.status === productionStatusValue || 
+           release?.status === mergeFinalStatusValue;
+  };
+
+  // Helper function to check if user can edit (admin or not production release)
+  const canEdit = (version: ProjectVersionWithDetails) => {
+    return user?.role === 'admin' || !hasProductionRelease(version);
+  };
 
   if (projectLoading || versionsLoading) {
     return (
@@ -307,7 +345,16 @@ export default function ProjectDetail() {
             {versions && versions.length > 0 ? (
               <div className="grid gap-4">
                 {versions.map((version, index) => {
-                  const progress = getVersionProgress(String(version.status));
+                  const versionProgress = calculateVersionProgress(version);
+                  const isProductionRelease = hasProductionRelease(version);
+                  const userCanEdit = canEdit(version);
+                  
+                  // Override progress to 100% green if it's a production release
+                  const displayProgress = isProductionRelease ? {
+                    ...versionProgress,
+                    percentage: 100,
+                    completionStatus: 'production_deployed' as const
+                  } : versionProgress;
                   
                   return (
                     <Card key={String(version.id)} className="shadow-lg border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 hover:shadow-xl transition-all duration-200 cursor-pointer group" onClick={() => setLocation(`/projects/${projectId}/versions/${String(version.id)}`)}>
@@ -324,7 +371,7 @@ export default function ProjectDetail() {
                                     Version {String(version.version)}
                                   </h3>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {getNextAction(String(version.status))}
+                                    {version.description || 'Aucune description'}
                                   </p>
                                 </div>
                               </div>
@@ -336,7 +383,7 @@ export default function ProjectDetail() {
                                 {version.releaseId && String(version.releaseId) !== '0' ? (
                                   <Badge 
                                     variant="secondary" 
-                                    className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 cursor-pointer hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors"
+                                    className={`${isProductionRelease ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'} cursor-pointer hover:bg-opacity-80 transition-colors`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       const release = releases.find(r => r.id === Number(version.releaseId));
@@ -346,43 +393,41 @@ export default function ProjectDetail() {
                                     }}
                                     title="Cliquer pour voir la release"
                                   >
-                                    Release: {releases.find(r => r.id === Number(version.releaseId))?.releaseId || String(version.releaseId)}
+                                    {isProductionRelease && '🟢 '} Release: {releases.find(r => r.id === Number(version.releaseId))?.releaseId || String(version.releaseId)}
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="text-gray-500 border-gray-300 dark:text-gray-400 dark:border-gray-600">
                                     Aucune release
                                   </Badge>
                                 )}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="ml-auto group-hover:bg-blue-50 group-hover:border-blue-200 dark:group-hover:bg-blue-900/20 dark:group-hover:border-blue-700 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedVersionId(Number(version.id));
-                                    setSelectedVersionName(String(version.version));
-                                    setCurrentReleaseId(version.releaseId && String(version.releaseId) !== '0' ? Number(version.releaseId) : null);
-                                    setReleaseModalOpen(true);
-                                  }}
-                                >
-                                  <LinkIcon className="w-4 h-4 mr-2" />
-                                  Changer de release
-                                </Button>
+                                {userCanEdit && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="ml-auto group-hover:bg-blue-50 group-hover:border-blue-200 dark:group-hover:bg-blue-900/20 dark:group-hover:border-blue-700 transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedVersionId(Number(version.id));
+                                      setSelectedVersionName(String(version.version));
+                                      setCurrentReleaseId(version.releaseId && String(version.releaseId) !== '0' ? Number(version.releaseId) : null);
+                                      setReleaseModalOpen(true);
+                                    }}
+                                  >
+                                    <LinkIcon className="w-4 h-4 mr-2" />
+                                    Changer de release
+                                  </Button>
+                                )}
+                                {!userCanEdit && (
+                                  <Badge variant="outline" className="text-orange-600 border-orange-300 dark:text-orange-400 dark:border-orange-600">
+                                    🔒 Production - Modification restreinte
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                             
                             {/* Progress Bar */}
                             <div className="mb-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Progression</span>
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{progress}%</span>
-                              </div>
-                              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                <div 
-                                  className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300" 
-                                  style={{ width: `${progress}%` }}
-                                ></div>
-                              </div>
+                              <ProgressBar progress={displayProgress} className={isProductionRelease ? 'production-release' : ''} />
                             </div>
                           </div>
                         </div>

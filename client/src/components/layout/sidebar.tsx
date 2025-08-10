@@ -86,7 +86,7 @@ export function Sidebar() {
   ];
 
   return (
-  <nav className="fixed left-0 top-0 w-64 h-screen bg-[hsl(var(--navy-grad-from))] text-[hsl(var(--sidebar-foreground))] shadow-sm flex flex-col z-50 shrink-0">
+  <nav className="fixed left-0 top-0 w-64 h-screen bg-gradient-to-b from-[hsl(var(--navy-grad-from))] to-[hsl(var(--navy-grad-to))] text-[hsl(var(--sidebar-foreground))] shadow-sm flex flex-col z-50 shrink-0">
       {/* Logo */}
   <div className="px-6 py-4 border-b border-[hsl(var(--sidebar-border))]">
         <h1 className="text-xl font-bold flex items-center">

@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   ArrowLeft, Calendar, GitCommit, FileText, CheckCircle, Clock, AlertCircle, 
@@ -15,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
-import { formatDate } from "@/lib/constants";
+import { formatDate, STATUS_OPTIONS } from "@/lib/constants";
 import { VersionReleaseModal } from "@/components/modals/version-release-modal";
 import { GitRepoModal } from "@/components/modals/git-repo-modal";
 import { PvModal } from "@/components/modals/pv-modal";
@@ -29,6 +30,8 @@ import type {
   ProceduresByType,
   Procedure 
 } from "@shared/schema";
+import { calculateVersionProgress } from "@shared/progress-utils";
+import { ProgressBar } from "@/components/ui/progress-bar";
 
 const procedureTypeIcons = {
   environment_variables: Settings,
@@ -44,10 +47,17 @@ const procedureTypeLabels = {
   data_import: "Import des données",
 };
 
+const procedureTypeButtonColors: Record<string, string> = {
+  environment_variables: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-200",
+  service_verification: "bg-sky-50 hover:bg-sky-100 border-sky-200 text-sky-700 dark:bg-sky-900/20 dark:border-sky-800 dark:text-sky-200",
+  command_execution: "bg-violet-50 hover:bg-violet-100 border-violet-200 text-violet-700 dark:bg-violet-900/20 dark:border-violet-800 dark:text-violet-200",
+  data_import: "bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200",
+};
+
 // Composant séparé pour éviter les hooks dans une boucle
 function RepoCommitsCard({ versionGitRepo, onAddCommit }: { 
   versionGitRepo: any; 
-  onAddCommit: (versionGitRepoId: number) => void;
+  onAddCommit?: (versionGitRepoId: number) => void;
 }) {
   const { data: commits } = useQuery({
     queryKey: [`/api/version-git-repos/${versionGitRepo.id}/commits`],
@@ -66,15 +76,17 @@ function RepoCommitsCard({ versionGitRepo, onAddCommit }: {
             <Badge variant="outline" className="text-xs">
               {commits && Array.isArray(commits) ? commits.length : 0} commit(s)
             </Badge>
-            <Button 
-              variant="default" 
-              size="sm" 
-              onClick={() => onAddCommit(versionGitRepo.id)}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Plus className="w-3 h-3 mr-1" />
-              Commit
-            </Button>
+            {onAddCommit && (
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={() => onAddCommit(versionGitRepo.id)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                Commit
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -174,6 +186,8 @@ function ProcedureCard({ procedure, repoName, onEdit }: {
   onEdit?: (procedure: Procedure) => void;
 }) {
   const Icon = procedureTypeIcons[procedure.type as keyof typeof procedureTypeIcons];
+  const typeLabel = procedureTypeLabels[procedure.type as keyof typeof procedureTypeLabels];
+  const showTitle = false; // le titre sera affiché dans la section du contenu
   
   return (
     <Card className={`border-l-4 ${procedure.isCompleted ? 'border-l-green-500 bg-green-50 dark:bg-green-950' : 'border-l-blue-500'} hover:shadow-md transition-shadow duration-200`}>
@@ -181,7 +195,9 @@ function ProcedureCard({ procedure, repoName, onEdit }: {
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
             <Icon className="w-4 h-4" />
-            <CardTitle className="text-sm">{procedure.title}</CardTitle>
+            {showTitle && (
+              <CardTitle className="text-sm">{procedure.title}</CardTitle>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
@@ -204,17 +220,17 @@ function ProcedureCard({ procedure, repoName, onEdit }: {
             )}
           </div>
         </div>
-        <CardDescription className="text-sm">
-          {procedureTypeLabels[procedure.type as keyof typeof procedureTypeLabels]}
-        </CardDescription>
+        {/* Supprimer l'affichage du type ici pour éviter la duplication avec le header de groupe */}
       </CardHeader>
-      {procedure.description && (
-        <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-300">{procedure.description}</p>
-        </CardContent>
-      )}
       {procedure.content && (
         <CardContent className="pt-0">
+          {/* Titre de procédure dans la section (à la place de l'en-tête de groupe) */}
+          <div className="flex items-center gap-2 mb-3 pl-3 border-l-4 border-blue-400 dark:border-blue-600">
+            <Icon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
+              {procedure.title?.trim() || typeLabel}
+            </span>
+          </div>
           <div
             className="prose prose-sm max-w-none dark:prose-invert"
             dangerouslySetInnerHTML={{ __html: procedure.content }}
@@ -227,8 +243,8 @@ function ProcedureCard({ procedure, repoName, onEdit }: {
 
 function GitRepoSection({ versionGitRepo, onAddProcedure, onEditProcedure }: { 
   versionGitRepo: any; 
-  onAddProcedure: (versionGitRepoId: number, type: string) => void;
-  onEditProcedure: (procedure: Procedure, versionGitRepoId: number) => void;
+  onAddProcedure?: (versionGitRepoId: number, type: string) => void;
+  onEditProcedure?: (procedure: Procedure, versionGitRepoId: number) => void;
 }) {
   const { data: procedures } = useQuery<ProceduresByType>({
     queryKey: [`/api/version-git-repos/${versionGitRepo.id}/procedures`],
@@ -238,7 +254,7 @@ function GitRepoSection({ versionGitRepo, onAddProcedure, onEditProcedure }: {
   return (
     <Card className="border-0 shadow-lg bg-gradient-to-r from-white to-gray-50/50 dark:from-gray-800 dark:to-gray-700/50 hover:shadow-xl transition-all duration-200">
       <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg">
               <GitBranch className="w-5 h-5 text-white" />
@@ -276,22 +292,26 @@ function GitRepoSection({ versionGitRepo, onAddProcedure, onEditProcedure }: {
               <Settings className="w-4 h-4 text-purple-500" />
               Procédures de déploiement
             </h4>
-            <div className="flex gap-2 flex-wrap mb-4">
-              {Object.keys(procedureTypeLabels).map((type) => {
-                const Icon = procedureTypeIcons[type as keyof typeof procedureTypeIcons];
-                return (
-                  <Button
-                    key={type}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddProcedure(versionGitRepo.id, type)}
-                    className="text-xs hover:bg-purple-50 hover:border-purple-200 dark:hover:bg-purple-900/20"
-                  >
-                    <Icon className="w-3 h-3 mr-1" />
-                    {procedureTypeLabels[type as keyof typeof procedureTypeLabels]}
-                  </Button>
-                );
-              })}
+            <div className="flex items-center justify-between gap-2 mb-4">
+              {onAddProcedure && (
+                <div className="flex gap-2 flex-wrap">
+                  {Object.keys(procedureTypeLabels).map((type) => {
+                    const Icon = procedureTypeIcons[type as keyof typeof procedureTypeIcons];
+                    return (
+                      <Button
+                        key={type}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onAddProcedure(versionGitRepo.id, type)}
+                        className={`text-xs border ${procedureTypeButtonColors[type]}`}
+                      >
+                        <Icon className="w-3 h-3 mr-1" />
+                        {procedureTypeLabels[type as keyof typeof procedureTypeLabels]}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
           
@@ -300,19 +320,13 @@ function GitRepoSection({ versionGitRepo, onAddProcedure, onEditProcedure }: {
               {Object.entries(procedures).map(([type, procedureList]) => (
                 procedureList.length > 0 && (
                   <div key={type} className="space-y-3">
-                    <h5 className="text-sm font-medium text-gray-600 dark:text-gray-300 flex items-center gap-2">
-                      {procedureTypeLabels[type as keyof typeof procedureTypeLabels]} 
-                      <Badge variant="outline" className="text-xs">
-                        {procedureList.length}
-                      </Badge>
-                    </h5>
                     <div className="grid grid-cols-1 gap-4">
                       {procedureList.map((procedure) => (
                         <ProcedureCard 
                           key={procedure.id} 
                           procedure={procedure} 
                           repoName={versionGitRepo.gitRepo?.name || ''} 
-                          onEdit={(procedure) => onEditProcedure(procedure, versionGitRepo.id)}
+                          onEdit={onEditProcedure ? (procedure) => onEditProcedure(procedure, versionGitRepo.id) : undefined}
                         />
                       ))}
                     </div>
@@ -345,6 +359,7 @@ export default function VersionDetail() {
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   
   // Git Repo modal states
   const [gitRepoModalOpen, setGitRepoModalOpen] = useState(false);
@@ -369,16 +384,56 @@ export default function VersionDetail() {
   const [selectedGitRepoForProcedure, setSelectedGitRepoForProcedure] = useState<number>(0);
   const [selectedProcedureType, setSelectedProcedureType] = useState<string>('');
 
+  // Version note state
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteValue, setNoteValue] = useState('');
+
   const { data: version, isLoading: versionLoading } = useQuery<ProjectVersionWithDetails>({
     queryKey: [`/api/projects/${projectId}/versions/${versionId}`],
     enabled: !!projectId && !!versionId,
   });
+
+  // Load persisted note
+  const { data: noteData, refetch: refetchNote } = useQuery<{ note: string | null}>({
+    queryKey: [`/api/project-versions/${versionId}/note`],
+    enabled: !!versionId,
+  });
+
+  useEffect(() => {
+    if (noteData && typeof noteData.note !== 'undefined') {
+      setNoteValue(noteData.note || '');
+    }
+  }, [noteData]);
 
   // Récupérer les détails de la release si la version en a une
   const { data: release } = useQuery<any>({
     queryKey: [`/api/releases/${version?.releaseId}`],
     enabled: !!version?.releaseId,
   });
+
+  // Helper function to check if version has a production release
+  const hasProductionRelease = () => {
+    // Find the status values that correspond to production states
+    const productionStatusOption = STATUS_OPTIONS.release.find(option => 
+      option.label === "Mis en production"
+    );
+    const mergeFinalStatusOption = STATUS_OPTIONS.release.find(option => 
+      option.label === "Merge final"
+    );
+    
+    const productionStatusValue = productionStatusOption?.value;
+    const mergeFinalStatusValue = mergeFinalStatusOption?.value;
+    
+    return release?.status === 'production' || 
+           release?.status === productionStatusValue || 
+           release?.status === mergeFinalStatusValue;
+  };
+
+  // Helper function to check if user can edit (admin or not production release)
+  const canEdit = () => {
+    return user?.role === 'admin' || !hasProductionRelease();
+  };
 
   // Handlers for commits and procedures
   const handleAddCommit = (versionGitRepoId: number) => {
@@ -403,7 +458,7 @@ export default function VersionDetail() {
 
   if (versionLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+  <div className="min-h-screen bg-background flex">
         <Sidebar />
         <main className="flex-1 overflow-auto ml-64">
           <Header 
@@ -430,7 +485,7 @@ export default function VersionDetail() {
 
   if (!version) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+  <div className="min-h-screen bg-background flex">
         <Sidebar />
         <main className="flex-1 overflow-auto ml-64">
           <Header 
@@ -460,7 +515,7 @@ export default function VersionDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
+  <div className="min-h-screen bg-background flex">
       <Sidebar />
       
       <main className="flex-1 overflow-auto ml-64">
@@ -471,11 +526,25 @@ export default function VersionDetail() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={() => setReleaseModalOpen(true)}
+                onClick={() => setNoteOpen(true)}
+                className="bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200"
               >
-                <LinkIcon className="w-4 h-4 mr-2" />
-                Changer de release
+                <FileText className="w-4 h-4 mr-2" />
+                Note
               </Button>
+              {canEdit() ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setReleaseModalOpen(true)}
+                >
+                  <LinkIcon className="w-4 h-4 mr-2" />
+                  Changer de release
+                </Button>
+              ) : (
+                <Badge variant="outline" className="text-orange-600 border-orange-300 dark:text-orange-400 dark:border-orange-600">
+                  🔒 Release en production - Modification restreinte
+                </Badge>
+              )}
               <Button variant="outline" onClick={() => setLocation(`/projects/${projectId}`)}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Retour au projet
@@ -484,7 +553,7 @@ export default function VersionDetail() {
           }
         />
 
-        <div className="p-6 space-y-6">
+  <div className="p-6 space-y-6">
           {/* Version Info */}
           <Card className="border-0 shadow-lg bg-gradient-to-r from-white to-blue-50/30 dark:from-gray-800 dark:to-blue-900/10">
             <CardHeader className="pb-4">
@@ -509,6 +578,30 @@ export default function VersionDetail() {
                   )}
                 </div>
                 <div className="flex items-center gap-3">
+                  {(() => {
+                    const versionProgress = calculateVersionProgress(version);
+                    const isProductionRelease = hasProductionRelease();
+                    
+                    // Override progress to 100% green if it's a production release
+                    const displayProgress = isProductionRelease ? {
+                      ...versionProgress,
+                      percentage: 100,
+                      completionStatus: 'production_deployed' as const
+                    } : versionProgress;
+                    
+                    const getProgressColor = () => {
+                      if (isProductionRelease) return 'bg-gradient-to-r from-green-500 to-emerald-500 text-white';
+                      if (displayProgress.percentage === 100) return 'bg-green-500 text-white';
+                      if (displayProgress.percentage >= 80) return 'bg-blue-500 text-white';
+                      return 'bg-gray-400 text-white';
+                    };
+                    
+                    return (
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold ${getProgressColor()}`}>
+                        {displayProgress.percentage}%
+                      </div>
+                    );
+                  })()}
                   <Badge className={`px-4 py-2 text-sm font-medium ${statusColors[version.status as keyof typeof statusColors] || statusColors.en_developpement}`}>
                     {statusLabels[version.status as keyof typeof statusLabels] || version.status}
                   </Badge>
@@ -578,16 +671,18 @@ export default function VersionDetail() {
             <TabsContent value="repositories" className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">Repositories Git</h3>
-                <Button 
-                  onClick={() => {
-                    setSelectedGitRepo(null);
-                    setGitRepoModalOpen(true);
-                  }}
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Ajouter un repository
-                </Button>
+                {canEdit() && (
+                  <Button 
+                    onClick={() => {
+                      setSelectedGitRepo(null);
+                      setGitRepoModalOpen(true);
+                    }}
+                    size="sm"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Ajouter un repository
+                  </Button>
+                )}
               </div>
               
               {version.versionGitRepos && version.versionGitRepos.length > 0 ? (
@@ -595,8 +690,8 @@ export default function VersionDetail() {
                   <GitRepoSection 
                     key={versionGitRepo.id} 
                     versionGitRepo={versionGitRepo}
-                    onAddProcedure={handleAddProcedure}
-                    onEditProcedure={handleEditProcedure}
+                    onAddProcedure={canEdit() ? handleAddProcedure : undefined}
+                    onEditProcedure={canEdit() ? handleEditProcedure : undefined}
                   />
                 ))
               ) : (
@@ -624,7 +719,7 @@ export default function VersionDetail() {
                   <RepoCommitsCard 
                     key={versionGitRepo.id} 
                     versionGitRepo={versionGitRepo} 
-                    onAddCommit={handleAddCommit}
+                    onAddCommit={canEdit() ? handleAddCommit : undefined}
                   />
                 ))
               ) : (
@@ -645,16 +740,18 @@ export default function VersionDetail() {
             <TabsContent value="pvs" className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">PVs (Procès-Verbaux)</h3>
-                <Button 
-                  onClick={() => {
-                    setSelectedPv(null);
-                    setPvModalOpen(true);
-                  }}
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Ajouter un PV
-                </Button>
+                {canEdit() && (
+                  <Button 
+                    onClick={() => {
+                      setSelectedPv(null);
+                      setPvModalOpen(true);
+                    }}
+                    size="sm"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Ajouter un PV
+                  </Button>
+                )}
               </div>
               
               {version.pvs && version.pvs.length > 0 ? (
@@ -682,40 +779,44 @@ export default function VersionDetail() {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedPv(pv);
-                                setPvModalOpen(true);
-                              }}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={async () => {
-                                if (confirm('Êtes-vous sûr de vouloir supprimer ce PV ?')) {
-                                  try {
-                                    await apiRequest("DELETE", `/api/project-pvs/${pv.id}`);
-                                    queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
-                                    toast({
-                                      title: "Succès",
-                                      description: "PV supprimé avec succès",
-                                    });
-                                  } catch (error) {
-                                    toast({
-                                      title: "Erreur",
-                                      description: "Impossible de supprimer le PV",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            {canEdit() && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedPv(pv);
+                                    setPvModalOpen(true);
+                                  }}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    if (confirm('Êtes-vous sûr de vouloir supprimer ce PV ?')) {
+                                      try {
+                                        await apiRequest("DELETE", `/api/project-pvs/${pv.id}`);
+                                        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+                                        toast({
+                                          title: "Succès",
+                                          description: "PV supprimé avec succès",
+                                        });
+                                      } catch (error) {
+                                        toast({
+                                          title: "Erreur",
+                                          description: "Impossible de supprimer le PV",
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
                             <CheckCircle className="w-4 h-4 text-green-600" />
                           </div>
                         </div>
@@ -764,16 +865,18 @@ export default function VersionDetail() {
             <TabsContent value="cab" className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">Tickets CAB</h3>
-                <Button 
-                  onClick={() => {
-                    setSelectedCab(null);
-                    setCabModalOpen(true);
-                  }}
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Ajouter un ticket CAB
-                </Button>
+                {canEdit() && (
+                  <Button 
+                    onClick={() => {
+                      setSelectedCab(null);
+                      setCabModalOpen(true);
+                    }}
+                    size="sm"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Ajouter un ticket CAB
+                  </Button>
+                )}
               </div>
               
               {version.cabs && version.cabs.length > 0 ? (
@@ -786,40 +889,44 @@ export default function VersionDetail() {
                           <CardDescription className="text-sm">{cab.title}</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedCab(cab);
-                              setCabModalOpen(true);
-                            }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              if (confirm('Êtes-vous sûr de vouloir supprimer ce ticket CAB ?')) {
-                                try {
-                                  await apiRequest("DELETE", `/api/cabs/${cab.id}`);
-                                  queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
-                                  toast({
-                                    title: "Succès",
-                                    description: "Ticket CAB supprimé avec succès",
-                                  });
-                                } catch (error) {
-                                  toast({
-                                    title: "Erreur",
-                                    description: "Impossible de supprimer le ticket CAB",
-                                    variant: "destructive",
-                                  });
-                                }
-                              }
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {canEdit() && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedCab(cab);
+                                  setCabModalOpen(true);
+                                }}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  if (confirm('Êtes-vous sûr de vouloir supprimer ce ticket CAB ?')) {
+                                    try {
+                                      await apiRequest("DELETE", `/api/cabs/${cab.id}`);
+                                      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/versions/${versionId}`] });
+                                      toast({
+                                        title: "Succès",
+                                        description: "Ticket CAB supprimé avec succès",
+                                      });
+                                    } catch (error) {
+                                      toast({
+                                        title: "Erreur",
+                                        description: "Impossible de supprimer le ticket CAB",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
                           <Badge className={statusColors[cab.status as keyof typeof statusColors] || statusColors.open}>
                             {statusLabels[cab.status as keyof typeof statusLabels] || cab.status}
                           </Badge>
@@ -921,6 +1028,52 @@ export default function VersionDetail() {
           setSelectedProcedureType('');
         }}
       />
+
+      {/* Note modal (simple inline dialog) */}
+      {noteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setNoteOpen(false)} />
+          <div className="relative z-10 w-full max-w-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-amber-500" />
+                Note de version
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setNoteOpen(false)}>Fermer</Button>
+            </div>
+            <div>
+              <textarea
+                className="w-full h-40 text-sm border rounded p-2 bg-white dark:bg-gray-800"
+                value={noteValue}
+                onChange={(e) => setNoteValue(e.target.value)}
+                placeholder="Ajoutez une note contextuelle pour cette version..."
+              />
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setNoteOpen(false)}>Annuler</Button>
+              <Button
+                size="sm"
+                disabled={noteSaving}
+                onClick={async () => {
+                  try {
+                    setNoteSaving(true);
+                    await apiRequest('PATCH', `/api/project-versions/${versionId}/note`, { note: noteValue });
+                    refetchNote();
+                    setNoteOpen(false);
+                    toast({ title: 'Note enregistrée' });
+                  } catch (e) {
+                    toast({ title: 'Erreur', description: 'Impossible d\'enregistrer la note', variant: 'destructive' });
+                  } finally {
+                    setNoteSaving(false);
+                  }
+                }}
+              >
+                Enregistrer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

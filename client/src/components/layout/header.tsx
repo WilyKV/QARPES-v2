@@ -12,7 +12,7 @@ interface HeaderProps {
 export function Header({ title, subtitle, actions }: HeaderProps) {
   const { cycle, theme } = useTheme();
   return (
-    <header className="text-[hsl(var(--card-foreground))] shadow-sm border-b border-[hsl(var(--border))] bg-gradient-to-r from-[hsl(var(--navy-grad-from))] to-[hsl(var(--navy-grad-to))]">
+  <header className="text-[hsl(var(--header-foreground))] shadow-sm border-b border-[hsl(var(--border))] bg-gradient-to-r from-[hsl(var(--navy-grad-from))] to-[hsl(var(--navy-grad-to))]">
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div>

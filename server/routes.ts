@@ -418,6 +418,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Project version note routes
+  app.get('/api/project-versions/:id/note', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const version = await storage.getProjectVersion(id);
+      if (!version) return res.status(404).json({ message: 'Version not found' });
+      res.json({ note: (version as any).note || null });
+    } catch (error) {
+      console.error('Error fetching project version note:', error);
+      res.status(500).json({ message: 'Failed to fetch project version note' });
+    }
+  });
+
+  app.patch('/api/project-versions/:id/note', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { note } = req.body as { note?: string | null };
+      const updated = await storage.updateProjectVersionNote(id, note ?? null);
+      res.json({ id: updated.id, note: (updated as any).note || null });
+    } catch (error) {
+      console.error('Error updating project version note:', error);
+      res.status(500).json({ message: 'Failed to update project version note' });
+    }
+  });
+
   // Users routes
   app.get('/api/users', async (req, res) => {
     try {

@@ -86,6 +86,7 @@ export interface IStorage {
   getProjectVersion(id: number): Promise<ProjectVersionWithDetails | undefined>;
   createProjectVersion(version: InsertProjectVersion): Promise<ProjectVersion>;
   updateProjectVersion(id: number, version: Partial<InsertProjectVersion>): Promise<ProjectVersion>;
+  updateProjectVersionNote(id: number, note: string | null): Promise<ProjectVersion>;
   deleteProjectVersion(id: number): Promise<void>;
   
   // Git Repository operations
@@ -430,7 +431,8 @@ export class DatabaseStorage implements IStorage {
             commits: true,
           },
         },
-        cabs: true,
+  cabs: true,
+  pvs: { include: { files: true } },
       },
     });
     // Adapter le format si besoin (ex: mapping pour ProjectVersionWithDetails)
@@ -473,6 +475,11 @@ export class DatabaseStorage implements IStorage {
   async updateProjectVersion(id: number, version: Partial<InsertProjectVersion>): Promise<ProjectVersion> {
     const updatedVersion = await prisma.projectVersion.update({ where: { id }, data: { ...version, updatedAt: new Date() } });
     await this.updateProjectStatusFromVersions(updatedVersion.projectId);
+    return updatedVersion;
+  }
+
+  async updateProjectVersionNote(id: number, note: string | null): Promise<ProjectVersion> {
+    const updatedVersion = await prisma.projectVersion.update({ where: { id }, data: { note, updatedAt: new Date() } });
     return updatedVersion;
   }
 
@@ -542,7 +549,7 @@ export class DatabaseStorage implements IStorage {
     });
     
     // Transformer pour retourner la structure attendue
-    return versionGitRepos.map(vgr => ({
+  return versionGitRepos.map((vgr: any) => ({
       ...vgr.gitRepo,
       commits: vgr.commits,
       procedures: vgr.procedures,
@@ -643,7 +650,7 @@ export class DatabaseStorage implements IStorage {
     });
 
     // Collecter toutes les procédures de toutes les associations
-    const allProcedures = versionGitRepos.flatMap(vgr => vgr.procedures);
+  const allProcedures = versionGitRepos.flatMap((vgr: any) => vgr.procedures);
 
     return {
       environment_variables: allProcedures.filter((p: any) => p.type === 'environment_variables'),
@@ -736,8 +743,9 @@ export class DatabaseStorage implements IStorage {
       where: { releaseId },
       include: {
         project: { include: { team: true } },
-        gitRepos: {
+        versionGitRepos: {
           include: {
+            gitRepo: true,
             commits: { orderBy: { committedAt: 'desc' }, take: 10 },
             procedures: { orderBy: { order: 'asc' } },
           },

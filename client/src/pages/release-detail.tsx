@@ -196,10 +196,10 @@ export default function ReleaseDetail() {
                                 {version.status}
                               </Badge>
                             </div>
-                            {version.gitRepos && version.gitRepos.length > 0 && (
+                            {version.versionGitRepos && version.versionGitRepos.length > 0 && (
                               <div className="mt-2">
                                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  {version.gitRepos.length} repository(ies) git
+                                  {version.versionGitRepos.length} repository(ies) git
                                 </p>
                               </div>
                             )}
@@ -249,22 +249,22 @@ export default function ReleaseDetail() {
                           <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">
                             {projectVersion.project?.name} - Version {projectVersion.version}
                           </h4>
-                          <Badge variant="outline">{projectVersion.gitRepos?.length || 0} repo(s)</Badge>
+                          <Badge variant="outline">{projectVersion.versionGitRepos?.length || 0} repo(s)</Badge>
                         </div>
                         
-                        {projectVersion.gitRepos?.map((gitRepo: any) => (
-                          <div key={gitRepo.id} className="ml-4 border rounded-lg p-4">
+                        {projectVersion.versionGitRepos?.map((versionGitRepo: any) => (
+                          <div key={versionGitRepo.id} className="ml-4 border rounded-lg p-4">
                             <div className="flex items-center space-x-2 mb-3">
                               <GitBranch className="w-4 h-4 text-gray-500" />
-                              <h6 className="font-medium text-gray-900 dark:text-gray-100">{gitRepo.name}</h6>
+                              <h6 className="font-medium text-gray-900 dark:text-gray-100">{versionGitRepo.gitRepo?.name}</h6>
                               <Badge variant="outline" className="text-xs">
-                                {gitRepo.procedures?.length || 0} procédure(s)
+                                {versionGitRepo.procedures?.length || 0} procédure(s)
                               </Badge>
                             </div>
                             
-                            {gitRepo.procedures && gitRepo.procedures.length > 0 ? (
+                            {versionGitRepo.procedures && versionGitRepo.procedures.length > 0 ? (
                               <div className="space-y-2">
-                                {gitRepo.procedures.map((procedure: any) => (
+                                {versionGitRepo.procedures.map((procedure: any) => (
                                   <div key={procedure.id} className="flex items-center space-x-2 text-sm p-2 bg-gray-50 dark:bg-gray-800 rounded">
                                     {procedure.isCompleted ? (
                                       <CheckCircle className="w-4 h-4 text-green-500" />

@@ -35,3 +35,7 @@ apk:
 	- docker cp qarpes-v2-apk-tmp:/app/output/. ./output
 	docker rm qarpes-v2-apk-tmp
 	@echo "APK(s) genere(s) : output/"
+
+# TypeScript check (no emit)
+check:
+	docker compose exec app npm run check
