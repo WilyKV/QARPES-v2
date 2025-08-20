@@ -34,23 +34,81 @@ interface EditableCellProps {
   onSave: (value: string) => void;
   type?: string;
   options?: { value: string; label: string }[];
+  className?: string;
 }
 
-function EditableCell({ value, onSave, type = "text", options = [] }: EditableCellProps) {
+function EditableCell({ value, onSave, type = "text", options = [], className = "" }: EditableCellProps) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value ?? "");
-  useEffect(() => { setVal(value ?? ""); }, [value]);
-  if (!editing) return (
-    <span onClick={() => setEditing(true)} className="cursor-pointer hover:underline">{type === "select" ? (options?.find(o => o.value === value)?.label || value) : value || <span className="text-gray-400">-</span>}</span>
-  );
+  
+  useEffect(() => { 
+    setVal(value ?? ""); 
+  }, [value]);
+
+  const handleSave = () => {
+    setEditing(false);
+    if (val !== value) {
+      onSave(val as string);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSave();
+    } else if (e.key === "Escape") {
+      setVal(value ?? "");
+      setEditing(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <span 
+        onClick={() => setEditing(true)} 
+        className={`cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 px-2 py-1 rounded transition-colors ${className}`}
+        title="Cliquer pour éditer"
+      >
+        {type === "select" 
+          ? (options?.find(o => o.value === value)?.label || value) 
+          : (value || <span className="text-gray-400 italic">Cliquer pour ajouter</span>)
+        }
+      </span>
+    );
+  }
+
   return (
-    <span>
+    <span className="inline-block">
       {type === "select" ? (
-        <select value={val} onChange={e => setVal(e.target.value)} onBlur={() => { setEditing(false); onSave(val as string); }}>
+        <select 
+          value={val} 
+          onChange={e => setVal(e.target.value)} 
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="px-2 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700"
+        >
           {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+      ) : type === "date" ? (
+        <input 
+          type="date"
+          value={val} 
+          onChange={e => setVal(e.target.value)} 
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="px-2 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700"
+        />
       ) : (
-        <input value={val} onChange={e => setVal(e.target.value)} onBlur={() => { setEditing(false); onSave(val as string); }} />
+        <input 
+          type="text"
+          value={val} 
+          onChange={e => setVal(e.target.value)} 
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="px-2 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 min-w-[150px]"
+        />
       )}
     </span>
   );
@@ -61,7 +119,7 @@ export type ReleaseWithTeamAndProjects = ReleaseWithProjects & { team?: Team };
 
 export default function Releases() {
   const { toast } = useToast();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -72,23 +130,10 @@ export default function Releases() {
     setLocation(`/releases/${releaseId}`);
   };
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Non autorisé",
-        description: "Vous devez être connecté pour accéder aux releases. Redirection en cours...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, isLoading, toast]);
-
   const { data: releases, isLoading: releasesLoading } = useQuery({
     queryKey: ["/api/releases"],
     retry: false,
+    enabled: isAuthenticated, // Ne lance la requête que si authentifié
   });
 
   const deleteMutation = useMutation({
@@ -110,7 +155,7 @@ export default function Releases() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          setLocation("/");
         }, 500);
         return;
       }
@@ -174,12 +219,12 @@ export default function Releases() {
     return Array.isArray(release.projectVersions) ? release.projectVersions.length : 0;
   }
 
-  if (isLoading || !isAuthenticated) {
+  if (releasesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">Chargement...</p>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Chargement des releases...</p>
         </div>
       </div>
     );
@@ -251,14 +296,26 @@ export default function Releases() {
                         if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
                         return "";
                       };
-                      const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
                       return (
                         <tr key={rowId} className="hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                          <td className="px-4 py-3 font-mono text-sm font-medium text-blue-600 dark:text-blue-400">{displayName}</td>
+                          <td className="px-4 py-3 font-mono text-sm font-medium text-blue-600 dark:text-blue-400">
+                            <div className="flex flex-col">
+                              <EditableCell 
+                                value={name} 
+                                onSave={v => updateField(rowId!, "name", v)} 
+                                className="font-mono font-medium text-blue-600 dark:text-blue-400"
+                              />
+                              <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Version: {releaseId || "Non définie"}</span>
+                            </div>
+                          </td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                              {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
-                            </span>
+                            <EditableCell 
+                              value={status} 
+                              onSave={v => updateField(rowId!, "status", v)} 
+                              type="select"
+                              options={STATUS_OPTIONS.release}
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}
+                            />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />
@@ -323,14 +380,26 @@ export default function Releases() {
                         if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
                         return "";
                       };
-                      const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
                       return (
                         <tr key={rowId} className="hover:bg-amber-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                          <td className="px-4 py-3 text-sm font-medium text-amber-600 dark:text-amber-400">{displayName}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-amber-600 dark:text-amber-400">
+                            <div className="flex flex-col">
+                              <EditableCell 
+                                value={name} 
+                                onSave={v => updateField(rowId!, "name", v)} 
+                                className="font-medium text-amber-600 dark:text-amber-400"
+                              />
+                              <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Version: {releaseId || "Non définie"}</span>
+                            </div>
+                          </td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                              {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
-                            </span>
+                            <EditableCell 
+                              value={status} 
+                              onSave={v => updateField(rowId!, "status", v)} 
+                              type="select"
+                              options={STATUS_OPTIONS.release}
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}
+                            />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <EditableCell value={safeDate(row.recetteDate)} onSave={v => updateField(rowId!, "recetteDate", v)} type="date" />
@@ -399,14 +468,26 @@ export default function Releases() {
                         if (typeof d === "object" && typeof d.toISOString === "function") return d.toISOString().slice(0, 10);
                         return "";
                       };
-                      const displayName = releaseId ? `Release ${releaseId}` : (name || "Sans nom");
                       return (
                         <tr key={rowId} className="hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                          <td className="px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400">{displayName}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400">
+                            <div className="flex flex-col">
+                              <EditableCell 
+                                value={name} 
+                                onSave={v => updateField(rowId!, "name", v)} 
+                                className="font-medium text-slate-600 dark:text-slate-400"
+                              />
+                              <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Version: {releaseId || "Non définie"}</span>
+                            </div>
+                          </td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                              {STATUS_OPTIONS.release.find(o => o.value === status)?.label || status}
-                            </span>
+                            <EditableCell 
+                              value={status} 
+                              onSave={v => updateField(rowId!, "status", v)} 
+                              type="select"
+                              options={STATUS_OPTIONS.release}
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}
+                            />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <EditableCell value={safeDate(row.productionDate)} onSave={v => updateField(rowId!, "productionDate", v)} type="date" />

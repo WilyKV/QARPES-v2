@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     ports:
-      - "8086:8080"
+      - "3000:8080"
       - "5173:5173"
       - "5555:5555"
     depends_on:
@@ -28,7 +28,7 @@ services:
       POSTGRES_USER: qarpes
       POSTGRES_PASSWORD: qarpes
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - qarpes-db-data:/var/lib/postgresql/data
     networks:

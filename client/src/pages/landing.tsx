@@ -1,15 +1,33 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Rocket, Users, FolderOpen, Shield } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Rocket, Users, FolderOpen, Shield, User } from "lucide-react";
 
 export default function Landing() {
+  const [selectedRole, setSelectedRole] = useState<string>("viewer");
+
   const handleLogin = () => {
     window.location.href = "/api/login";
   };
 
   const handleDemoLogin = () => {
-    window.location.href = "/api/auth/demo";
+    window.location.href = `/api/auth/demo?role=${selectedRole}`;
   };
+
+  const roles = [
+    { value: "admin", label: "Admin", description: "Accès complet" },
+    { value: "manager", label: "Manager", description: "Gestion des équipes et projets" },
+    { value: "dev", label: "Développeur", description: "Gestion des projets" },
+    { value: "ops", label: "Ops", description: "Gestion des releases" },
+    { value: "viewer", label: "Viewer", description: "Lecture seule" },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -163,14 +181,36 @@ export default function Landing() {
                 >
                   Se connecter avec Microsoft O365
                 </Button>
-                <Button 
-                  onClick={handleDemoLogin}
-                  variant="outline"
-                  className="w-full"
-                  size="lg"
-                >
-                  Connexion démo (temporaire)
-                </Button>
+                
+                <div className="border-t pt-3 mt-3">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-center">
+                    <User className="h-4 w-4 mr-2" />
+                    Connexion démo - Choisissez votre rôle :
+                  </p>
+                  <Select value={selectedRole} onValueChange={setSelectedRole}>
+                    <SelectTrigger className="w-full mb-3">
+                      <SelectValue placeholder="Sélectionner un rôle" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((role) => (
+                        <SelectItem key={role.value} value={role.value}>
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">{role.label}</span>
+                            <span className="text-xs text-gray-500">{role.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    onClick={handleDemoLogin}
+                    variant="outline"
+                    className="w-full"
+                    size="lg"
+                  >
+                    Connexion démo en tant que {roles.find(r => r.value === selectedRole)?.label}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

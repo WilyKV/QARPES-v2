@@ -17,6 +17,7 @@ export async function createCompleteFixtures() {
   await prisma.release.deleteMany();
   await prisma.project.deleteMany();
   await prisma.teamMember.deleteMany();
+  await prisma.member.deleteMany();
   await prisma.team.deleteMany();
   await prisma.user.deleteMany();
 
@@ -292,6 +293,26 @@ export async function createCompleteFixtures() {
     skipDuplicates: true,
   });
 
+  // Création des membres à partir des utilisateurs
+  const users = await prisma.user.findMany();
+  const membersData = users.map((user: { id: string; firstName: string | null; lastName: string | null; email: string | null }) => ({
+    firstName: user.firstName || "",
+    lastName: user.lastName || "",
+    email: user.email || "",
+    userId: user.id,
+  }));
+
+  await prisma.member.createMany({
+    data: membersData,
+    skipDuplicates: true,
+  });
+
+  // Récupération des membres créés
+  const members = await prisma.member.findMany();
+  const membersByUserId = new Map<string | null, { id: number; userId: string | null }>(
+    members.map((m: { userId: string | null; id: number }) => [m.userId, m])
+  );
+
   // Création des équipes
   await prisma.team.createMany({
     data: [
@@ -361,72 +382,90 @@ export async function createCompleteFixtures() {
 
   const teamsList = await prisma.team.findMany();
 
-  // Création des membres d'équipe
+  // Création des membres d'équipe avec memberId
+  const teamMembersData = [
+    // E2I Team
+    { teamId: teamsList[0].id, userId: "kevin.nicol", role: "lead" },
+    { teamId: teamsList[0].id, userId: "guillaume.zavan", role: "senior" },
+    { teamId: teamsList[0].id, userId: "sophea.thong", role: "member" },
+    
+    // Nemo Team
+    { teamId: teamsList[1].id, userId: "ivana.lackovic", role: "lead" },
+    { teamId: teamsList[1].id, userId: "anas.mersoul", role: "senior" },
+    { teamId: teamsList[1].id, userId: "lucas.sahraoui", role: "member" },
+    { teamId: teamsList[1].id, userId: "mehdi.fadili", role: "member" },
+    
+    // Iris Team
+    { teamId: teamsList[2].id, userId: "florence.gastellier", role: "lead" },
+    { teamId: teamsList[2].id, userId: "yannick.meunier", role: "senior" },
+    { teamId: teamsList[2].id, userId: "bertrand.berthomieu", role: "member" },
+    
+    // Carte Étudiante Team
+    { teamId: teamsList[3].id, userId: "guillaume.zavan", role: "lead" },
+    { teamId: teamsList[3].id, userId: "patrick.lopez", role: "senior" },
+    
+    // EUBS Team
+    { teamId: teamsList[4].id, userId: "sophea.thong", role: "lead" },
+    { teamId: teamsList[4].id, userId: "cyrille.satge", role: "member" },
+    
+    // Formulaire de Candidature Team
+    { teamId: teamsList[5].id, userId: "anas.mersoul", role: "lead" },
+    { teamId: teamsList[5].id, userId: "lucas.sahraoui", role: "member" },
+    
+    // Techaway Team
+    { teamId: teamsList[6].id, userId: "guillaume.ulrich", role: "lead" },
+    { teamId: teamsList[6].id, userId: "yannis.boudendorf", role: "senior" },
+    { teamId: teamsList[6].id, userId: "amandine.bourdon", role: "member" },
+    
+    // Ypareo Team
+    { teamId: teamsList[7].id, userId: "stephanie.houdebine", role: "lead" },
+    { teamId: teamsList[7].id, userId: "hachmi.halfaoui", role: "senior" },
+    { teamId: teamsList[7].id, userId: "carole.helene", role: "member" },
+    { teamId: teamsList[7].id, userId: "julie.ramadanoski", role: "member" },
+    
+    // Match'Up Team
+    { teamId: teamsList[8].id, userId: "laurent.billon", role: "lead" },
+    { teamId: teamsList[8].id, userId: "julien.francisco", role: "senior" },
+    { teamId: teamsList[8].id, userId: "hajer.saffar", role: "member" },
+    { teamId: teamsList[8].id, userId: "nicolas.chambaz", role: "member" },
+    { teamId: teamsList[8].id, userId: "camille.camara", role: "member" },
+    { teamId: teamsList[8].id, userId: "amar.bouabbache", role: "member" },
+    
+    // Plateforme OMNES Team  
+    { teamId: teamsList[9].id, userId: "walid.chiouchiou", role: "lead" },
+    { teamId: teamsList[9].id, userId: "yannis.boudendorf", role: "senior" },
+    { teamId: teamsList[9].id, userId: "amandine.bourdon", role: "member" },
+    { teamId: teamsList[9].id, userId: "lucas.nerrand", role: "member" },
+    { teamId: teamsList[9].id, userId: "muzamil.adigun", role: "member" },
+    
+    // DevOps Team
+    { teamId: teamsList[10].id, userId: "jacques.roubault", role: "lead" },
+    { teamId: teamsList[10].id, userId: "thomas.prelot", role: "senior" },
+    { teamId: teamsList[10].id, userId: "cyril.chalaux", role: "member" },
+    
+    // QA Team
+    { teamId: teamsList[11].id, userId: "aurelia.leger", role: "lead" },
+    { teamId: teamsList[11].id, userId: "francois.gille", role: "member" },
+  ];
+
+  // Transformer les userId en memberId
+  const teamMembersToCreate = teamMembersData
+    .map((tm) => {
+      const member = membersByUserId.get(tm.userId);
+      if (!member) {
+        console.warn(`⚠️ Membre non trouvé pour userId: ${tm.userId}`);
+        return null;
+      }
+      return {
+        teamId: tm.teamId,
+        memberId: member.id as number,
+        role: tm.role,
+      };
+    })
+    .filter((tm): tm is { teamId: number; memberId: number; role: string } => tm !== null);
+
   await prisma.teamMember.createMany({
-    data: [
-      // E2I Team
-      { teamId: teamsList[0].id, userId: "kevin.nicol", role: "lead" },
-      { teamId: teamsList[0].id, userId: "guillaume.zavan", role: "senior" },
-      { teamId: teamsList[0].id, userId: "sophea.thong", role: "member" },
-      
-      // Nemo Team
-      { teamId: teamsList[1].id, userId: "ivana.lackovic", role: "lead" },
-      { teamId: teamsList[1].id, userId: "anas.mersoul", role: "senior" },
-      { teamId: teamsList[1].id, userId: "lucas.sahraoui", role: "member" },
-      { teamId: teamsList[1].id, userId: "mehdi.fadili", role: "member" },
-      
-      // Iris Team
-      { teamId: teamsList[2].id, userId: "florence.gastellier", role: "lead" },
-      { teamId: teamsList[2].id, userId: "yannick.meunier", role: "senior" },
-      { teamId: teamsList[2].id, userId: "bertrand.berthomieu", role: "member" },
-      
-      // Carte Étudiante Team
-      { teamId: teamsList[3].id, userId: "guillaume.zavan", role: "lead" },
-      { teamId: teamsList[3].id, userId: "patrick.lopez", role: "senior" },
-      
-      // EUBS Team
-      { teamId: teamsList[4].id, userId: "sophea.thong", role: "lead" },
-      { teamId: teamsList[4].id, userId: "cyrille.satge", role: "member" },
-      
-      // Formulaire de Candidature Team
-      { teamId: teamsList[5].id, userId: "anas.mersoul", role: "lead" },
-      { teamId: teamsList[5].id, userId: "lucas.sahraoui", role: "member" },
-      
-      // Techaway Team
-      { teamId: teamsList[6].id, userId: "guillaume.ulrich", role: "lead" },
-      { teamId: teamsList[6].id, userId: "yannis.boudendorf", role: "senior" },
-      { teamId: teamsList[6].id, userId: "amandine.bourdon", role: "member" },
-      
-      // Ypareo Team
-      { teamId: teamsList[7].id, userId: "stephanie.houdebine", role: "lead" },
-      { teamId: teamsList[7].id, userId: "hachmi.halfaoui", role: "senior" },
-      { teamId: teamsList[7].id, userId: "carole.helene", role: "member" },
-      { teamId: teamsList[7].id, userId: "julie.ramadanoski", role: "member" },
-      
-      // Match'Up Team
-      { teamId: teamsList[8].id, userId: "laurent.billon", role: "lead" },
-      { teamId: teamsList[8].id, userId: "julien.francisco", role: "senior" },
-      { teamId: teamsList[8].id, userId: "hajer.saffar", role: "member" },
-      { teamId: teamsList[8].id, userId: "nicolas.chambaz", role: "member" },
-      { teamId: teamsList[8].id, userId: "camille.camara", role: "member" },
-      { teamId: teamsList[8].id, userId: "amar.bouabbache", role: "member" },
-      
-      // Plateforme OMNES Team  
-      { teamId: teamsList[9].id, userId: "walid.chiouchiou", role: "lead" },
-      { teamId: teamsList[9].id, userId: "yannis.boudendorf", role: "senior" },
-      { teamId: teamsList[9].id, userId: "amandine.bourdon", role: "member" },
-      { teamId: teamsList[9].id, userId: "lucas.nerrand", role: "member" },
-      { teamId: teamsList[9].id, userId: "muzamil.adigun", role: "member" },
-      
-      // DevOps Team
-      { teamId: teamsList[10].id, userId: "jacques.roubault", role: "lead" },
-      { teamId: teamsList[10].id, userId: "thomas.prelot", role: "senior" },
-      { teamId: teamsList[10].id, userId: "cyril.chalaux", role: "member" },
-      
-      // QA Team
-      { teamId: teamsList[11].id, userId: "aurelia.leger", role: "lead" },
-      { teamId: teamsList[11].id, userId: "francois.gille", role: "member" },
-    ],
+    data: teamMembersToCreate,
     skipDuplicates: true,
   });
 

@@ -25,9 +25,24 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @default(now())
   teamsLed       Team[]    @relation("LeaderOfTeams")
-  teamMembers    TeamMember[]
   requestedArbs  Arb[]     @relation("RequesterArbs")
   approvedArbs   Arb[]     @relation("ApproverArbs")
+  auditLogs      AuditLog[]
+  member         Member?   @relation("UserMember")
+}
+
+model Member {
+  id          Int      @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  email       String   @unique
+  phone       String?
+  position    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  userId      String?  @unique @db.VarChar(255)
+  user        User?    @relation("UserMember", fields: [userId], references: [id])
+  teamMembers TeamMember[]
 }
 
 model Team {
@@ -46,13 +61,13 @@ model Team {
 model TeamMember {
   id        Int      @id @default(autoincrement())
   teamId    Int
-  userId    String   @db.VarChar(255)
+  memberId  Int
   role      String   @default("member")
   joinedAt  DateTime @default(now())
   team      Team     @relation(fields: [teamId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  member    Member   @relation(fields: [memberId], references: [id])
   
-  @@unique([teamId, userId])
+  @@unique([teamId, memberId])
 }
 
 model Project {
@@ -220,4 +235,31 @@ model ProjectVersionGitRepo {
   commits          Commit[]
   
   @@unique([projectVersionId, gitRepoId])
+}
+
+model AuditLog {
+  id         Int       @id @default(autoincrement())
+  userId     String?   @db.VarChar(255)
+  action     String    @db.VarChar(50)
+  resource   String    @db.VarChar(50)
+  resourceId String?   @db.VarChar(255)
+  metadata   Json?
+  ipAddress  String?   @db.VarChar(45)
+  userAgent  String?   @db.VarChar(200)
+  timestamp  DateTime  @default(now())
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([timestamp])
+}
+
+model Session {
+  sid    String   @id
+  sess   Json
+  expire DateTime
+
+  @@index([expire])
+  @@map("sessions")
 }

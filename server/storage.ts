@@ -1,6 +1,7 @@
 import {
   type User,
   type UpsertUser,
+  type Member,
   type Team,
   type InsertTeam,
   type TeamMember,
@@ -45,6 +46,7 @@ import { prisma } from "./db";
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | null>;
   upsertUser(user: UpsertUser): Promise<User>;
   getUsers(): Promise<User[]>;
   createUser(user: UpsertUser): Promise<User>;
@@ -175,6 +177,12 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async getUserByEmail(email: string): Promise<User | null> {
+    return prisma.user.findUnique({
+      where: { email },
+    });
+  }
+
   async getUsers(): Promise<User[]> {
     return prisma.user.findMany({ orderBy: { createdAt: "desc" } });
   }
@@ -188,7 +196,7 @@ export class DatabaseStorage implements IStorage {
     const teams = await prisma.team.findMany({
       include: {
         leader: true,
-        members: { include: { user: true } },
+        members: { include: { member: { include: { user: true } } } },
         _count: { select: { members: true, projects: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -201,7 +209,7 @@ export class DatabaseStorage implements IStorage {
       where: { id },
       include: {
         leader: true,
-        members: { include: { user: true } },
+        members: { include: { member: { include: { user: true } } } },
       },
     });
     return team || undefined;
@@ -225,10 +233,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeTeamMember(teamId: number, userId: string): Promise<void> {
+    // Trouver le member correspondant au userId
+    const member = await prisma.member.findUnique({
+      where: { userId }
+    });
+    
+    if (!member) {
+      throw new Error(`Member with userId ${userId} not found`);
+    }
+    
     await prisma.teamMember.deleteMany({ 
       where: { 
         teamId: teamId,
-        userId: userId
+        memberId: member.id
       } 
     });
   }
@@ -236,9 +253,20 @@ export class DatabaseStorage implements IStorage {
   async getTeamMembers(teamId: number): Promise<(TeamMember & { user: User })[]> {
     const members = await prisma.teamMember.findMany({
       where: { teamId },
-      include: { user: true },
+      include: { member: { include: { user: true } } },
     });
-    return members;
+    return members as any; // Cast nécessaire car la structure a changé
+  }
+
+  // Member operations
+  async getMemberByUserId(userId: string): Promise<Member | null> {
+    return prisma.member.findUnique({
+      where: { userId }
+    });
+  }
+
+  async createMember(data: { firstName: string; lastName: string; email: string; userId: string }): Promise<Member> {
+    return prisma.member.create({ data });
   }
 
   // Project operations
@@ -323,6 +351,15 @@ export class DatabaseStorage implements IStorage {
         nextNumber = lastNumber + 1;
       }
       releaseId = `${yearMonth}-${nextNumber.toString().padStart(2, '0')}`;
+    } else {
+      // Si un releaseId est fourni, vérifier qu'il n'existe pas déjà
+      const existing = await prisma.release.findUnique({
+        where: { releaseId },
+      });
+      
+      if (existing) {
+        throw new Error(`Release with releaseId "${releaseId}" already exists`);
+      }
     }
 
     // Correction : parser les dates si elles sont au format YYYY-MM-DD

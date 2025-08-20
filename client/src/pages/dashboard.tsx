@@ -126,9 +126,9 @@ export default function Dashboard() {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Releases Actives</p>
-                    <p className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
                       {statsLoading ? <Skeleton className="h-8 w-8" /> : stats?.activeReleases || 0}
-                    </p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -144,9 +144,9 @@ export default function Dashboard() {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Projets</p>
-                    <p className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
                       {statsLoading ? <Skeleton className="h-8 w-8" /> : stats?.totalProjects || 0}
-                    </p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -162,9 +162,9 @@ export default function Dashboard() {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Équipes</p>
-                    <p className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
                       {statsLoading ? <Skeleton className="h-8 w-8" /> : stats?.totalTeams || 0}
-                    </p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -180,9 +180,9 @@ export default function Dashboard() {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">ARB Actifs</p>
-                    <p className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
                       {statsLoading ? <Skeleton className="h-8 w-8" /> : stats?.activeArb || 0}
-                    </p>
+                    </div>
                   </div>
                 </div>
               </CardContent>

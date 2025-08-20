@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, UserPlus, Mail, Calendar, Users, Search, Filter } from "lucide-react";
+import { Plus, UserPlus, Mail, Calendar, Users, Search, Filter, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,14 +27,15 @@ const memberSchema = z.object({
   lastName: z.string().min(1, "Le nom est requis"),
   role: z.enum(["member", "leader"], {
     errorMap: () => ({ message: "Sélectionnez un rôle" })
-  })
+  }),
+  teamId: z.string().optional()
 });
 
 type MemberFormData = z.infer<typeof memberSchema>;
 
-function MemberCard({ user, teams }: { user: User; teams: TeamWithMembers[] }) {
+function MemberCard({ user, teams, onEdit }: { user: User; teams: TeamWithMembers[]; onEdit: (user: User) => void }) {
   const userTeams = teams.filter(team => 
-    team.members?.some(member => member.userId === user.id) || team.leaderId === user.id
+    team.members?.some(member => member.member.user.id === user.id) || team.leaderId === user.id
   );
 
   return (
@@ -47,16 +48,28 @@ function MemberCard({ user, teams }: { user: User; teams: TeamWithMembers[] }) {
             </AvatarFallback>
           </Avatar>
           <div className="flex-1">
-            <CardTitle className="text-lg bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
-              {user.firstName} {user.lastName}
-            </CardTitle>
-            <CardDescription className="flex items-center gap-2 mt-1">
-              <Mail className="w-4 h-4" />
-              {user.email}
-            </CardDescription>
-            <div className="flex items-center gap-2 mt-2 text-sm text-gray-600 dark:text-gray-300">
-              <Calendar className="w-4 h-4" />
-              Membre depuis {user.createdAt ? format(new Date(user.createdAt), "dd/MM/yyyy") : "Date inconnue"}
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <CardTitle className="text-lg bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+                  {user.firstName} {user.lastName}
+                </CardTitle>
+                <CardDescription className="flex items-center gap-2 mt-1">
+                  <Mail className="w-4 h-4" />
+                  {user.email}
+                </CardDescription>
+                <div className="flex items-center gap-2 mt-2 text-sm text-gray-600 dark:text-gray-300">
+                  <Calendar className="w-4 h-4" />
+                  Membre depuis {user.createdAt ? format(new Date(user.createdAt), "dd/MM/yyyy") : "Date inconnue"}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(user)}
+                className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+              >
+                <Edit2 className="h-4 w-4 text-blue-600" />
+              </Button>
             </div>
           </div>
         </div>
@@ -102,7 +115,8 @@ function AddMemberModal() {
       email: "",
       firstName: "",
       lastName: "",
-      role: "member"
+      role: "member",
+      teamId: "none"
     }
   });
 
@@ -112,13 +126,23 @@ function AddMemberModal() {
 
   const addMemberMutation = useMutation({
     mutationFn: async (data: MemberFormData) => {
+      // Générer un ID unique basé sur l'email et un timestamp
+      const userId = `user-${data.email.split('@')[0]}-${Date.now()}`;
+      
       // Créer l'utilisateur
-      const newUser = await apiRequest("/api/users", "POST", {
-        id: `user-${Date.now()}`, // Généré côté client pour demo
+      const newUser = await apiRequest("POST", "/api/users", {
+        id: userId,
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName
       });
+
+      // Si une équipe est sélectionnée, ajouter le membre à l'équipe
+      if (data.teamId && data.teamId !== "none") {
+        await apiRequest("POST", `/api/teams/${data.teamId}/members`, {
+          userId: newUser.id
+        });
+      }
 
       return newUser;
     },
@@ -199,6 +223,31 @@ function AddMemberModal() {
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="teamId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Équipe (optionnel)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || "none"}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner une équipe" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Aucune équipe</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={String(team.id)}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                 Annuler
@@ -214,9 +263,139 @@ function AddMemberModal() {
   );
 }
 
+function EditMemberModal({ user, isOpen, onClose }: { user: User | null; isOpen: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  
+  const form = useForm<{ firstName: string; lastName: string; email: string }>({
+    defaultValues: {
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
+      email: user?.email || "",
+    },
+  });
+
+  // Réinitialiser le formulaire quand l'utilisateur change
+  useEffect(() => {
+    if (user) {
+      form.reset({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+      });
+    }
+  }, [user, form]);
+
+  const updateMemberMutation = useMutation({
+    mutationFn: async (data: { firstName: string; lastName: string; email: string }) => {
+      if (!user) return;
+      return await apiRequest("PUT", `/api/users/${user.id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Membre modifié",
+        description: "Les informations du membre ont été mises à jour avec succès"
+      });
+      onClose();
+    },
+    onError: (error) => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier le membre",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleSubmit = (data: { firstName: string; lastName: string; email: string }) => {
+    updateMemberMutation.mutate(data);
+  };
+
+  if (!user) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Edit2 className="w-5 h-5 text-blue-600" />
+            Modifier le membre
+          </DialogTitle>
+          <DialogDescription>
+            Modifiez les informations du membre {user.firstName} {user.lastName}
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="firstName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Prénom</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Jean" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="lastName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nom</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Dupont" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="email" placeholder="jean.dupont@omneseducation.com" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Annuler
+              </Button>
+              <Button type="submit" disabled={updateMemberMutation.isPending}>
+                {updateMemberMutation.isPending ? "Modification..." : "Modifier"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Members() {
   const [searchTerm, setSearchTerm] = useState("");
   const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingUser(null);
+  };
 
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"]
@@ -234,14 +413,14 @@ export default function Members() {
     if (teamFilter === "all") return matchesSearch;
     if (teamFilter === "no-team") {
       const hasTeam = teams.some(team => 
-        team.members?.some(member => member.userId === user.id) || team.leaderId === user.id
+        team.members?.some(member => member.member.user.id === user.id) || team.leaderId === user.id
       );
       return matchesSearch && !hasTeam;
     }
     
     const isInTeam = teams.some(team => 
       team.id.toString() === teamFilter && 
-      (team.members?.some(member => member.userId === user.id) || team.leaderId === user.id)
+      (team.members?.some(member => member.member.user.id === user.id) || team.leaderId === user.id)
     );
     return matchesSearch && isInTeam;
   });
@@ -327,7 +506,7 @@ export default function Members() {
                 <p className="text-3xl font-bold bg-gradient-to-r from-red-600 to-rose-600 bg-clip-text text-transparent">
                   {users.filter(user => 
                     !teams.some(team => 
-                      team.members?.some(member => member.userId === user.id) || team.leaderId === user.id
+                      team.members?.some(member => member.member.user.id === user.id) || team.leaderId === user.id
                     )
                   ).length}
                 </p>
@@ -364,7 +543,7 @@ export default function Members() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredUsers.map(user => (
-              <MemberCard key={String(user.id)} user={user} teams={teams} />
+              <MemberCard key={String(user.id)} user={user} teams={teams} onEdit={handleEditUser} />
             ))}
           </div>
 
@@ -385,6 +564,9 @@ export default function Members() {
             </div>
           )}
         </div>
+
+        <AddMemberModal />
+        <EditMemberModal user={editingUser} isOpen={isEditModalOpen} onClose={handleCloseEditModal} />
       </main>
     </div>
   );

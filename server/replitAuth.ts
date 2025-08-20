@@ -2,13 +2,14 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
+import { logAuditEvent, getRequestInfo } from "./auditLogger";
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
+    createTableIfMissing: true,
     ttl: sessionTtl,
     tableName: "sessions",
   });
@@ -173,11 +174,22 @@ export async function setupAuth(app: Express) {
       };
 
       // Save session explicitly
-      req.session.save((err) => {
+      req.session.save(async (err) => {
         if (err) {
           console.error("Session save error:", err);
           return res.redirect("/api/login");
         }
+        
+        // Log successful login
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          userId: demoId,
+          action: 'login',
+          resource: 'session',
+          metadata: { demo: true },
+        });
+        
         console.log("Session saved successfully, redirecting to /");
         res.redirect("/");
       });
@@ -190,17 +202,23 @@ export async function setupAuth(app: Express) {
   // Route de test pour bypass l'authentification Microsoft
   app.get("/api/auth/demo", async (req, res) => {
     try {
-      const demoEmail = "demo.user@omneseducation.com";
-      const demoId = "demo-user-id";
+      // Récupérer le rôle depuis les query params (par défaut: viewer)
+      const requestedRole = (req.query.role as string) || "viewer";
+      const validRoles = ["admin", "manager", "dev", "ops", "viewer"];
+      const role = validRoles.includes(requestedRole) ? requestedRole : "viewer";
 
-      console.log("Demo auth: Creating demo user...");
+      const demoEmail = `demo.${role}@omneseducation.com`;
+      const demoId = `demo-${role}-id`;
+
+      console.log(`Demo auth: Creating demo user with role: ${role}...`);
       
       await storage.upsertUser({
         id: demoId,
         email: demoEmail,
         firstName: "Demo",
-        lastName: "User",
+        lastName: role.charAt(0).toUpperCase() + role.slice(1),
         profileImageUrl: null,
+        role: role,
       });
 
       console.log("Demo auth: Setting session...");
@@ -218,7 +236,17 @@ export async function setupAuth(app: Express) {
         });
       });
 
-      console.log("Demo auth: Session saved, redirecting...");
+      // Log successful demo login
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        userId: demoId,
+        action: 'login',
+        resource: 'session',
+        metadata: { demo: true, role: role, route: '/api/auth/demo' },
+      });
+
+      console.log(`Demo auth: Session saved for role ${role}, redirecting...`);
       res.redirect("/");
     } catch (error) {
       console.error("Demo auth error:", error);
@@ -226,9 +254,26 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  app.get("/api/logout", (req, res) => {
-    (req.session as any).user = null;
-    res.redirect("https://login.microsoftonline.com/common/oauth2/v2.0/logout");
+  app.get("/api/logout", async (req, res) => {
+    const requestInfo = getRequestInfo(req);
+    
+    // Log logout before destroying session
+    if (requestInfo.userId) {
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'logout',
+        resource: 'session',
+      });
+    }
+    
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("Error destroying session:", err);
+        return res.status(500).json({ error: "Failed to logout" });
+      }
+      res.clearCookie('connect.sid');
+      res.json({ message: "Logged out successfully" });
+    });
   });
 }
 

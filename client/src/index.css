@@ -89,21 +89,21 @@
 
 /* Thème Navy personnalisé (n'affecte QUE le header/menu) */
 .navy {
-  /* Sidebar uniquement en navy */
-  --sidebar-background: 220 28% 18%;
-  --sidebar-foreground: 210 30% 96%;
-  --sidebar-primary: 216 92% 65%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 22% 22%;
-  --sidebar-accent-foreground: 210 30% 96%;
-  --sidebar-border: 220 18% 26%;
-  --sidebar-ring: 216 92% 65%;
+  /* Sidebar uniquement en navy avec gradient 0f172a → 1e293b */
+  --sidebar-background: 224 71% 4%; /* #0F172A */
+  --sidebar-foreground: 213 31% 91%; /* #E2E8F0 */
+  --sidebar-primary: 217 91% 60%; /* #3B82F6 */
+  --sidebar-primary-foreground: 0 0% 100%; /* #FFFFFF */
+  --sidebar-accent: 223 47% 11%; /* #1E293B */
+  --sidebar-accent-foreground: 213 31% 91%; /* #E2E8F0 */
+  --sidebar-border: 216 34% 17%; /* #334155 */
+  --sidebar-ring: 217 91% 60%; /* #3B82F6 */
 
-  /* Header gradient (bleu -> violet doux) */
-  --navy-grad-from: 220 80% 30%; /* bleu vif */
-  --navy-grad-to: 262 55% 32%;  /* violet clair */
+  /* Header gradient (0f172a -> 1e293b) */
+  --navy-grad-from: 224 71% 4%;  /* #0F172A */
+  --navy-grad-to: 223 47% 11%;   /* #1E293B */
   /* Header text should be light over the navy gradient */
-  --header-foreground: 210 30% 96%;
+  --header-foreground: 213 31% 91%; /* #E2E8F0 */
 }
 
 @layer base {

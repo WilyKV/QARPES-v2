@@ -1,23 +1,23 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Calendar, FileText, Users, Plus, Link as LinkIcon, Activity, Layers, Target } from "lucide-react";
+import { ArrowLeft, Calendar, FileText, Users, Plus, Link as LinkIcon, Activity, Layers, Target, Settings, GitBranch, CheckCircle, Clock, Terminal, Upload, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
-import { formatDate, STATUS_OPTIONS } from "@/lib/constants";
+import { formatDate } from "@/lib/constants";
 import { VersionModal } from "@/components/modals/version-modal";
 import { VersionReleaseModal } from "@/components/modals/version-release-modal";
-import { useAuth } from "@/hooks/useAuth";
+import { ProjectModal } from "@/components/modals/project-modal";
 import type { 
   ProjectWithTeam, 
-  ProjectVersionWithDetails
+  ProjectVersionWithDetails,
+  ProceduresByType,
+  Procedure 
 } from "@shared/schema";
-import { calculateVersionProgress } from "@shared/progress-utils";
-import { ProgressBar } from "@/components/ui/progress-bar";
 
 // Status styling with modern gradients and colors
 const statusColors = {
@@ -70,6 +70,59 @@ const statusLabels = {
   termine: "Terminé",
 };
 
+// Procedure type icons and labels (aligné avec version-detail)
+const procedureTypeIcons = {
+  environment_variables: Settings,
+  service_verification: CheckCircle,
+  command_execution: Terminal,
+  data_import: Upload,
+};
+
+const procedureTypeLabels = {
+  environment_variables: "Variables d'environnement",
+  service_verification: "Vérification des services",
+  command_execution: "Exécution des commandes",
+  data_import: "Import des données",
+};
+
+// Procedure Card Component
+function ProcedureCard({ procedure }: { procedure: Procedure }) {
+  const Icon = procedureTypeIcons[procedure.type as keyof typeof procedureTypeIcons];
+  
+  return (
+    <Card className={`border-l-4 ${procedure.isCompleted ? 'border-l-green-500 bg-green-50 dark:bg-green-950' : 'border-l-blue-500'} hover:shadow-md transition-shadow duration-200`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            {Icon && <Icon className="w-4 h-4" />}
+            <CardTitle className="text-sm">{procedure.title}</CardTitle>
+          </div>
+          <div className="flex items-center gap-2">
+            {procedure.type in procedureTypeLabels && (
+              <Badge variant="outline" className="text-xs">
+                {procedureTypeLabels[procedure.type as keyof typeof procedureTypeLabels]}
+              </Badge>
+            )}
+            {procedure.isCompleted ? (
+              <CheckCircle className="w-4 h-4 text-green-600" />
+            ) : (
+              <Clock className="w-4 h-4 text-orange-600" />
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      {procedure.content && (
+        <CardContent className="pt-0">
+          <div 
+            className="text-sm prose prose-sm max-w-none dark:prose-invert"
+            dangerouslySetInnerHTML={{ __html: procedure.content }}
+          />
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 // Enhanced version status icons
 const getVersionStatusIcon = (status: string) => {
   switch (status) {
@@ -98,63 +151,46 @@ export default function ProjectDetail() {
   const projectId = parseInt(params.id || "0");
   const [versionModalOpen, setVersionModalOpen] = useState(false);
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [selectedVersionName, setSelectedVersionName] = useState<string>("");
   const [currentReleaseId, setCurrentReleaseId] = useState<number | null>(null);
-  const { user } = useAuth();
 
   const { data: project, isLoading: projectLoading } = useQuery<ProjectWithTeam>({
     queryKey: [`/api/projects/${projectId}`],
     enabled: !!projectId,
   });
 
-  const { data: versionsData, isLoading: versionsLoading } = useQuery<ProjectVersionWithDetails[]>({
+  const { data: versions, isLoading: versionsLoading } = useQuery<ProjectVersionWithDetails[]>({
     queryKey: [`/api/projects/${projectId}/versions`],
     enabled: !!projectId,
   });
 
-  // Sort versions by most recent first (descending order by createdAt)
-  const versions = useMemo(() => {
-    if (!versionsData) return [];
-    return [...versionsData].sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }, [versionsData]);
+  // Versions triées décroissantes par numéro sémantique strict (ex: 2.10.0 > 2.2.0 > 2.1.9)
+  const sortedVersions = useMemo(() => {
+    const toParts = (v?: string) => (String(v || "0.0.0").trim().replace(/^v/i, "")).split(".").map((n) => Number(n) || 0);
+    return (versions || []).slice().sort((a, b) => {
+      const ap = toParts(a.version as any);
+      const bp = toParts(b.version as any);
+      for (let i = 0; i < Math.max(ap.length, bp.length); i++) {
+        const diff = (bp[i] || 0) - (ap[i] || 0);
+        if (diff !== 0) return diff;
+      }
+      // Égalité: plus récent d'abord
+      const ad = a.createdAt ? new Date(a.createdAt as any).getTime() : 0;
+      const bd = b.createdAt ? new Date(b.createdAt as any).getTime() : 0;
+      return bd - ad;
+    });
+  }, [versions]);
 
   const { data: releases = [] } = useQuery<any[]>({
     queryKey: ["/api/releases"],
     enabled: !!projectId,
   });
 
-  // Helper function to check if a version has a production release
-  const hasProductionRelease = (version: ProjectVersionWithDetails) => {
-    if (!version.releaseId || String(version.releaseId) === '0') return false;
-    const release = releases.find(r => r.id === Number(version.releaseId));
-    
-    // Find the status values that correspond to production states
-    const productionStatusOption = STATUS_OPTIONS.release.find(option => 
-      option.label === "Mis en production"
-    );
-    const mergeFinalStatusOption = STATUS_OPTIONS.release.find(option => 
-      option.label === "Merge final"
-    );
-    
-    const productionStatusValue = productionStatusOption?.value;
-    const mergeFinalStatusValue = mergeFinalStatusOption?.value;
-    
-    return release?.status === 'production' || 
-           release?.status === productionStatusValue || 
-           release?.status === mergeFinalStatusValue;
-  };
-
-  // Helper function to check if user can edit (admin or not production release)
-  const canEdit = (version: ProjectVersionWithDetails) => {
-    return user?.role === 'admin' || !hasProductionRelease(version);
-  };
-
   if (projectLoading || versionsLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
+  <div className="min-h-screen bg-background flex">
         <Sidebar />
         <main className="flex-1 overflow-auto ml-64">
           <Header 
@@ -175,7 +211,7 @@ export default function ProjectDetail() {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
+  <div className="min-h-screen bg-background flex">
         <Sidebar />
         <main className="flex-1 overflow-auto ml-64">
           <Header 
@@ -239,25 +275,66 @@ export default function ProjectDetail() {
     }
   };
 
-  const getVersionProgress = (status: string) => {
-    const progressMap: { [key: string]: number } = {
-      'en_cours_arb': 10,
-      'en_developpement': 25,
-      'a_deployer_recette': 40,
-      'recette_en_cours': 55,
-      'a_deployer_preprod': 70,
-      'preprod_en_cours': 85,
-      'a_deployer_production': 95,
-      'termine': 100,
-      'annule': 0,
-      'hotfix_a_prevoir': 90,
-      'merge_git_a_faire': 80,
-    };
-    return progressMap[status] || 0;
-  };
+  // Progression basée sur critères:
+  // - +20% si release associée
+  // - +20% si au moins un repo associé
+  // - +20% si les 4 PVs fournis (2 recette + 2 préprod)
+  // - +20% si 2 CAB créés (recette + préprod)
+  // - +20% si au moins une procédure de chaque repo ajoutée
+  // Règle spéciale: sans les 2 PVs préprod et le CAB préprod, on est à 80% => flèche "Recette finalisée"
+  function computeVersionProgress(v: ProjectVersionWithDetails) {
+    let progress = 0;
+    const hasRelease = v.releaseId !== null && v.releaseId !== undefined && Number(v.releaseId) > 0;
+    const repos = (v as any).versionGitRepos || [];
+    const hasAtLeastOneRepo = repos.length > 0;
+    const pvs = (v as any).pvs || [];
+    const pvByCat: Record<string, number> = {};
+    for (const pv of pvs) pvByCat[pv.category] = (pvByCat[pv.category] || 0) + 1;
+    const pvFonctionnelRecette = pvByCat['pv_fonctionnel_recette'] ? 1 : 0;
+    const pvMetierRecette = pvByCat['pv_metier_recette'] ? 1 : 0;
+    const pvConformitePreprod = pvByCat['pv_conformite_preprod'] ? 1 : 0;
+    const pvTestsPreprod = pvByCat['pv_tests_homologation_preprod'] ? 1 : 0;
+    const all4PVs = pvFonctionnelRecette && pvMetierRecette && pvConformitePreprod && pvTestsPreprod;
+
+    const cabs = (v as any).cabs || [];
+    const hasCabAny = cabs.length > 0; // CAB "recette" approximé par la présence de n'importe quel CAB
+    const hasCabPreprod = cabs.some((c: any) => String(c.environment) === 'preprod');
+    const twoCabs = hasCabAny && hasCabPreprod;
+
+    const hasProceduresPerRepo = hasAtLeastOneRepo && repos.every((r: any) => {
+      const procs = r.procedures;
+      if (!procs) return false;
+      // Supporte soit un tableau, soit un objet par type
+      if (Array.isArray(procs)) return procs.length > 0;
+      return Object.values(procs as any).some((arr: any) => Array.isArray(arr) && arr.length > 0);
+    });
+
+    if (hasRelease) progress += 20;
+    if (hasAtLeastOneRepo) progress += 20;
+    if (all4PVs) progress += 20; else {
+      // Recette: considérer 2 PVs de recette comme 20% partiels, et 2 de préprod pour compléter ce bloc
+      const hasBothRecettePVs = pvFonctionnelRecette && pvMetierRecette;
+      const hasBothPreprodPVs = pvConformitePreprod && pvTestsPreprod;
+      if (hasBothRecettePVs && !hasBothPreprodPVs) {
+        // 10% partiels pour marquer l'avancement (optionnel). On garde la règle principale simple: bloc PV = 20% si 4 PVs
+      }
+    }
+    if (twoCabs) progress += 20;
+    if (hasProceduresPerRepo) progress += 20;
+
+  // Forcer le palier 80% quand: release + repo + 2 PVs recette + au moins 1 CAB + procédures par repo
+  const hasRecetteDone = hasRelease && hasAtLeastOneRepo && (pvFonctionnelRecette && pvMetierRecette) && hasCabAny && hasProceduresPerRepo;
+    if (hasRecetteDone && progress < 80) progress = 80;
+
+    // 100% quand tout est complet (incluant préprod)
+    const allPreprodDone = hasCabPreprod && pvConformitePreprod && pvTestsPreprod;
+    if (hasRecetteDone && allPreprodDone && progress < 100) progress = 100;
+
+    return Math.min(progress, 100);
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
+  <div className="min-h-screen bg-background flex">
       <Sidebar />
       <main className="flex-1 overflow-auto ml-64">
         <Header 
@@ -285,6 +362,15 @@ export default function ProjectDetail() {
                   <Badge className={`px-4 py-2 text-sm font-medium border ${statusColors[String(project?.status) as keyof typeof statusColors] || statusColors.development}`}>
                     {statusLabels[String(project?.status) as keyof typeof statusLabels] || String(project?.status)}
                   </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProjectModalOpen(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Modifier
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -342,19 +428,10 @@ export default function ProjectDetail() {
               </Button>
             </div>
             
-            {versions && versions.length > 0 ? (
+      {sortedVersions && sortedVersions.length > 0 ? (
               <div className="grid gap-4">
-                {versions.map((version, index) => {
-                  const versionProgress = calculateVersionProgress(version);
-                  const isProductionRelease = hasProductionRelease(version);
-                  const userCanEdit = canEdit(version);
-                  
-                  // Override progress to 100% green if it's a production release
-                  const displayProgress = isProductionRelease ? {
-                    ...versionProgress,
-                    percentage: 100,
-                    completionStatus: 'production_deployed' as const
-                  } : versionProgress;
+        {sortedVersions.map((version, index) => {
+                  const progress = computeVersionProgress(version as any);
                   
                   return (
                     <Card key={String(version.id)} className="shadow-lg border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 hover:shadow-xl transition-all duration-200 cursor-pointer group" onClick={() => setLocation(`/projects/${projectId}/versions/${String(version.id)}`)}>
@@ -371,7 +448,7 @@ export default function ProjectDetail() {
                                     Version {String(version.version)}
                                   </h3>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {version.description || 'Aucune description'}
+                                    {getNextAction(String(version.status))}
                                   </p>
                                 </div>
                               </div>
@@ -383,7 +460,7 @@ export default function ProjectDetail() {
                                 {version.releaseId && String(version.releaseId) !== '0' ? (
                                   <Badge 
                                     variant="secondary" 
-                                    className={`${isProductionRelease ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'} cursor-pointer hover:bg-opacity-80 transition-colors`}
+                                    className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 cursor-pointer hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       const release = releases.find(r => r.id === Number(version.releaseId));
@@ -393,41 +470,56 @@ export default function ProjectDetail() {
                                     }}
                                     title="Cliquer pour voir la release"
                                   >
-                                    {isProductionRelease && '🟢 '} Release: {releases.find(r => r.id === Number(version.releaseId))?.releaseId || String(version.releaseId)}
+                                    Release: {releases.find(r => r.id === Number(version.releaseId))?.releaseId || String(version.releaseId)}
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="text-gray-500 border-gray-300 dark:text-gray-400 dark:border-gray-600">
                                     Aucune release
                                   </Badge>
                                 )}
-                                {userCanEdit && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="ml-auto group-hover:bg-blue-50 group-hover:border-blue-200 dark:group-hover:bg-blue-900/20 dark:group-hover:border-blue-700 transition-colors"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedVersionId(Number(version.id));
-                                      setSelectedVersionName(String(version.version));
-                                      setCurrentReleaseId(version.releaseId && String(version.releaseId) !== '0' ? Number(version.releaseId) : null);
-                                      setReleaseModalOpen(true);
-                                    }}
-                                  >
-                                    <LinkIcon className="w-4 h-4 mr-2" />
-                                    Changer de release
-                                  </Button>
-                                )}
-                                {!userCanEdit && (
-                                  <Badge variant="outline" className="text-orange-600 border-orange-300 dark:text-orange-400 dark:border-orange-600">
-                                    🔒 Production - Modification restreinte
-                                  </Badge>
-                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="ml-auto group-hover:bg-blue-50 group-hover:border-blue-200 dark:group-hover:bg-blue-900/20 dark:group-hover:border-blue-700 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVersionId(Number(version.id));
+                                    setSelectedVersionName(String(version.version));
+                                    setCurrentReleaseId(version.releaseId && String(version.releaseId) !== '0' ? Number(version.releaseId) : null);
+                                    setReleaseModalOpen(true);
+                                  }}
+                                >
+                                  <LinkIcon className="w-4 h-4 mr-2" />
+                                  Changer de release
+                                </Button>
                               </div>
                             </div>
                             
                             {/* Progress Bar */}
                             <div className="mb-3">
-                              <ProgressBar progress={displayProgress} className={isProductionRelease ? 'production-release' : ''} />
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Progression</span>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{progress}%</span>
+                              </div>
+                              <div className="relative w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div 
+                                  className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300" 
+                                  style={{ width: `${progress}%` }}
+                                />
+                                {/* Marqueurs 80% / 100% */}
+                                {progress >= 80 && progress < 100 && (
+                                  <div className="absolute -top-6 left-[80%] -translate-x-1/2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                    <span className="inline-block w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-8 border-b-amber-400 dark:border-b-amber-500" />
+                                    Recette finalisée
+                                  </div>
+                                )}
+                                {progress >= 100 && (
+                                  <div className="absolute -top-6 right-0 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                    <span className="inline-block w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-8 border-b-emerald-400 dark:border-b-emerald-500" />
+                                    Pré-production finalisée
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -467,6 +559,12 @@ export default function ProjectDetail() {
         open={versionModalOpen} 
         onOpenChange={setVersionModalOpen} 
         projectId={projectId} 
+      />
+
+      <ProjectModal
+        open={projectModalOpen}
+        onOpenChange={setProjectModalOpen}
+        project={project}
       />
       
       {selectedVersionId && (

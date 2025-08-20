@@ -73,6 +73,15 @@ app.use((req, res, next) => {
         log(`📊 Base de données déjà initialisée (${userCount} utilisateurs trouvés)`);
         log("💡 Pour recharger les fixtures, utilisez FORCE_FIXTURES=true");
       }
+
+      // Exécuter les tests fonctionnels automatiquement
+      const { runFunctionalTests } = await import("./functional-tests");
+      await runFunctionalTests();
+      
+      // Exécuter les tests fonctionnels des équipes
+      const { runTeamFunctionalTests } = await import("./functional-tests-teams");
+      await runTeamFunctionalTests();
+      
     } catch (error) {
       log("❌ Erreur lors de la création des fixtures:", error);
     }

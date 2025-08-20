@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
 import { TeamModal } from "@/components/modals/team-modal";
+import { TeamMembersModal } from "@/components/modals/team-members-modal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, Edit, Trash2, Users } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -22,6 +23,8 @@ export default function Teams() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<TeamWithMembers | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+  const [selectedTeamForMembers, setSelectedTeamForMembers] = useState<TeamWithMembers | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -89,6 +92,16 @@ export default function Teams() {
     setEditingTeam(null);
   };
 
+  const handleShowMembers = (team: TeamWithMembers) => {
+    setSelectedTeamForMembers(team);
+    setIsMembersModalOpen(true);
+  };
+
+  const handleMembersModalClose = () => {
+    setIsMembersModalOpen(false);
+    setSelectedTeamForMembers(null);
+  };
+
   const getInitials = (firstName?: string, lastName?: string) => {
     const first = firstName?.charAt(0) || "";
     const last = lastName?.charAt(0) || "";
@@ -143,10 +156,14 @@ export default function Teams() {
       accessorKey: "_count",
       header: "Membres",
       cell: ({ row }: any) => (
-        <div className="flex items-center space-x-1">
-          <Users className="h-4 w-4 text-gray-400" />
-          <span>{row.original._count?.members || 0}</span>
-        </div>
+        <Button
+          variant="ghost"
+          className="flex items-center space-x-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+          onClick={() => handleShowMembers(row.original)}
+        >
+          <Users className="h-4 w-4 text-blue-600" />
+          <span className="text-blue-600 font-medium">{row.original._count?.members || 0}</span>
+        </Button>
       ),
     },
     {
@@ -242,6 +259,12 @@ export default function Teams() {
         open={isModalOpen} 
         onOpenChange={handleModalClose}
         team={editingTeam}
+      />
+
+      <TeamMembersModal
+        open={isMembersModalOpen}
+        onOpenChange={handleMembersModalClose}
+        team={selectedTeamForMembers}
       />
     </div>
   );

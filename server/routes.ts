@@ -2,8 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { prisma } from "./db";
+import { setupAuth } from "./replitAuth";
+import { logAuditEvent, getRequestInfo, cleanupOldLogs } from "./auditLogger";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup authentication
+  await setupAuth(app);
+
   // Auth routes - Demo mode for testing
   app.get('/api/auth/user', async (req: any, res) => {
     try {
@@ -11,15 +16,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessionUser = session?.user;
       
       if (!sessionUser || !sessionUser.id) {
-        // Return demo user for development access to authentic data
-        const demoUser = {
-          id: "kevin.nicol",
-          email: "kevin.nicol@omneseducation.com", 
-          firstName: "Kevin",
-          lastName: "NICOL",
-          profileImageUrl: "https://ui-avatars.com/api/?name=Kevin+Nicol"
-        };
-        return res.json(demoUser);
+        return res.status(401).json({ message: "Not authenticated" });
       }
 
       const user = await storage.getUser(sessionUser.id);
@@ -70,6 +67,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const teamData = req.body;
       const team = await storage.createTeam(teamData);
+      
+      // Log team creation
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'create',
+        resource: 'team',
+        resourceId: team.id.toString(),
+        metadata: { name: team.name },
+      });
+      
       res.status(201).json(team);
     } catch (error) {
       console.error("Error creating team:", error);
@@ -82,6 +90,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const teamData = req.body;
       const team = await storage.updateTeam(id, teamData);
+      
+      // Log team update
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'update',
+        resource: 'team',
+        resourceId: id.toString(),
+        metadata: { name: team.name },
+      });
+      
       res.json(team);
     } catch (error) {
       console.error("Error updating team:", error);
@@ -93,6 +112,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteTeam(id);
+      
+      // Log team deletion
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'delete',
+        resource: 'team',
+        resourceId: id.toString(),
+      });
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting team:", error);
@@ -115,9 +144,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/teams/:id/members', async (req, res) => {
     try {
       const teamId = parseInt(req.params.id);
-      const memberData = { ...req.body, teamId };
-      const member = await storage.addTeamMember(memberData);
-      res.status(201).json(member);
+      const { userId, role = 'member' } = req.body;
+      
+      // Trouver ou créer le Member correspondant au userId
+      let member = await storage.getMemberByUserId(userId);
+      
+      if (!member) {
+        // Si le Member n'existe pas, le créer à partir de l'User
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        
+        member = await storage.createMember({
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          email: user.email || '',
+          userId: user.id
+        });
+      }
+      
+      // Créer le TeamMember avec le memberId
+      const teamMember = await storage.addTeamMember({
+        teamId,
+        memberId: member.id,
+        role
+      });
+      
+      res.status(201).json(teamMember);
     } catch (error) {
       console.error("Error adding team member:", error);
       res.status(400).json({ message: "Failed to add team member" });
@@ -165,6 +219,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const projectData = req.body;
       const project = await storage.createProject(projectData);
+      
+      // Log project creation
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'create',
+        resource: 'project',
+        resourceId: project.id.toString(),
+        metadata: { name: project.name },
+      });
+      
       res.status(201).json(project);
     } catch (error) {
       console.error("Error creating project:", error);
@@ -177,6 +242,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const projectData = req.body;
       const project = await storage.updateProject(id, projectData);
+      
+      // Log project update
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'update',
+        resource: 'project',
+        resourceId: id.toString(),
+        metadata: { name: project.name },
+      });
+      
       res.json(project);
     } catch (error) {
       console.error("Error updating project:", error);
@@ -188,6 +264,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteProject(id);
+      
+      // Log project deletion
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'delete',
+        resource: 'project',
+        resourceId: id.toString(),
+      });
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting project:", error);
@@ -233,6 +319,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const releaseData = req.body;
       const release = await storage.createRelease(releaseData);
+      
+      // Log release creation
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'create',
+        resource: 'release',
+        resourceId: release.id.toString(),
+        metadata: { name: release.name, releaseId: release.releaseId },
+      });
+      
       res.status(201).json(release);
     } catch (error) {
       console.error("Error creating release:", error);
@@ -253,6 +350,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const releaseData = req.body;
       const release = await storage.updateRelease(id, releaseData);
+      
+      // Log release update
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'update',
+        resource: 'release',
+        resourceId: id.toString(),
+        metadata: { name: release.name, releaseId: release.releaseId },
+      });
+      
       res.json(release);
     } catch (error) {
       console.error("Error updating release:", error);
@@ -264,6 +372,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteRelease(id);
+      
+      // Log release deletion
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'delete',
+        resource: 'release',
+        resourceId: id.toString(),
+      });
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting release:", error);
@@ -457,11 +575,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/users', async (req, res) => {
     try {
       const userData = req.body;
-      const user = await storage.createUser(userData);
+      
+      // Vérifier si un utilisateur avec cet email existe déjà
+      if (userData.email) {
+        const existingUser = await storage.getUserByEmail(userData.email);
+        if (existingUser) {
+          // Mettre à jour l'utilisateur existant
+          const updatedUser = await storage.upsertUser({
+            ...userData,
+            id: existingUser.id, // Utiliser l'ID existant
+          });
+          return res.json(updatedUser);
+        }
+      }
+      
+      // Sinon, utiliser upsertUser avec l'ID fourni
+      const user = await storage.upsertUser(userData);
       res.json(user);
     } catch (error) {
       console.error("Error creating user:", error);
       res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  app.put('/api/users/:id', async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const userData = req.body;
+      
+      const user = await storage.upsertUser({
+        ...userData,
+        id: userId,
+      });
+      
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
     }
   });
 
@@ -809,6 +959,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating procedure for version-git-repo:", error);
       res.status(500).json({ message: "Failed to create procedure for version-git-repo" });
+    }
+  });
+
+  // Admin routes for audit logs
+  app.get('/api/admin/audit-logs', async (req, res) => {
+    try {
+      const requestInfo = getRequestInfo(req);
+      
+      // Check if user is admin (for now, any logged in user can access)
+      if (!requestInfo.userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { page = 1, limit = 50, action, resource, userId } = req.query;
+      const offset = (Number(page) - 1) * Number(limit);
+
+      const where: any = {};
+      if (action) where.action = action;
+      if (resource) where.resource = resource;
+      if (userId) where.userId = userId;
+
+      const [logs, total] = await Promise.all([
+        prisma.auditLog.findMany({
+          where,
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+          orderBy: { timestamp: 'desc' },
+          skip: offset,
+          take: Number(limit),
+        }),
+        prisma.auditLog.count({ where }),
+      ]);
+
+      res.json({
+        logs,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total,
+          pages: Math.ceil(total / Number(limit)),
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching audit logs:", error);
+      res.status(500).json({ message: "Failed to fetch audit logs" });
+    }
+  });
+
+  app.delete('/api/admin/audit-logs', async (req, res) => {
+    try {
+      const requestInfo = getRequestInfo(req);
+      
+      // Check if user is admin
+      if (!requestInfo.userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      await cleanupOldLogs();
+      
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'cleanup',
+        resource: 'audit_logs',
+        metadata: { manual: true },
+      });
+
+      res.json({ message: "Old audit logs cleaned up successfully" });
+    } catch (error) {
+      console.error("Error cleaning up audit logs:", error);
+      res.status(500).json({ message: "Failed to cleanup audit logs" });
     }
   });
 

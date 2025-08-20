@@ -16,6 +16,18 @@ export type User = {
   updatedAt: Date;
 };
 
+export type Member = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  position: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  userId: string | null;
+};
+
 export type Team = {
   id: number;
   name: string;
@@ -28,7 +40,7 @@ export type Team = {
 export type TeamMember = {
   id: number;
   teamId: number;
-  userId: string;
+  memberId: number;
   role: string;
   joinedAt: Date;
 };
@@ -186,7 +198,7 @@ export type InsertTeam = {
 
 export type InsertTeamMember = {
   teamId: number;
-  userId: string;
+  memberId: number;
   role?: string;
 };
 
@@ -247,7 +259,7 @@ export type InsertProcedure = {
 };
 
 export type InsertRelease = {
-  releaseId: string;
+  releaseId?: string;
   name: string;
   description?: string;
   status?: string;
@@ -292,7 +304,7 @@ export type InsertArb = {
 // Extended types for UI
 export type TeamWithMembers = Team & {
   leader?: User;
-  members?: (TeamMember & { user: User })[];
+  members?: (TeamMember & { member: Member & { user: User } })[];
   _count?: { members: number; projects: number };
 };
 

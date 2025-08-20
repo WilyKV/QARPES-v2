@@ -11,13 +11,33 @@ import {
   Shield, 
   UserCog, 
   Settings, 
-  LogOut 
+  LogOut,
+  CheckCircle,
+  GitBranch,
+  Lock,
+  BoxIcon,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 export function Sidebar() {
   const { user } = useAuth();
   const [location, setLocation] = useLocation();
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = (sectionTitle: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionTitle)) {
+        next.delete(sectionTitle);
+      } else {
+        next.add(sectionTitle);
+      }
+      return next;
+    });
+  };
 
   const getInitials = (firstName?: string, lastName?: string) => {
     const first = firstName?.charAt(0) || "";
@@ -25,74 +45,117 @@ export function Sidebar() {
     return (first + last).toUpperCase() || "U";
   };
 
-  const handleLogout = () => {
-    window.location.href = "/api/logout";
+  const handleLogout = async () => {
+    try {
+      const response = await fetch("/api/logout");
+      if (response.ok) {
+        // Forcer le rechargement de la page pour vider le cache et rediriger vers login
+        window.location.href = "/";
+      } else {
+        console.error("Logout failed");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
-  const navigationItems = [
+  const menuSections = [
     {
-      name: "Dashboard",
-      href: "/",
-      icon: LayoutDashboard,
-      current: location === "/",
+      title: "Qualité",
+      icon: CheckCircle,
+      items: []
     },
     {
-      name: "Releases",
-      href: "/releases",
-      icon: Tags,
-      current: location === "/releases",
+      title: "Architecture",
+      icon: BoxIcon,
+      items: [
+        {
+          name: "ARB",
+          href: "/arb",
+          icon: Shield,
+          current: location === "/arb",
+        },
+        {
+          name: "ADR",
+          href: "/adr",
+          icon: BoxIcon,
+          current: location === "/adr",
+        }
+      ]
     },
     {
-      name: "Projets",
-      href: "/projects",
+      title: "Release",
+      icon: GitBranch,
+      items: [
+        {
+          name: "Liste des releases",
+          href: "/releases",
+          icon: Tags,
+          current: location === "/releases",
+        }
+      ]
+    },
+    {
+      title: "Projet",
       icon: FolderOpen,
-      current: location === "/projects",
+      items: [
+        {
+          name: "Liste des projets",
+          href: "/projects",
+          icon: FolderOpen,
+          current: location === "/projects",
+        }
+      ]
     },
     {
-      name: "Équipes",
-      href: "/teams",
+      title: "Equipe",
       icon: Users,
-      current: location === "/teams",
+      items: [
+        {
+          name: "Liste des équipes",
+          href: "/teams",
+          icon: Users,
+          current: location === "/teams",
+        },
+        {
+          name: "Liste des membres",
+          href: "/members",
+          icon: UserCog,
+          current: location === "/members",
+        }
+      ]
     },
     {
-      name: "Membres",
-      href: "/members",
-      icon: UserCog,
-      current: location === "/members",
-    },
-    {
-      name: "ARB",
-      href: "/arb",
-      icon: Shield,
-      current: location === "/arb",
-    },
+      title: "Sécurité",
+      icon: Lock,
+      items: []
+    }
   ];
 
-  const adminItems = [
+  const adminItems = user?.role === "admin" ? [
     {
       name: "Utilisateurs",
-      href: "/users",
+      href: "/admin/users",
       icon: UserCog,
-      current: location === "/users",
-      roleRequired: "admin",
-    },
-    {
-      name: "Paramètres",
-      href: "/settings",
-      icon: Settings,
-      current: location === "/settings",
-      roleRequired: "admin",
-    },
-  ];
+      current: location === "/admin/users",
+    }
+  ] : [];
+
+  const allSections = user?.role === "admin" 
+    ? [...menuSections, { title: "Administration", icon: Settings, items: adminItems }]
+    : menuSections;
 
   return (
   <nav className="fixed left-0 top-0 w-64 h-screen bg-gradient-to-b from-[hsl(var(--navy-grad-from))] to-[hsl(var(--navy-grad-to))] text-[hsl(var(--sidebar-foreground))] shadow-sm flex flex-col z-50 shrink-0">
-      {/* Logo */}
+      {/* Logo cliquable */}
   <div className="px-6 py-4 border-b border-[hsl(var(--sidebar-border))]">
-        <h1 className="text-xl font-bold flex items-center">
+        <button 
+          onClick={() => setLocation("/")}
+          className="text-xl font-bold flex items-center hover:opacity-80 transition-opacity w-full"
+        >
           <Rocket className="h-5 w-5 text-[hsl(var(--sidebar-primary))] mr-2" />
-          Release Manager
-        </h1>
+          QARPES v2
+        </button>
       </div>
 
       {/* User Profile */}
@@ -115,71 +178,71 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 px-4 py-4">
-        <nav className="space-y-1">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
+      {/* Navigation Sections */}
+      <div className="flex-1 px-4 py-4 overflow-y-auto">
+        <nav className="space-y-6">
+          {allSections.map((section) => {
+            const isCollapsed = collapsedSections.has(section.title);
             return (
-              <button
-                key={item.name}
-                onClick={() => setLocation(item.href)}
-                className={cn(
-                  "w-full text-left group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors",
-                  item.current
-                    ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]"
-                    : "hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))] opacity-90"
-                )}
-              >
-                <Icon
-                  className={cn(
-                    "mr-3 h-4 w-4",
-                    item.current
-                      ? "text-[hsl(var(--sidebar-primary))]"
-                      : "opacity-70 group-hover:opacity-100"
+              <div key={section.title}>
+                {/* Section Header - Cliquable pour replier */}
+                <button
+                  onClick={() => toggleSection(section.title)}
+                  className="flex items-center justify-between w-full px-2 mb-2 hover:opacity-100 opacity-90 transition-opacity"
+                >
+                  <div className="flex items-center">
+                    <section.icon className="h-4 w-4 mr-2 opacity-60" />
+                    <h3 className="text-xs font-semibold opacity-70 uppercase tracking-wider">
+                      {section.title}
+                    </h3>
+                  </div>
+                  {section.items.length > 0 && (
+                    isCollapsed ? (
+                      <ChevronRight className="h-3 w-3 opacity-60" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 opacity-60" />
+                    )
                   )}
-                />
-                {item.name}
-              </button>
+                </button>
+                
+                {/* Section Items - Affichés si non replié */}
+                {!isCollapsed && (
+                  section.items.length > 0 ? (
+                    <div className="space-y-1">
+                      {section.items.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.name}
+                            onClick={() => setLocation(item.href)}
+                            className={cn(
+                              "w-full text-left group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors",
+                              item.current
+                                ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]"
+                                : "hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))] opacity-90"
+                            )}
+                          >
+                            <Icon
+                              className={cn(
+                                "mr-3 h-4 w-4",
+                                item.current
+                                  ? "text-[hsl(var(--sidebar-primary))]"
+                                  : "opacity-70 group-hover:opacity-100"
+                              )}
+                            />
+                            {item.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="px-2 text-xs opacity-50 italic">Prochainement</p>
+                  )
+                )}
+              </div>
             );
           })}
         </nav>
-
-        {/* Admin Section */}
-        {user?.role === "admin" && (
-          <div className="mt-8">
-            <h3 className="px-2 text-xs font-semibold opacity-70 uppercase tracking-wider">
-              Administration
-            </h3>
-            <nav className="mt-2 space-y-1">
-              {adminItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.name}
-                    onClick={() => setLocation(item.href)}
-                    className={cn(
-                      "w-full text-left group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors",
-                      item.current
-                        ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]"
-                        : "hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))] opacity-90"
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "mr-3 h-4 w-4",
-                        item.current
-                          ? "text-[hsl(var(--sidebar-primary))]"
-                          : "opacity-70 group-hover:opacity-100"
-                      )}
-                    />
-                    {item.name}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        )}
       </div>
 
       {/* Logout Button */}

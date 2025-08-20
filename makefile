@@ -8,7 +8,6 @@ reload-app:
 	docker compose up -d --build app
 	docker compose exec app npx prisma generate
 	docker compose exec app npx prisma migrate deploy
-	docker compose exec app npx prisma db push
 	docker compose exec app npx prisma db seed
 	docker compose exec app npm run dev
 
@@ -27,7 +26,7 @@ build: down clean
 
 clean:
 	- docker rmi qarpes-v2
-	@if exist dist rmdir /s /q dist
+	@if [ -d dist ]; then rm -rf dist; fi
 
 apk:
 	docker build -f .docker/Dockerfile-apk -t qarpes-v2-apk .
@@ -39,3 +38,7 @@ apk:
 # TypeScript check (no emit)
 check:
 	docker compose exec app npm run check
+
+sh:
+	docker compose exec app sh
+
