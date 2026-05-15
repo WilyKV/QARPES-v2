@@ -1,5 +1,6 @@
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
+import rateLimit from "express-rate-limit";
 import connectPg from "connect-pg-simple";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { storage } from "./storage";
@@ -18,10 +19,12 @@ export function getSession() {
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
+    name: "qarpes.sid",
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       maxAge: sessionTtl,
     },
   });
@@ -33,6 +36,21 @@ export async function setupAuth(app: Express) {
 
   app.set("trust proxy", 1);
   app.use(getSession());
+
+  const LOOPBACK_IPS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many auth attempts, please try again later" },
+    skip: (req) => LOOPBACK_IPS.has(req.ip ?? ""),
+  });
+
+  app.use("/api/login", authLimiter);
+  app.use("/api/callback", authLimiter);
+  app.use("/api/auth/demo", authLimiter);
 
   // Microsoft O365 authentication with Azure AD
   app.get("/api/login", (req, res) => {
@@ -291,7 +309,7 @@ export async function setupAuth(app: Express) {
         console.error("Error destroying session:", err);
         return res.status(500).json({ error: "Failed to logout" });
       }
-      res.clearCookie('connect.sid');
+      res.clearCookie('qarpes.sid');
       res.json({ message: "Logged out successfully" });
     });
   });
