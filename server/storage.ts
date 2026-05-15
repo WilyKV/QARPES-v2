@@ -42,6 +42,7 @@ import {
   type ArbWithDetails,
 } from "@shared/schema";
 import { prisma } from "./db";
+import { sanitizeRichText } from "./lib/sanitize.js";
 
 export interface IStorage {
   // User operations
@@ -760,11 +761,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProcedure(procedure: InsertProcedure): Promise<Procedure> {
-    return prisma.procedure.create({ data: procedure });
+    const sanitizedContent =
+      typeof procedure.content === "string"
+        ? sanitizeRichText(procedure.content)
+        : procedure.content;
+    return prisma.procedure.create({ data: { ...procedure, content: sanitizedContent } });
   }
 
   async updateProcedure(id: number, procedure: Partial<InsertProcedure>): Promise<Procedure> {
-    return prisma.procedure.update({ where: { id }, data: { ...procedure, updatedAt: new Date() } });
+    const sanitizedContent =
+      typeof procedure.content === "string"
+        ? sanitizeRichText(procedure.content)
+        : procedure.content;
+    return prisma.procedure.update({
+      where: { id },
+      data: { ...procedure, content: sanitizedContent, updatedAt: new Date() },
+    });
   }
 
   async deleteProcedure(id: number): Promise<void> {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -233,7 +234,7 @@ function ProcedureCard({ procedure, repoName, onEdit }: {
           </div>
           <div
             className="prose prose-sm max-w-none dark:prose-invert"
-            dangerouslySetInnerHTML={{ __html: procedure.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(procedure.content) }}
           />
         </CardContent>
       )}

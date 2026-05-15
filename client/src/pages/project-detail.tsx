@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useParams, useLocation } from "wouter";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Calendar, FileText, Users, Plus, Link as LinkIcon, Activity, Layers, Target, Settings, GitBranch, CheckCircle, Clock, Terminal, Upload, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -113,9 +114,9 @@ function ProcedureCard({ procedure }: { procedure: Procedure }) {
       </CardHeader>
       {procedure.content && (
         <CardContent className="pt-0">
-          <div 
+          <div
             className="text-sm prose prose-sm max-w-none dark:prose-invert"
-            dangerouslySetInnerHTML={{ __html: procedure.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(procedure.content) }}
           />
         </CardContent>
       )}
