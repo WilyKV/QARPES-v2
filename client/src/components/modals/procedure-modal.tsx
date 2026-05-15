@@ -391,7 +391,7 @@ export default function ProcedureModal({
   const getCurrentCell = (): HTMLTableCellElement | null => {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return null;
-    let node: Node | null = sel.anchorNode;
+    const node: Node | null = sel.anchorNode;
     let el: HTMLElement | null = (node as HTMLElement)?.nodeType === Node.ELEMENT_NODE
       ? (node as HTMLElement)
       : (node as ChildNode)?.parentElement || null;

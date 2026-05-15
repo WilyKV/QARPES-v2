@@ -86,7 +86,7 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
     if (release) {
       form.reset({
         name: String(release.name || ""),
-        status: String(release.status || "0"),
+        status: String(release.status || "0") as FormData["status"],
         recetteDate: formatDateForInput(release.recetteDate),
         preprodDate: formatDateForInput(release.preprodDate),
         productionDate: formatDateForInput(release.productionDate),
@@ -136,17 +136,19 @@ export function ReleaseModal({ open, onOpenChange, release }: ReleaseModalProps)
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      let payload = {
+      const basePayload = {
         ...data,
         recetteDate: data.recetteDate || null,
         preprodDate: data.preprodDate || null,
         productionDate: data.productionDate || null,
       };
+      // releaseId is generated server-side or injected here as extra field
+      const payload: Record<string, unknown> = { ...basePayload };
 
       // Si c'est une nouvelle release, générer automatiquement le releaseId
       if (!isEditing && data.productionDate) {
         const generatedReleaseId = await generateReleaseId(data.productionDate);
-        payload = { ...payload, releaseId: generatedReleaseId };
+        payload["releaseId"] = generatedReleaseId;
       }
 
       if (isEditing) {

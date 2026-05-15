@@ -77,7 +77,7 @@ export default function ARBPage() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: arbs, isLoading: arbsLoading } = useQuery({
+  const { data: arbs, isLoading: arbsLoading } = useQuery<ArbWithDetails[]>({
     queryKey: ["/api/arb"],
     retry: false,
   });

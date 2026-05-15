@@ -279,7 +279,7 @@ export function TeamModal({ open, onOpenChange, team }: TeamModalProps) {
                         >
                           <div className="flex items-center space-x-3">
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={memberUser?.profileImageUrl} />
+                              <AvatarImage src={memberUser?.profileImageUrl ?? undefined} />
                               <AvatarFallback className="text-xs">
                                 {memberUser?.firstName?.charAt(0)}{memberUser?.lastName?.charAt(0)}
                               </AvatarFallback>

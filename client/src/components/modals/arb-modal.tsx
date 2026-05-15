@@ -94,12 +94,12 @@ export function ArbModal({ open, onOpenChange, arb }: ArbModalProps) {
     },
   });
 
-  const { data: teams } = useQuery({
+  const { data: teams } = useQuery<import("@shared/schema").TeamWithMembers[]>({
     queryKey: ["/api/teams"],
     retry: false,
   });
 
-  const { data: projects } = useQuery({
+  const { data: projects } = useQuery<import("@shared/schema").ProjectWithTeam[]>({
     queryKey: ["/api/projects"],
     retry: false,
   });
@@ -109,14 +109,14 @@ export function ArbModal({ open, onOpenChange, arb }: ArbModalProps) {
       form.reset({
         title: arb.title,
         description: arb.description || "",
-        type: arb.type,
+        type: arb.type as "access" | "budget",
         status: arb.status,
         priority: arb.priority,
         teamId: arb.teamId || undefined,
         projectId: arb.projectId || undefined,
-        approverId: arb.approverId || undefined,
+        approverId: arb.approverId ? Number(arb.approverId) : undefined,
         budget: arb.budget ? (arb.budget / 100).toString() : "",
-        dueDate: arb.dueDate || "",
+        dueDate: arb.dueDate ? (typeof arb.dueDate === "string" ? arb.dueDate : (arb.dueDate as Date).toISOString().split("T")[0]) : "",
       });
     } else {
       form.reset({

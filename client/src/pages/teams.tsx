@@ -40,7 +40,7 @@ export default function Teams() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: teams, isLoading: teamsLoading } = useQuery({
+  const { data: teams, isLoading: teamsLoading } = useQuery<TeamWithMembers[]>({
     queryKey: ["/api/teams"],
     retry: false,
   });

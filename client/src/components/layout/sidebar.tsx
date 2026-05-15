@@ -162,9 +162,9 @@ export function Sidebar() {
   <div className="px-6 py-4 border-b border-[hsl(var(--sidebar-border))]">
         <div className="flex items-center space-x-3">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user?.profileImageUrl} />
+            <AvatarImage src={user?.profileImageUrl ?? undefined} />
     <AvatarFallback className="bg-[hsl(var(--sidebar-primary))] text-[hsl(var(--sidebar-primary-foreground))] text-sm font-medium">
-              {getInitials(user?.firstName, user?.lastName)}
+              {getInitials(user?.firstName ?? undefined, user?.lastName ?? undefined)}
             </AvatarFallback>
           </Avatar>
           <div>

@@ -44,12 +44,18 @@ export default function Dashboard() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery<{
+    activeReleases: number;
+    totalProjects: number;
+    totalTeams: number;
+    activeArb: number;
+    projectsByStatus: { status: string; count: number }[];
+  }>({
     queryKey: ["/api/dashboard/stats"],
     retry: false,
   });
 
-  const { data: releases, isLoading: releasesLoading } = useQuery({
+  const { data: releases, isLoading: releasesLoading } = useQuery<import("@shared/schema").ReleaseWithProjects[]>({
     queryKey: ["/api/releases"],
     retry: false,
   });

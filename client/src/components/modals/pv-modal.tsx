@@ -87,11 +87,11 @@ export function PvModal({
       apiRequest("GET", `/api/projects/${projectId}/versions/${versionId}/pvs`),
   });
 
-  const form = useForm<FormData>({
+  const form = useForm<FormData, unknown, FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      category: pv?.category || undefined,
-      status: pv?.status || "en_cours",
+      category: (pv?.category as FormData["category"]) || undefined,
+      status: (pv?.status as FormData["status"]) || "en_cours",
     },
   });
 

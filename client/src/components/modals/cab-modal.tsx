@@ -76,12 +76,12 @@ export function CabModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const form = useForm<FormData>({
+  const form = useForm<FormData, unknown, FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      environment: cab?.environment || "preprod",
+      environment: (cab?.environment as "preprod" | "prod") || "preprod",
       helpdeskUrl: cab?.helpdeskUrl || "",
-      status: cab?.status || "cree",
+      status: (cab?.status as "cree" | "demande" | "valide" | "refuse") || "cree",
     },
   });
 

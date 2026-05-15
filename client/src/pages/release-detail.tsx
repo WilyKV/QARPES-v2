@@ -26,7 +26,7 @@ const statusLabels = {
   production: "Production",
 };
 
-const formatDate = (dateString: string | null) => {
+const formatDate = (dateString: string | Date | null) => {
   if (!dateString) return "Non définie";
   return new Date(dateString).toLocaleDateString('fr-FR');
 };
@@ -68,7 +68,7 @@ export default function ReleaseDetail() {
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden ml-64">
-          <Header />
+          <Header title="Détail de la release" />
           <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-6">
             <div className="animate-pulse space-y-4">
               <div className="h-8 bg-gray-300 rounded w-1/3"></div>
@@ -85,7 +85,7 @@ export default function ReleaseDetail() {
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden ml-64">
-          <Header />
+          <Header title="Détail de la release" />
           <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-6">
             <div className="text-center py-12">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Release non trouvée</h2>
@@ -109,7 +109,7 @@ export default function ReleaseDetail() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       <Sidebar />
       <main className="flex-1 overflow-auto ml-64">
-        <Header />
+        <Header title="Détail de la release" />
         <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">

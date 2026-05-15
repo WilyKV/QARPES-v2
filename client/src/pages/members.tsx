@@ -34,8 +34,8 @@ const memberSchema = z.object({
 type MemberFormData = z.infer<typeof memberSchema>;
 
 function MemberCard({ user, teams, onEdit }: { user: User; teams: TeamWithMembers[]; onEdit: (user: User) => void }) {
-  const userTeams = teams.filter(team => 
-    team.members?.some(member => member.member.user.id === user.id) || team.leaderId === user.id
+  const userTeams = teams.filter(team =>
+    team.members?.some(member => member.member.user?.id === user.id) || team.leaderId === user.id
   );
 
   return (
@@ -130,12 +130,13 @@ function AddMemberModal() {
       const userId = `user-${data.email.split('@')[0]}-${Date.now()}`;
       
       // Créer l'utilisateur
-      const newUser = await apiRequest("POST", "/api/users", {
+      const newUserRes = await apiRequest("POST", "/api/users", {
         id: userId,
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName
       });
+      const newUser: { id: string } = await newUserRes.json();
 
       // Si une équipe est sélectionnée, ajouter le membre à l'équipe
       if (data.teamId && data.teamId !== "none") {
@@ -412,15 +413,15 @@ export default function Members() {
     
     if (teamFilter === "all") return matchesSearch;
     if (teamFilter === "no-team") {
-      const hasTeam = teams.some(team => 
-        team.members?.some(member => member.member.user.id === user.id) || team.leaderId === user.id
+      const hasTeam = teams.some(team =>
+        team.members?.some(member => member.member.user?.id === user.id) || team.leaderId === user.id
       );
       return matchesSearch && !hasTeam;
     }
-    
-    const isInTeam = teams.some(team => 
-      team.id.toString() === teamFilter && 
-      (team.members?.some(member => member.member.user.id === user.id) || team.leaderId === user.id)
+
+    const isInTeam = teams.some(team =>
+      team.id.toString() === teamFilter &&
+      (team.members?.some(member => member.member.user?.id === user.id) || team.leaderId === user.id)
     );
     return matchesSearch && isInTeam;
   });
@@ -504,9 +505,9 @@ export default function Members() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold bg-gradient-to-r from-red-600 to-rose-600 bg-clip-text text-transparent">
-                  {users.filter(user => 
-                    !teams.some(team => 
-                      team.members?.some(member => member.member.user.id === user.id) || team.leaderId === user.id
+                  {users.filter(user =>
+                    !teams.some(team =>
+                      team.members?.some(member => member.member.user?.id === user.id) || team.leaderId === user.id
                     )
                   ).length}
                 </p>

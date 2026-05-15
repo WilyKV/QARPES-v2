@@ -71,9 +71,9 @@ export function TeamMembersModal({ open, onOpenChange, team }: TeamMembersModalP
                   >
                     <div className="flex items-center space-x-4">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={memberUser?.profileImageUrl} />
+                        <AvatarImage src={memberUser?.profileImageUrl ?? undefined} />
                         <AvatarFallback className="text-sm">
-                          {getInitials(memberUser?.firstName, memberUser?.lastName)}
+                          {getInitials(memberUser?.firstName ?? undefined, memberUser?.lastName ?? undefined)}
                         </AvatarFallback>
                       </Avatar>
                       <div>
