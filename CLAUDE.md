@@ -156,12 +156,19 @@ Permissions are defined in `client/src/lib/permissions.ts` and consumed via `use
 
 Large files should be refactored cautiously; they handle critical domain logic. Changes require testing.
 
-## Tooling Gaps
+## Tooling
 
-- **No ESLint, Prettier, Husky, or lint-staged:** Formatting and style consistency rely on manual adherence.
-- **No CI/CD pipeline:** No `.github/workflows/`. Deployments require manual image builds and pushes.
-- **Testing:** Only ad-hoc functional tests (server/functional-tests*.ts); no unit/integration test framework (vitest/jest/playwright).
-- **Validation:** Zod imported but unused in server code post-Drizzle migration. No request body validation.
+### Configured (as of May 2026)
+
+- **Vitest** (`npm run test` / `npm run test:watch` / `npm run test:coverage`): framework de test configuré, environment node, aliases `@/`, `@shared/`, `@assets/` actifs. Tests dans `tests/**/*.test.ts`, `server/**/*.test.ts`, `shared/**/*.test.ts`. Smoke test present in `tests/smoke.test.ts`.
+- **ESLint** (`npm run lint` / `npm run lint:fix`): flat config ESM (`eslint.config.js`), typescript-eslint recommended (sans type-aware rules), eslint-plugin-react + react-hooks + react-refresh pour `client/src/**`. 18 problemes restants (1 erreur `prefer-const` auto-fixable, 17 warnings pre-existants) — la codebase n'est pas encore conforme, le nettoyage est prevu separement.
+- **Prettier** (`npm run format` / `npm run format:check`): config dans `.prettierrc.json`, ignore dans `.prettierignore`. `eslint-config-prettier` integre dans la chaine ESLint pour eviter les conflits. **Ne pas executer `npm run format` sans revue** : cela reformatterait toute la codebase, ce qui doit etre fait en PR dediee.
+
+### Restant a configurer
+
+- **Husky + lint-staged:** pre-commit hooks non configures.
+- **CI/CD pipeline:** pas de `.github/workflows/`. Deployments manuels.
+- **Validation:** Zod importe mais inutilise cote serveur post-migration Drizzle. Pas de validation des corps de requetes.
 
 ## Important Notes
 
@@ -177,4 +184,4 @@ Large files should be refactored cautiously; they handle critical domain logic. 
 2. **Add server-side auth middleware:** Wrap `/api/*` routes (except `/api/auth/*`) with `isAuthenticated` check.
 3. **Restrict demo mode to dev:** Add `if (NODE_ENV !== 'development') return 403` to `/api/auth/demo`.
 4. **Fix TypeScript errors:** Install missing deps (`embla-carousel-react`, `input-otp`) or suppress 72 errors.
-5. **Add ESLint + Prettier + Vitest:** Establish code quality baseline.
+5. **Clean up lint warnings:** ESLint + Prettier + Vitest are now configured. Next: resolve 17 lint warnings and run `npm run format` in a dedicated PR.

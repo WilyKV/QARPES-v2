@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+client/dist
+coverage
+prisma/migrations
+attached_assets
+package-lock.json
+*.md
