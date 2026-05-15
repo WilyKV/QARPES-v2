@@ -68,7 +68,6 @@ export async function setupAuth(app: Express) {
     }
 
     // For demo mode, skip state verification
-    console.log("Callback received, proceeding with demo authentication");
 
     // TODO: Uncomment when Azure AD app is properly configured
     /*
@@ -147,8 +146,6 @@ export async function setupAuth(app: Express) {
       const demoEmail = "demo.user@omneseducation.com";
       const demoId = "demo-user-id";
 
-      console.log("Creating demo user...");
-      
       // Create/update demo user in database
       await storage.upsertUser({
         id: demoId,
@@ -157,8 +154,6 @@ export async function setupAuth(app: Express) {
         lastName: "User",
         profileImageUrl: null,
       });
-
-      console.log("Demo user created, setting session...");
 
       // Ensure session exists
       if (!req.session) {
@@ -190,7 +185,6 @@ export async function setupAuth(app: Express) {
           metadata: { demo: true },
         });
         
-        console.log("Session saved successfully, redirecting to /");
         res.redirect("/");
       });
     } catch (error) {
@@ -210,8 +204,6 @@ export async function setupAuth(app: Express) {
       const demoEmail = `demo.${role}@omneseducation.com`;
       const demoId = `demo-${role}-id`;
 
-      console.log(`Demo auth: Creating demo user with role: ${role}...`);
-      
       await storage.upsertUser({
         id: demoId,
         email: demoEmail,
@@ -220,8 +212,6 @@ export async function setupAuth(app: Express) {
         profileImageUrl: null,
         role: role,
       });
-
-      console.log("Demo auth: Setting session...");
 
       (req.session as any).user = {
         id: demoId,
@@ -246,7 +236,6 @@ export async function setupAuth(app: Express) {
         metadata: { demo: true, role: role, route: '/api/auth/demo' },
       });
 
-      console.log(`Demo auth: Session saved for role ${role}, redirecting...`);
       res.redirect("/");
     } catch (error) {
       console.error("Demo auth error:", error);

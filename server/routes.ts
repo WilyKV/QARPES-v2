@@ -443,51 +443,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const versionId = parseInt(req.params.versionId);
       const { releaseId, createRelease } = req.body;
       
-      console.log('=== ASSOCIATION DEBUG START ===');
-      console.log('Params:', req.params);
-      console.log('Body:', req.body);
-      console.log('Parsed projectId:', projectId);
-      console.log('Parsed versionId:', versionId);
-      console.log('Received releaseId:', releaseId);
-      
       let targetReleaseId = releaseId;
-      
+
       // If createRelease is provided, create a new release first
       if (createRelease) {
-        console.log('Creating new release:', createRelease);
         const newRelease = await storage.createRelease(createRelease);
         targetReleaseId = newRelease.id;
-        console.log('Created new release with ID:', targetReleaseId);
       }
-      
-      console.log('Target release ID:', targetReleaseId);
-      
+
       // Verify the version exists before updating
       const existingVersion = await storage.getProjectVersion(versionId);
       if (!existingVersion) {
-        console.error('Version not found:', versionId);
         return res.status(404).json({ message: "Project version not found" });
       }
-      
-      console.log('Existing version found:', { id: existingVersion.id, currentReleaseId: existingVersion.releaseId });
-      
+
       // Associate version to release directly
-      console.log('Updating project version with releaseId:', targetReleaseId);
-      const updatedVersion = await storage.updateProjectVersion(versionId, { releaseId: targetReleaseId });
-      console.log('Updated version result:', { id: updatedVersion.id, newReleaseId: updatedVersion.releaseId });
-      
+      await storage.updateProjectVersion(versionId, { releaseId: targetReleaseId });
+
       // Also associate project to release if not already associated
       try {
-        console.log('Adding project to release:', { releaseId: targetReleaseId, projectId });
         await storage.addProjectToRelease({ releaseId: targetReleaseId, projectId });
-        console.log('Project associated to release successfully');
-      } catch (error) {
+      } catch (_err) {
         // Ignore duplicate key errors - project already associated to release
-        console.log("Project already associated to release, skipping...", error.message);
       }
-      
-      console.log('=== ASSOCIATION DEBUG END ===');
-      res.status(201).json({ 
+
+      res.status(201).json({
         message: "Project version associated to release successfully",
         releaseId: targetReleaseId,
         versionId: versionId
