@@ -1,6 +1,7 @@
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { storage } from "./storage";
 import { logAuditEvent, getRequestInfo } from "./auditLogger";
 
@@ -27,6 +28,9 @@ export function getSession() {
 }
 
 export async function setupAuth(app: Express) {
+  // Capture NODE_ENV at setup time so route handlers use the correct value
+  const nodeEnv = process.env.NODE_ENV;
+
   app.set("trust proxy", 1);
   app.use(getSession());
 
@@ -36,38 +40,61 @@ export async function setupAuth(app: Express) {
       return res.status(500).json({ error: "Microsoft Azure AD configuration missing" });
     }
 
-    const baseUrl = process.env.NODE_ENV === 'development' 
-      ? `http://localhost:5000` 
+    const baseUrl = process.env.NODE_ENV === 'development'
+      ? `http://localhost:5000`
       : `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
-    
-    const redirectUri = `${baseUrl}/api/callback`;
-    const state = Math.random().toString(36).substring(7);
-    
-    // Store state in session for security
-    (req.session as any).oauth_state = state;
-    
-    const microsoftLoginUrl = new URL('https://login.microsoftonline.com/' + process.env.MICROSOFT_TENANT_ID + '/oauth2/v2.0/authorize');
-    microsoftLoginUrl.searchParams.set('client_id', process.env.MICROSOFT_CLIENT_ID);
-    microsoftLoginUrl.searchParams.set('response_type', 'code');
-    microsoftLoginUrl.searchParams.set('redirect_uri', redirectUri);
-    microsoftLoginUrl.searchParams.set('scope', 'openid email profile');
-    microsoftLoginUrl.searchParams.set('state', state);
-    microsoftLoginUrl.searchParams.set('prompt', 'login');
-    microsoftLoginUrl.searchParams.set('domain_hint', 'omneseducation.com');
 
-    res.redirect(microsoftLoginUrl.toString());
+    const redirectUri = `${baseUrl}/api/callback`;
+    const state = randomBytes(32).toString("hex");
+
+    // Store state in session for security before redirect
+    (req.session as any).oauth_state = state;
+    (req.session as any).oauth_state_expires_at = Date.now() + 10 * 60 * 1000; // 10 min
+
+    req.session.save(() => {
+      const microsoftLoginUrl = new URL(
+        'https://login.microsoftonline.com/' + process.env.MICROSOFT_TENANT_ID + '/oauth2/v2.0/authorize'
+      );
+      microsoftLoginUrl.searchParams.set('client_id', process.env.MICROSOFT_CLIENT_ID!);
+      microsoftLoginUrl.searchParams.set('response_type', 'code');
+      microsoftLoginUrl.searchParams.set('redirect_uri', redirectUri);
+      microsoftLoginUrl.searchParams.set('scope', 'openid email profile');
+      microsoftLoginUrl.searchParams.set('state', state);
+      microsoftLoginUrl.searchParams.set('prompt', 'login');
+      microsoftLoginUrl.searchParams.set('domain_hint', 'omneseducation.com');
+      res.redirect(microsoftLoginUrl.toString());
+    });
   });
 
   // Microsoft O365 callback handler (demo mode)
   app.get("/api/callback", async (req, res) => {
     const { code, state, error } = req.query;
-    
+
+    // Validate OAuth state to prevent CSRF attacks
+    const receivedState = typeof state === "string" ? state : "";
+    const storedState = (req.session as any).oauth_state as string | undefined;
+    const expiresAt = (req.session as any).oauth_state_expires_at as number | undefined;
+
+    if (!storedState || !receivedState) {
+      return res.status(400).json({ message: "Invalid OAuth state" });
+    }
+    if (Date.now() > (expiresAt ?? 0)) {
+      return res.status(400).json({ message: "Invalid OAuth state" });
+    }
+    const bufA = Buffer.from(storedState);
+    const bufB = Buffer.from(receivedState);
+    if (bufA.length !== bufB.length || !timingSafeEqual(bufA, bufB)) {
+      return res.status(400).json({ message: "Invalid OAuth state" });
+    }
+
+    // Cleanup state after successful validation
+    delete (req.session as any).oauth_state;
+    delete (req.session as any).oauth_state_expires_at;
+
     if (error) {
       console.error("OAuth error:", error);
       return res.redirect("/api/login");
     }
-
-    // For demo mode, skip state verification
 
     // TODO: Uncomment when Azure AD app is properly configured
     /*
@@ -193,12 +220,16 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  // Route de test pour bypass l'authentification Microsoft
+  // Route de test pour bypass l'authentification Microsoft (désactivée en production)
   app.get("/api/auth/demo", async (req, res) => {
+    if (nodeEnv === "production") {
+      return res.status(404).json({ message: "Not found" });
+    }
+
     try {
       // Récupérer le rôle depuis les query params (par défaut: viewer)
-      const requestedRole = (req.query.role as string) || "viewer";
-      const validRoles = ["admin", "manager", "dev", "ops", "viewer"];
+      const requestedRole = String(req.query.role ?? "viewer");
+      const validRoles = ["admin", "prod", "architecte", "po", "chef_projet", "viewer"];
       const role = validRoles.includes(requestedRole) ? requestedRole : "viewer";
 
       const demoEmail = `demo.${role}@omneseducation.com`;

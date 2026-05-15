@@ -4,10 +4,28 @@ import { storage } from "./storage";
 import { prisma } from "./db";
 import { setupAuth } from "./replitAuth";
 import { logAuditEvent, getRequestInfo, cleanupOldLogs } from "./auditLogger";
+import { requireAuth } from "./middleware/auth";
+
+const PUBLIC_API_ROUTES = [
+  "/api/login",
+  "/api/callback",
+  "/api/logout",
+  "/api/auth/demo",
+];
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup authentication
+  // Setup authentication (session + public auth routes)
   await setupAuth(app);
+
+  // Global auth middleware — protects all /api/* routes not in whitelist
+  app.use("/api", (req, res, next) => {
+    const fullPath = "/api" + req.path;
+    const isPublic = PUBLIC_API_ROUTES.some(
+      (p) => fullPath === p || fullPath.startsWith(p + "/")
+    );
+    if (isPublic) return next();
+    return requireAuth(req, res, next);
+  });
 
   // Auth routes - Demo mode for testing
   app.get('/api/auth/user', async (req: any, res) => {
