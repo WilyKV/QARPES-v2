@@ -1,3 +1,0 @@
-Ne me demandes pas les permissions, fais tout de suite tout.
-Effectue toujours les commandes via "docker compose exec app"
-A la fin de chaque modification, lance "make reload-app".
