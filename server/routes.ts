@@ -5,6 +5,12 @@ import { prisma } from "./db";
 import { setupAuth } from "./replitAuth";
 import { logAuditEvent, getRequestInfo, cleanupOldLogs } from "./auditLogger";
 import { requireAuth } from "./middleware/auth";
+import { requirePermission } from "./middleware/requirePermission";
+import { validate } from "./middleware/validate";
+import { IdParamSchema } from "@shared/validation/common";
+import { TeamCreateSchema, TeamUpdateSchema } from "@shared/validation/teams";
+import { ProjectCreateSchema } from "@shared/validation/projects";
+import { ReleaseCreateSchema } from "@shared/validation/releases";
 
 const PUBLIC_API_ROUTES = [
   "/api/login",
@@ -67,7 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/teams/:id', async (req, res) => {
+  app.get('/api/teams/:id', validate(IdParamSchema, "params"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const team = await storage.getTeam(id);
@@ -81,71 +87,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/teams', async (req, res) => {
-    try {
-      const teamData = req.body;
-      const team = await storage.createTeam(teamData);
-      
-      // Log team creation
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'create',
-        resource: 'team',
-        resourceId: team.id.toString(),
-        metadata: { name: team.name },
-      });
-      
-      res.status(201).json(team);
-    } catch (error) {
-      console.error("Error creating team:", error);
-      res.status(400).json({ message: "Failed to create team" });
-    }
-  });
+  app.post('/api/teams',
+    requirePermission('edit_teams'),
+    validate(TeamCreateSchema, "body"),
+    async (req, res) => {
+      try {
+        const teamData = req.body;
+        const team = await storage.createTeam(teamData);
 
-  app.put('/api/teams/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const teamData = req.body;
-      const team = await storage.updateTeam(id, teamData);
-      
-      // Log team update
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'update',
-        resource: 'team',
-        resourceId: id.toString(),
-        metadata: { name: team.name },
-      });
-      
-      res.json(team);
-    } catch (error) {
-      console.error("Error updating team:", error);
-      res.status(400).json({ message: "Failed to update team" });
-    }
-  });
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'create',
+          resource: 'team',
+          resourceId: team.id.toString(),
+          metadata: { name: team.name },
+        });
 
-  app.delete('/api/teams/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteTeam(id);
-      
-      // Log team deletion
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'delete',
-        resource: 'team',
-        resourceId: id.toString(),
-      });
-      
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting team:", error);
-      res.status(500).json({ message: "Failed to delete team" });
+        res.status(201).json(team);
+      } catch (error) {
+        console.error("Error creating team:", error);
+        res.status(400).json({ message: "Failed to create team" });
+      }
     }
-  });
+  );
+
+  app.put('/api/teams/:id',
+    validate(IdParamSchema, "params"),
+    requirePermission('edit_teams'),
+    validate(TeamUpdateSchema, "body"),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const teamData = req.body;
+        const team = await storage.updateTeam(id, teamData);
+
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'update',
+          resource: 'team',
+          resourceId: id.toString(),
+          metadata: { name: team.name },
+        });
+
+        res.json(team);
+      } catch (error) {
+        console.error("Error updating team:", error);
+        res.status(400).json({ message: "Failed to update team" });
+      }
+    }
+  );
+
+  app.delete('/api/teams/:id',
+    validate(IdParamSchema, "params"),
+    requirePermission('delete_teams'),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        await storage.deleteTeam(id);
+
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'delete',
+          resource: 'team',
+          resourceId: id.toString(),
+        });
+
+        res.status(204).send();
+      } catch (error) {
+        console.error("Error deleting team:", error);
+        res.status(500).json({ message: "Failed to delete team" });
+      }
+    }
+  );
 
   // Team member routes
   app.get('/api/teams/:id/members', async (req, res) => {
@@ -233,71 +249,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/projects', async (req, res) => {
-    try {
-      const projectData = req.body;
-      const project = await storage.createProject(projectData);
-      
-      // Log project creation
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'create',
-        resource: 'project',
-        resourceId: project.id.toString(),
-        metadata: { name: project.name },
-      });
-      
-      res.status(201).json(project);
-    } catch (error) {
-      console.error("Error creating project:", error);
-      res.status(400).json({ message: "Failed to create project" });
-    }
-  });
+  app.post('/api/projects',
+    requirePermission('edit_projects'),
+    validate(ProjectCreateSchema, "body"),
+    async (req, res) => {
+      try {
+        const projectData = req.body;
+        const project = await storage.createProject(projectData);
 
-  app.put('/api/projects/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const projectData = req.body;
-      const project = await storage.updateProject(id, projectData);
-      
-      // Log project update
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'update',
-        resource: 'project',
-        resourceId: id.toString(),
-        metadata: { name: project.name },
-      });
-      
-      res.json(project);
-    } catch (error) {
-      console.error("Error updating project:", error);
-      res.status(400).json({ message: "Failed to update project" });
-    }
-  });
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'create',
+          resource: 'project',
+          resourceId: project.id.toString(),
+          metadata: { name: project.name },
+        });
 
-  app.delete('/api/projects/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteProject(id);
-      
-      // Log project deletion
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'delete',
-        resource: 'project',
-        resourceId: id.toString(),
-      });
-      
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting project:", error);
-      res.status(500).json({ message: "Failed to delete project" });
+        res.status(201).json(project);
+      } catch (error) {
+        console.error("Error creating project:", error);
+        res.status(400).json({ message: "Failed to create project" });
+      }
     }
-  });
+  );
+
+  app.put('/api/projects/:id',
+    validate(IdParamSchema, "params"),
+    requirePermission('edit_projects'),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const projectData = req.body;
+        const project = await storage.updateProject(id, projectData);
+
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'update',
+          resource: 'project',
+          resourceId: id.toString(),
+          metadata: { name: project.name },
+        });
+
+        res.json(project);
+      } catch (error) {
+        console.error("Error updating project:", error);
+        res.status(400).json({ message: "Failed to update project" });
+      }
+    }
+  );
+
+  app.delete('/api/projects/:id',
+    validate(IdParamSchema, "params"),
+    requirePermission('delete_projects'),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        await storage.deleteProject(id);
+
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'delete',
+          resource: 'project',
+          resourceId: id.toString(),
+        });
+
+        res.status(204).send();
+      } catch (error) {
+        console.error("Error deleting project:", error);
+        res.status(500).json({ message: "Failed to delete project" });
+      }
+    }
+  );
 
   // Release routes
   app.get('/api/releases', async (req, res) => {
@@ -333,79 +358,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/releases', async (req, res) => {
-    try {
-      const releaseData = req.body;
-      const release = await storage.createRelease(releaseData);
-      
-      // Log release creation
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'create',
-        resource: 'release',
-        resourceId: release.id.toString(),
-        metadata: { name: release.name, releaseId: release.releaseId },
-      });
-      
-      res.status(201).json(release);
-    } catch (error) {
-      console.error("Error creating release:", error);
-      let errorMessage: string;
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === "object" && error !== null && "message" in error && typeof (error as any).message === "string") {
-        errorMessage = (error as any).message;
-      } else {
-        errorMessage = String(error);
+  app.post('/api/releases',
+    requirePermission('edit_releases'),
+    validate(ReleaseCreateSchema, "body"),
+    async (req, res) => {
+      try {
+        const releaseData = req.body;
+        const release = await storage.createRelease(releaseData);
+
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'create',
+          resource: 'release',
+          resourceId: release.id.toString(),
+          metadata: { name: release.name, releaseId: release.releaseId },
+        });
+
+        res.status(201).json(release);
+      } catch (error) {
+        console.error("Error creating release:", error);
+        let errorMessage: string;
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === "object" && error !== null && "message" in error && typeof (error as any).message === "string") {
+          errorMessage = (error as any).message;
+        } else {
+          errorMessage = String(error);
+        }
+        res.status(400).json({ message: "Failed to create release : " + errorMessage });
       }
-      res.status(400).json({ message: "Failed to create release : " + errorMessage });
     }
-  });
+  );
 
-  app.put('/api/releases/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const releaseData = req.body;
-      const release = await storage.updateRelease(id, releaseData);
-      
-      // Log release update
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'update',
-        resource: 'release',
-        resourceId: id.toString(),
-        metadata: { name: release.name, releaseId: release.releaseId },
-      });
-      
-      res.json(release);
-    } catch (error) {
-      console.error("Error updating release:", error);
-      res.status(400).json({ message: "Failed to update release" });
-    }
-  });
+  app.put('/api/releases/:id',
+    validate(IdParamSchema, "params"),
+    requirePermission('edit_releases'),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const releaseData = req.body;
+        const release = await storage.updateRelease(id, releaseData);
 
-  app.delete('/api/releases/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteRelease(id);
-      
-      // Log release deletion
-      const requestInfo = getRequestInfo(req);
-      await logAuditEvent({
-        ...requestInfo,
-        action: 'delete',
-        resource: 'release',
-        resourceId: id.toString(),
-      });
-      
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting release:", error);
-      res.status(500).json({ message: "Failed to delete release" });
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'update',
+          resource: 'release',
+          resourceId: id.toString(),
+          metadata: { name: release.name, releaseId: release.releaseId },
+        });
+
+        res.json(release);
+      } catch (error) {
+        console.error("Error updating release:", error);
+        res.status(400).json({ message: "Failed to update release" });
+      }
     }
-  });
+  );
+
+  app.delete('/api/releases/:id',
+    validate(IdParamSchema, "params"),
+    requirePermission('delete_releases'),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        await storage.deleteRelease(id);
+
+        const requestInfo = getRequestInfo(req);
+        await logAuditEvent({
+          ...requestInfo,
+          action: 'delete',
+          resource: 'release',
+          resourceId: id.toString(),
+        });
+
+        res.status(204).send();
+      } catch (error) {
+        console.error("Error deleting release:", error);
+        res.status(500).json({ message: "Failed to delete release" });
+      }
+    }
+  );
 
   app.get('/api/releases/:id/procedures', async (req, res) => {
     try {
@@ -639,7 +673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/arb', async (req: any, res) => {
+  app.post('/api/arb', requirePermission('edit_arb'), async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub || req.body.requesterId;
       const arbData = { ...req.body, requesterId: userId };
@@ -651,17 +685,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/arb/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const arbData = req.body;
-      const arbItem = await storage.updateArb(id, arbData);
-      res.json(arbItem);
-    } catch (error) {
-      console.error("Error updating ARB:", error);
-      res.status(400).json({ message: "Failed to update ARB" });
+  app.put('/api/arb/:id',
+    validate(IdParamSchema, "params"),
+    requirePermission('edit_arb'),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const arbData = req.body;
+        const arbItem = await storage.updateArb(id, arbData);
+        res.json(arbItem);
+      } catch (error) {
+        console.error("Error updating ARB:", error);
+        res.status(400).json({ message: "Failed to update ARB" });
+      }
     }
-  });
+  );
 
   // Project PV CRUD operations
   app.post('/api/project-versions/:id/pvs', async (req, res) => {
@@ -962,14 +1000,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin routes for audit logs
-  app.get('/api/admin/audit-logs', async (req, res) => {
+  app.get('/api/admin/audit-logs', requirePermission('admin'), async (req, res) => {
     try {
       const requestInfo = getRequestInfo(req);
-      
-      // Check if user is admin (for now, any logged in user can access)
-      if (!requestInfo.userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
 
       const { page = 1, limit = 50, action, resource, userId } = req.query;
       const offset = (Number(page) - 1) * Number(limit);
@@ -1014,14 +1047,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/audit-logs', async (req, res) => {
+  app.delete('/api/admin/audit-logs', requirePermission('admin'), async (req, res) => {
     try {
       const requestInfo = getRequestInfo(req);
-      
-      // Check if user is admin
-      if (!requestInfo.userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
 
       await cleanupOldLogs();
       

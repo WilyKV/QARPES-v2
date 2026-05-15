@@ -333,37 +333,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createRelease(release: InsertRelease): Promise<Release> {
-    // Génération de releaseId automatique (YYYYMM-NN) basée sur la date de production
-    let releaseId = release.releaseId;
-    
-    if (!releaseId) {
-      // Utiliser la date de production pour générer le releaseId
-      const productionDate = release.productionDate ? new Date(release.productionDate) : new Date();
-      const yearMonth = `${productionDate.getFullYear()}${(productionDate.getMonth() + 1).toString().padStart(2, '0')}`;
-      
-      const last = await prisma.release.findFirst({
-        where: { releaseId: { startsWith: yearMonth } },
-        orderBy: { releaseId: 'desc' },
-      });
-      
-      let nextNumber = 1;
-      if (last && last.releaseId) {
-        const lastNumber = parseInt(last.releaseId.split('-')[1]);
-        nextNumber = lastNumber + 1;
-      }
-      releaseId = `${yearMonth}-${nextNumber.toString().padStart(2, '0')}`;
-    } else {
-      // Si un releaseId est fourni, vérifier qu'il n'existe pas déjà
-      const existing = await prisma.release.findUnique({
-        where: { releaseId },
-      });
-      
-      if (existing) {
-        throw new Error(`Release with releaseId "${releaseId}" already exists`);
-      }
-    }
-
-    // Correction : parser les dates si elles sont au format YYYY-MM-DD
+    // Parser les dates si elles sont au format YYYY-MM-DD
     const parseDate = (d: any) => {
       if (!d) return undefined;
       if (d instanceof Date) return d;
@@ -373,15 +343,66 @@ export class DatabaseStorage implements IStorage {
       return new Date(d);
     };
 
-    return prisma.release.create({
-      data: {
-        ...release,
-        recetteDate: parseDate(release.recetteDate),
-        preprodDate: parseDate(release.preprodDate),
-        productionDate: parseDate(release.productionDate),
-        releaseId,
-      },
-    });
+    // Si un releaseId est fourni, verifier qu'il n'existe pas deja
+    if (release.releaseId) {
+      const existing = await prisma.release.findUnique({
+        where: { releaseId: release.releaseId },
+      });
+      if (existing) {
+        throw new Error(`Release with releaseId "${release.releaseId}" already exists`);
+      }
+      return prisma.release.create({
+        data: {
+          ...release,
+          releaseId: release.releaseId,
+          recetteDate: parseDate(release.recetteDate),
+          preprodDate: parseDate(release.preprodDate),
+          productionDate: parseDate(release.productionDate),
+        },
+      });
+    }
+
+    // Generation de releaseId automatique (YYYYMM-NN) avec retry en cas de conflit concurrent
+    const productionDate = release.productionDate ? new Date(release.productionDate) : new Date();
+    const yearMonth = `${productionDate.getFullYear()}${(productionDate.getMonth() + 1).toString().padStart(2, '0')}`;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const existing = await prisma.release.findMany({
+        where: { releaseId: { startsWith: yearMonth + '-' } },
+        select: { releaseId: true },
+      });
+
+      let nextNumber = 1;
+      if (existing.length > 0) {
+        const numbers = existing
+          .map((r) => parseInt(r.releaseId!.split('-')[1], 10))
+          .filter((n) => !isNaN(n));
+        if (numbers.length > 0) {
+          nextNumber = Math.max(...numbers) + 1;
+        }
+      }
+      const releaseId = `${yearMonth}-${nextNumber.toString().padStart(2, '0')}`;
+
+      try {
+        return await prisma.release.create({
+          data: {
+            ...release,
+            recetteDate: parseDate(release.recetteDate),
+            preprodDate: parseDate(release.preprodDate),
+            productionDate: parseDate(release.productionDate),
+            releaseId,
+          },
+        });
+      } catch (err: any) {
+        // P2002 = unique constraint violation -> retry avec le prochain numero
+        if (err?.code === 'P2002' && attempt < 4) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw new Error(`Failed to generate a unique releaseId for yearMonth "${yearMonth}" after 5 attempts`);
   }
 
   async updateRelease(id: number, release: Partial<InsertRelease>): Promise<Release> {

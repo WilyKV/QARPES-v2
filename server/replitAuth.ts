@@ -265,6 +265,7 @@ export async function setupAuth(app: Express) {
       (req.session as any).user = {
         id: demoId,
         email: demoEmail,
+        role: role,
         expires_at: Math.floor(Date.now() / 1000) + 3600,
       };
 
