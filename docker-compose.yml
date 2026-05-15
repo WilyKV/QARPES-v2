@@ -2,7 +2,8 @@ services:
   app:
     build:
       context: .
-      dockerfile: .docker/Dockerfile-dev
+      dockerfile: Dockerfile
+      target: development
     container_name: qarpes-app-dev
     restart: unless-stopped
     env_file:
@@ -40,19 +41,3 @@ volumes:
 networks:
   qarpes-net:
     driver: bridge
-
-# Ajoute un service prod si besoin :
-#  app-prod:
-#    build:
-#      context: .
-#      dockerfile: .docker/Dockerfile.prod
-#    container_name: qarpes-app-prod
-#    restart: unless-stopped
-#    env_file:
-#      - .env
-#    ports:
-#      - "8080:8080"
-#    depends_on:
-#      - db
-#    networks:
-#      - qarpes-net
