@@ -5,3 +5,8 @@ server/public
 vite.config.ts.*
 *.tar.gz
 /generated/prisma
+cookies.txt
+output/
+.env
+.env.local
+.env.*.local
