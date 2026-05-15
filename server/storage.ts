@@ -759,15 +759,15 @@ export class DatabaseStorage implements IStorage {
     const projectVersions = await prisma.projectVersion.findMany({
       where: { releaseId },
       include: {
-        gitRepos: {
+        versionGitRepos: {
           include: { procedures: true },
         },
       },
     });
-    
+
     const procedures: Procedure[] = [];
     for (const version of projectVersions) {
-      for (const repo of version.gitRepos) {
+      for (const repo of version.versionGitRepos) {
         procedures.push(...repo.procedures);
       }
     }
