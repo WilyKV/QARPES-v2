@@ -12,7 +12,7 @@ export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
     hmr: false, // Disable HMR to avoid WebSocket connection issues
-    allowedHosts: true,
+    allowedHosts: ["all"] as string[],
   };
 
   const vite = await createViteServer({

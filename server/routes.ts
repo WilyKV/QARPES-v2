@@ -474,7 +474,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error associating project version to release:", error);
-      res.status(500).json({ message: "Failed to associate project version to release", error: error.message });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ message: "Failed to associate project version to release", error: errorMessage });
     }
   });
 
@@ -744,7 +745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Récupérer toutes les versions du projet avec leurs git repos
       const versions = await storage.getProjectVersions(projectId);
-      const gitRepos = versions.flatMap(version => version.gitRepos || []);
+      const gitRepos = versions.flatMap(version => version.versionGitRepos || []);
       
       res.json(gitRepos);
     } catch (error) {

@@ -212,7 +212,7 @@ export class DatabaseStorage implements IStorage {
         members: { include: { member: { include: { user: true } } } },
       },
     });
-    return team || undefined;
+    return team ?? undefined;
   }
 
   async createTeam(team: InsertTeam): Promise<Team> {
@@ -283,7 +283,7 @@ export class DatabaseStorage implements IStorage {
       where: { id },
       include: { team: true },
     });
-    return project || undefined;
+    return project ?? undefined;
   }
 
   async createProject(project: InsertProject): Promise<Project> {
@@ -323,12 +323,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRelease(id: number): Promise<ReleaseWithProjects | undefined> {
-    return prisma.release.findUnique({
+    const result = await prisma.release.findUnique({
       where: { id },
       include: {
         projectVersions: { include: { project: true } },
       },
-    }) || undefined;
+    });
+    return result ?? undefined;
   }
 
   async createRelease(release: InsertRelease): Promise<Release> {
@@ -432,7 +433,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getArb(id: number): Promise<ArbWithDetails | undefined> {
-    return prisma.arb.findUnique({
+    const result = await prisma.arb.findUnique({
       where: { id },
       include: {
         requester: true,
@@ -440,7 +441,8 @@ export class DatabaseStorage implements IStorage {
         team: true,
         project: true,
       },
-    }) || undefined;
+    });
+    return result ?? undefined;
   }
 
   async createArb(arbData: InsertArb): Promise<Arb> {
@@ -477,7 +479,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProjectVersion(id: number): Promise<ProjectVersionWithDetails | undefined> {
-    return prisma.projectVersion.findUnique({
+    const result = await prisma.projectVersion.findUnique({
       where: { id },
       include: {
         project: {
@@ -500,7 +502,8 @@ export class DatabaseStorage implements IStorage {
           },
         },
       },
-    }) || undefined;
+    });
+    return result ?? undefined;
   }
 
   async createProjectVersion(version: InsertProjectVersion): Promise<ProjectVersion> {
@@ -657,7 +660,6 @@ export class DatabaseStorage implements IStorage {
   async getCabs(projectVersionId: number): Promise<CabWithDetails[]> {
     return prisma.cab.findMany({
       where: { projectVersionId },
-      include: { assignee: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -726,8 +728,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProceduresByType(gitRepoId: number, type: string): Promise<Procedure[]> {
+    // gitRepoId is accessed via versionGitRepo relation
     return prisma.procedure.findMany({
-      where: { gitRepoId, type },
+      where: {
+        versionGitRepo: { gitRepoId },
+        type,
+      },
       orderBy: { order: 'asc' },
     });
   }
@@ -851,10 +857,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProjectPv(id: number): Promise<(ProjectPv & { files: PvFile[] }) | undefined> {
-    return prisma.projectPv.findUnique({
+    const result = await prisma.projectPv.findUnique({
       where: { id },
       include: { files: true },
-    }) || undefined;
+    });
+    return result ?? undefined;
   }
 
   async createProjectPv(pvData: InsertProjectPv): Promise<ProjectPv> {
@@ -880,8 +887,8 @@ export class DatabaseStorage implements IStorage {
 
   async getPvFiles(pvId: number): Promise<PvFile[]> {
     return prisma.pvFile.findMany({
-      where: { projectPvId: pvId },
-      orderBy: { createdAt: 'asc' },
+      where: { pvId },
+      orderBy: { uploadedAt: 'asc' },
     });
   }
 

@@ -91,7 +91,7 @@ export type ProjectVersion = {
 
 export type Commit = {
   id: number;
-  gitRepoId: number;
+  versionGitRepoId: number;
   hash: string;
   message: string;
   author: string;
@@ -99,15 +99,14 @@ export type Commit = {
   committedAt: Date;
   createdAt: Date;
   updatedAt: Date;
-  projectVersionId: number | null;
 };
 
 export type Cab = {
   id: number;
   projectVersionId: number;
-  environment: "preprod" | "prod";
+  environment: string;
   helpdeskUrl: string;
-  status: "cree" | "demande" | "valide" | "refuse";
+  status: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -128,8 +127,8 @@ export type Procedure = {
 export type ProjectPv = {
   id: number;
   projectVersionId: number;
-  category: "pv_fonctionnel_recette" | "pv_metier_recette" | "pv_conformite_preprod" | "pv_tests_homologation_preprod";
-  status: "en_cours" | "validation" | "valide" | "refuse";
+  category: string;
+  status: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -183,10 +182,10 @@ export type ProjectVersionGitRepo = {
 // Insert types for creating new records
 export type UpsertUser = {
   id: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  profileImageUrl?: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
   role?: string;
 };
 
@@ -303,18 +302,18 @@ export type InsertArb = {
 
 // Extended types for UI
 export type TeamWithMembers = Team & {
-  leader?: User;
-  members?: (TeamMember & { member: Member & { user: User } })[];
+  leader?: User | null;
+  members?: (TeamMember & { member: Member & { user: User | null } })[];
   _count?: { members: number; projects: number };
 };
 
 export type ProjectWithTeam = Project & {
-  team?: Team;
+  team?: Team | null;
   versions?: ProjectVersion[];
 };
 
 export type ProjectVersionWithDetails = ProjectVersion & {
-  project?: Project & { team?: Team };
+  project?: (Project & { team?: Team | null }) | null;
   versionGitRepos?: ProjectVersionGitRepoWithDetails[];
   cabs?: CabWithDetails[];
   pvs?: (ProjectPv & { files: PvFile[] })[];
@@ -327,7 +326,13 @@ export type ProjectVersionGitRepoWithDetails = ProjectVersionGitRepo & {
 };
 
 export type CabWithDetails = Cab & {
-  assignee?: User;
+  // Extra display fields that may be populated from enriched API responses
+  ticketNumber?: string;
+  title?: string;
+  priority?: string;
+  description?: string | null;
+  assignee?: User | null;
+  dueDate?: string | Date | null;
 };
 
 export type ProceduresByType = {
@@ -358,14 +363,14 @@ export type ReleaseProceduresAggregated = {
 };
 
 export type ReleaseWithProjects = Release & {
-  projectVersions?: (ProjectVersion & { project: Project })[];
+  projectVersions?: (ProjectVersion & { project: Project | null })[];
 };
 
 export type ArbWithDetails = Arb & {
   requester: User;
-  approver?: User;
-  team?: Team;
-  project?: Project;
+  approver?: User | null;
+  team?: Team | null;
+  project?: Project | null;
 };
 
 export type GitRepoWithDetails = GitRepo & {
