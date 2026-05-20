@@ -1,12 +1,12 @@
 {
-  "name": "rest-express",
+  "name": "qarpes-v2",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
-    "build:backend": "tsc --project tsconfig.json --outDir dist/server",
-    "build:frontend": "cd client && npm install && npm run build",
+    "build:backend": "node scripts/build-backend.mjs",
+    "build:frontend": "vite build",
     "build": "npm run build:backend && npm run build:frontend",
     "start": "NODE_ENV=production node dist/server/index.js",
     "start:dev": "NODE_ENV=development tsx server/index.ts",

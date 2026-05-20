@@ -9,6 +9,11 @@ export default defineConfig({
       "server/**/*.test.ts",
       "shared/**/*.test.ts",
       "tests/**/*.test.ts",
+      "client/src/**/*.test.ts",
+      "client/src/**/*.test.tsx",
+    ],
+    environmentMatchGlobs: [
+      ["client/src/**/*.test.{ts,tsx}", "jsdom"],
     ],
     coverage: {
       provider: "v8",
@@ -16,7 +21,6 @@ export default defineConfig({
       exclude: [
         "dist/**",
         "node_modules/**",
-        "client/**",
         "server/fixtures-complete.ts",
         "**/*.config.{js,ts}",
       ],
@@ -26,7 +30,6 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
-      "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
   },
 });

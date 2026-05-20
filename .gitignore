@@ -10,3 +10,17 @@ output/
 .env
 .env.local
 .env.*.local
+
+# IDE
+.idea/
+.vscode/
+.claude/
+
+# Husky
+.husky/_/
+
+# Assets legacy
+attached_assets/
+
+# Coverage
+coverage/

@@ -4,8 +4,7 @@
     "node_modules",
     "build",
     "dist",
-    "**/*.test.ts",
-    "client/src/pages/releases-backup.tsx"
+    "**/*.test.ts"
   ],
   "compilerOptions": {
     "incremental": true,
