@@ -40,6 +40,10 @@ import {
   type ReleaseProceduresAggregated,
   type ReleaseWithProjects,
   type ArbWithDetails,
+  type Notification,
+  type NotificationWithCreator,
+  type SecurityAnnouncement,
+  type SecurityAnnouncementWithCreator,
 } from "@shared/schema";
 import { prisma } from "./db";
 import { sanitizeRichText } from "./lib/sanitize.js";
@@ -164,6 +168,113 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // ═══════════════════════════════════════
+  // SITE SETTINGS
+  // ═══════════════════════════════════════
+
+  async getSiteSettings(): Promise<Record<string, string>> {
+    const settings = await prisma.siteSetting.findMany();
+    return Object.fromEntries(settings.map(s => [s.key, s.value]));
+  }
+
+  async updateSiteSettings(settings: Record<string, string>): Promise<void> {
+    const operations = Object.entries(settings).map(([key, value]) =>
+      prisma.siteSetting.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value },
+      })
+    );
+    await prisma.$transaction(operations);
+  }
+
+  // ═══════════════════════════════════════
+  // NOTIFICATIONS
+  // ═══════════════════════════════════════
+
+  async getActiveNotifications(): Promise<NotificationWithCreator[]> {
+    const now = new Date();
+    return prisma.notification.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: now } },
+        ],
+      },
+      include: {
+        createdBy: {
+          select: { firstName: true, lastName: true, email: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async getAllNotifications(): Promise<NotificationWithCreator[]> {
+    return prisma.notification.findMany({
+      include: {
+        createdBy: {
+          select: { firstName: true, lastName: true, email: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async createNotification(data: { message: string; color: string; expiresAt?: Date | null; createdById: string }): Promise<Notification> {
+    return prisma.notification.create({ data });
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    await prisma.notification.delete({ where: { id } });
+  }
+
+  async toggleNotification(id: number, isActive: boolean): Promise<Notification> {
+    return prisma.notification.update({ where: { id }, data: { isActive } });
+  }
+
+  // ═══════════════════════════════════════
+  // SECURITY ANNOUNCEMENTS
+  // ═══════════════════════════════════════
+
+  async getSecurityAnnouncements(): Promise<SecurityAnnouncementWithCreator[]> {
+    return prisma.securityAnnouncement.findMany({
+      include: {
+        createdBy: {
+          select: { firstName: true, lastName: true, email: true },
+        },
+      },
+      orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
+    });
+  }
+
+  async createSecurityAnnouncement(data: { title: string; content: string; isFeatured: boolean; createdById: string }): Promise<SecurityAnnouncement> {
+    if (data.isFeatured) {
+      // Désactiver les autres "à la une" d'abord
+      await prisma.securityAnnouncement.updateMany({
+        where: { isFeatured: true },
+        data: { isFeatured: false },
+      });
+    }
+    return prisma.securityAnnouncement.create({ data });
+  }
+
+  async updateSecurityAnnouncement(id: number, data: { title?: string; content?: string; isFeatured?: boolean }): Promise<SecurityAnnouncement> {
+    if (data.isFeatured) {
+      // Désactiver les autres "à la une" d'abord
+      await prisma.securityAnnouncement.updateMany({
+        where: { isFeatured: true, id: { not: id } },
+        data: { isFeatured: false },
+      });
+    }
+    return prisma.securityAnnouncement.update({ where: { id }, data });
+  }
+
+  async deleteSecurityAnnouncement(id: number): Promise<void> {
+    await prisma.securityAnnouncement.delete({ where: { id } });
+  }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const user = await prisma.user.findUnique({ where: { id } });

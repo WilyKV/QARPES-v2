@@ -11,6 +11,7 @@ import { IdParamSchema } from "@shared/validation/common";
 import { TeamCreateSchema, TeamUpdateSchema } from "@shared/validation/teams";
 import { ProjectCreateSchema } from "@shared/validation/projects";
 import { ReleaseCreateSchema } from "@shared/validation/releases";
+import { SiteSettingsSchema, CreateNotificationSchema, CreateAnnouncementSchema, UpdateAnnouncementSchema } from "@shared/validation/settings";
 
 const PUBLIC_API_ROUTES = [
   "/api/login",
@@ -1052,7 +1053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const requestInfo = getRequestInfo(req);
 
       await cleanupOldLogs();
-      
+
       await logAuditEvent({
         ...requestInfo,
         action: 'cleanup',
@@ -1064,6 +1065,274 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error cleaning up audit logs:", error);
       res.status(500).json({ message: "Failed to cleanup audit logs" });
+    }
+  });
+
+  // ═══════════════════════════════════════
+  // SITE SETTINGS
+  // ═══════════════════════════════════════
+
+  app.get("/api/admin/settings", requirePermission("admin"), async (_req, res) => {
+    try {
+      const settings = await storage.getSiteSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching site settings:", error);
+      res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  app.put("/api/admin/settings", requirePermission("admin"), validate(SiteSettingsSchema), async (req, res) => {
+    try {
+      const settings: Record<string, string> = {};
+      if (req.body.logDashboardUrl !== undefined) settings.log_dashboard_url = req.body.logDashboardUrl;
+      if (req.body.kitCitizenUrl !== undefined) settings.kit_citizen_url = req.body.kitCitizenUrl;
+      await storage.updateSiteSettings(settings);
+
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'update',
+        resource: 'site_settings',
+        resourceId: 'global',
+      });
+
+      res.json({ message: "Settings updated successfully" });
+    } catch (error) {
+      console.error("Error updating site settings:", error);
+      res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
+  // GET public settings (for dashboard cards) - accessible to all authenticated users
+  app.get("/api/settings/dashboard", async (_req, res) => {
+    try {
+      const settings = await storage.getSiteSettings();
+      res.json({
+        logDashboardUrl: settings.log_dashboard_url || "",
+        kitCitizenUrl: settings.kit_citizen_url || "",
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard settings:", error);
+      res.status(500).json({ message: "Failed to fetch dashboard settings" });
+    }
+  });
+
+  // ═══════════════════════════════════════
+  // NOTIFICATIONS
+  // ═══════════════════════════════════════
+
+  // Public: get active notifications for all authenticated users
+  app.get("/api/notifications/active", async (_req, res) => {
+    try {
+      const notifications = await storage.getActiveNotifications();
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching active notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  // Admin: get all notifications (including inactive/expired)
+  app.get("/api/admin/notifications", requirePermission("admin"), async (_req, res) => {
+    try {
+      const notifications = await storage.getAllNotifications();
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  // Admin: create notification
+  app.post("/api/admin/notifications", requirePermission("admin"), validate(CreateNotificationSchema), async (req, res) => {
+    try {
+      const userId = (req.session as any)?.user?.id;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const notification = await storage.createNotification({
+        message: req.body.message,
+        color: req.body.color || "blue",
+        expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
+        createdById: userId,
+      });
+
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'create',
+        resource: 'notification',
+        resourceId: String(notification.id),
+      });
+
+      res.status(201).json(notification);
+    } catch (error) {
+      console.error("Error creating notification:", error);
+      res.status(500).json({ message: "Failed to create notification" });
+    }
+  });
+
+  // Admin: toggle notification active/inactive
+  app.patch("/api/admin/notifications/:id/toggle", requirePermission("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const { isActive } = req.body;
+      if (typeof isActive !== "boolean") return res.status(400).json({ message: "isActive must be a boolean" });
+
+      const notification = await storage.toggleNotification(id, isActive);
+
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'update',
+        resource: 'notification',
+        resourceId: String(id),
+      });
+
+      res.json(notification);
+    } catch (error) {
+      console.error("Error toggling notification:", error);
+      res.status(500).json({ message: "Failed to toggle notification" });
+    }
+  });
+
+  // Admin: delete notification
+  app.delete("/api/admin/notifications/:id", requirePermission("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      await storage.deleteNotification(id);
+
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'delete',
+        resource: 'notification',
+        resourceId: String(id),
+      });
+
+      res.json({ message: "Notification deleted" });
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      res.status(500).json({ message: "Failed to delete notification" });
+    }
+  });
+
+  // ═══════════════════════════════════════
+  // SECURITY ANNOUNCEMENTS
+  // ═══════════════════════════════════════
+
+  // Public: get all announcements (everyone can see)
+  app.get("/api/security/announcements", async (_req, res) => {
+    try {
+      const announcements = await storage.getSecurityAnnouncements();
+      res.json(announcements);
+    } catch (error) {
+      console.error("Error fetching security announcements:", error);
+      res.status(500).json({ message: "Failed to fetch announcements" });
+    }
+  });
+
+  // Securite role: create announcement
+  app.post("/api/security/announcements", requirePermission("edit_security"), validate(CreateAnnouncementSchema), async (req, res) => {
+    try {
+      const userId = (req.session as any)?.user?.id;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const announcement = await storage.createSecurityAnnouncement({
+        title: req.body.title,
+        content: req.body.content,
+        isFeatured: req.body.isFeatured || false,
+        createdById: userId,
+      });
+
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'create',
+        resource: 'security_announcement',
+        resourceId: String(announcement.id),
+      });
+
+      res.status(201).json(announcement);
+    } catch (error) {
+      console.error("Error creating announcement:", error);
+      res.status(500).json({ message: "Failed to create announcement" });
+    }
+  });
+
+  // Securite role: update announcement
+  app.put("/api/security/announcements/:id", requirePermission("edit_security"), validate(UpdateAnnouncementSchema), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const announcement = await storage.updateSecurityAnnouncement(id, req.body);
+
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'update',
+        resource: 'security_announcement',
+        resourceId: String(id),
+      });
+
+      res.json(announcement);
+    } catch (error) {
+      console.error("Error updating announcement:", error);
+      res.status(500).json({ message: "Failed to update announcement" });
+    }
+  });
+
+  // Securite role: delete announcement
+  app.delete("/api/security/announcements/:id", requirePermission("edit_security"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      await storage.deleteSecurityAnnouncement(id);
+
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'delete',
+        resource: 'security_announcement',
+        resourceId: String(id),
+      });
+
+      res.json({ message: "Announcement deleted" });
+    } catch (error) {
+      console.error("Error deleting announcement:", error);
+      res.status(500).json({ message: "Failed to delete announcement" });
+    }
+  });
+
+  // Securite role: toggle featured status
+  app.patch("/api/security/announcements/:id/feature", requirePermission("edit_security"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const { isFeatured } = req.body;
+      if (typeof isFeatured !== "boolean") return res.status(400).json({ message: "isFeatured must be a boolean" });
+
+      const announcement = await storage.updateSecurityAnnouncement(id, { isFeatured });
+
+      const requestInfo = getRequestInfo(req);
+      await logAuditEvent({
+        ...requestInfo,
+        action: 'update',
+        resource: 'security_announcement',
+        resourceId: String(id),
+      });
+
+      res.json(announcement);
+    } catch (error) {
+      console.error("Error updating featured status:", error);
+      res.status(500).json({ message: "Failed to update featured status" });
     }
   });
 

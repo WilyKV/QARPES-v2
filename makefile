@@ -1,23 +1,19 @@
-# Makefile pour gestion du projet QARPES-v2 avec Docker
+# Makefile pour gestion du projet ROVER avec Docker
 # Dockerfile unifié multi-stage (dev/prod)
 
 # ============================================================================
 # Commandes de développement
 # ============================================================================
 
-# Démarre tous les services (mode dev)
+# Démarre tous les services (mode dev) et lance automatiquement le serveur
 up:
 	docker compose up -d --build
 
-# Rebuild app + réinitialisation database
+# Rebuild app + redémarre le container (l'entrypoint gère migrations/seed/dev server)
 reload-app:
 	docker compose up -d --build app
-	docker compose exec app npx prisma generate
-	docker compose exec app npx prisma migrate deploy
-	docker compose exec app npx prisma db seed
-	docker compose exec app npm run dev
 
-# Lance le serveur de dev dans le container existant
+# Lance le serveur de dev manuellement dans le container existant (si besoin de restart)
 run-dev:
 	docker compose exec app npm run dev
 
@@ -47,12 +43,12 @@ studio:
 
 # Build l'image de production
 build:
-	docker build -t qarpes-v2:latest .
-	@echo "Image de production créée : qarpes-v2:latest"
+	docker build -t rover:latest .
+	@echo "Image de production créée : rover:latest"
 
 # Test l'image de production en local
 test-prod:
-	docker run --rm -p 8080:8080 --env-file .env qarpes-v2:latest
+	docker run --rm -p 8080:8080 --env-file .env rover:latest
 
 # ============================================================================
 # Nettoyage
@@ -60,7 +56,7 @@ test-prod:
 
 # Supprime les images de production et le dossier dist
 clean:
-	-docker rmi qarpes-v2:latest
+	-docker rmi rover:latest
 	@if [ -d dist ]; then rm -rf dist; fi
 	@echo "Nettoyage terminé"
 
@@ -78,10 +74,14 @@ status:
 	@echo "=== Services Docker Compose ==="
 	docker compose ps
 	@echo "\n=== Images Docker ==="
-	docker images | grep qarpes || echo "Aucune image qarpes trouvée"
+	docker images | grep rover || echo "Aucune image rover trouvée"
 
 # Affiche les logs de tous les services
 logs:
 	docker compose logs -f
 
-.PHONY: up reload-app run-dev run-seed down sh check studio build test-prod clean clean-all status logs
+# Affiche les logs de l'app (serveur de dev)
+logs-app:
+	docker compose logs -f app
+
+.PHONY: up reload-app run-dev run-seed down sh check studio build test-prod clean clean-all status logs logs-app

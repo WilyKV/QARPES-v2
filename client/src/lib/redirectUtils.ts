@@ -6,7 +6,7 @@
  * Redirige l'utilisateur vers la page d'accueil
  */
 export function redirectToHome() {
-  window.location.href = "/";
+ window.location.href = "/";
 }
 
 /**
@@ -14,7 +14,7 @@ export function redirectToHome() {
  * @param delay Délai en millisecondes (par défaut 500ms)
  */
 export function redirectToHomeDelayed(delay: number = 500) {
-  setTimeout(() => {
-    redirectToHome();
-  }, delay);
+ setTimeout(() => {
+ redirectToHome();
+ }, delay);
 }

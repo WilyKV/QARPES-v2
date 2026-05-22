@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: development
-    container_name: qarpes-app-dev
+    container_name: rover-app-dev
     restart: unless-stopped
     env_file:
       - .env
@@ -13,31 +13,37 @@ services:
       - "5173:5173"
       - "5555:5555"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
-      - qarpes-net
+      - rover-net
     volumes:
       - ./:/app
       - /app/node_modules
 
   db:
     image: postgres:16-alpine
-    container_name: qarpes-db
+    container_name: rover-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: qarpes
-      POSTGRES_USER: qarpes
-      POSTGRES_PASSWORD: qarpes
+      POSTGRES_DB: rover
+      POSTGRES_USER: rover
+      POSTGRES_PASSWORD: rover
     ports:
       - "5433:5432"
     volumes:
-      - qarpes-db-data:/var/lib/postgresql/data
+      - rover-db-data:/var/lib/postgresql/data
     networks:
-      - qarpes-net
+      - rover-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rover -d rover"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
-  qarpes-db-data:
+  rover-db-data:
 
 networks:
-  qarpes-net:
+  rover-net:
     driver: bridge

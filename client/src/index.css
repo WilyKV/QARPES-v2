@@ -3,108 +3,70 @@
 @tailwind utilities;
 
 :root {
-  --background: 210 11% 98%; /* #F9FAFB */
-  --foreground: 210 14% 11%; /* #1F2937 */
-  --muted: 210 11% 96%; /* #F3F4F6 */
-  --muted-foreground: 210 9% 45%; /* #6B7280 */
-  --popover: 0 0% 100%; /* #FFFFFF */
-  --popover-foreground: 210 14% 11%; /* #1F2937 */
-  --card: 0 0% 100%; /* #FFFFFF */
-  --card-foreground: 210 14% 11%; /* #1F2937 */
-  /* Header text color (used by Header component); defaults to card-foreground */
-  --header-foreground: 210 14% 11%;
-  --border: 210 11% 89%; /* #E5E7EB */
-  --input: 210 11% 89%; /* #E5E7EB */
-  --primary: 217 91% 60%; /* #3B82F6 */
-  --primary-foreground: 0 0% 100%; /* #FFFFFF */
-  --secondary: 210 11% 96%; /* #F3F4F6 */
-  --secondary-foreground: 210 14% 11%; /* #1F2937 */
-  --accent: 210 11% 96%; /* #F3F4F6 */
-  --accent-foreground: 210 14% 11%; /* #1F2937 */
-  --destructive: 0 84% 60%; /* #EF4444 */
-  --destructive-foreground: 0 0% 100%; /* #FFFFFF */
-  --ring: 217 91% 60%; /* #3B82F6 */
+  /* === FOND & TEXTE PRINCIPAL (zone de contenu — clair) === */
+  --background: 220 14% 96%;          /* #F1F5F9 — Gris bleuté très clair */
+  --foreground: 222 47% 11%;          /* #0C1527 — Quasi-noir bleuté */
+
+  /* === CARDS === */
+  --card: 0 0% 100%;                  /* Blanc pur */
+  --card-foreground: 222 47% 11%;
+
+  /* === POPOVER === */
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* === PRIMARY (bleu vif — couleur d'accentuation) === */
+  --primary: 213 94% 56%;             /* #3B82F6 — Bleu vif lumineux */
+  --primary-foreground: 0 0% 100%;
+
+  /* === SECONDARY === */
+  --secondary: 214 32% 91%;           /* #E2E8F0 — Gris bleuté clair */
+  --secondary-foreground: 222 47% 20%;
+
+  /* === MUTED === */
+  --muted: 210 20% 93%;               /* #EDF2F7 */
+  --muted-foreground: 215 16% 47%;    /* #64748B — Gris bleuté moyen */
+
+  /* === ACCENT === */
+  --accent: 214 32% 91%;
+  --accent-foreground: 222 47% 11%;
+
+  /* === DESTRUCTIVE === */
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* === BORDURES & INPUT === */
+  --border: 214 32% 91%;              /* Bordure subtile gris bleuté */
+  --input: 214 32% 91%;
+  --ring: 213 94% 56%;
+
+  /* === RADIUS === */
   --radius: 0.5rem;
 
-  /* Chart colors */
-  --chart-1: 217 91% 60%; /* #3B82F6 */
-  --chart-2: 142 76% 36%; /* #10B981 */
-  --chart-3: 45 93% 47%; /* #F59E0B */
-  --chart-4: 262 83% 58%; /* #8B5CF6 */
-  --chart-5: 340 82% 52%; /* #EF4444 */
+  /* === CHART === */
+  --chart-1: 213 94% 56%;      /* Bleu */
+  --chart-2: 142 71% 45%;      /* Vert */
+  --chart-3: 38 92% 50%;       /* Orange */
+  --chart-4: 262 83% 58%;      /* Violet */
+  --chart-5: 0 84% 60%;        /* Rouge */
 
-  /* Sidebar colors */
-  --sidebar-background: 0 0% 100%; /* #FFFFFF */
-  --sidebar-foreground: 210 14% 11%; /* #1F2937 */
-  --sidebar-primary: 217 91% 60%; /* #3B82F6 */
-  --sidebar-primary-foreground: 0 0% 100%; /* #FFFFFF */
-  --sidebar-accent: 210 11% 96%; /* #F3F4F6 */
-  --sidebar-accent-foreground: 210 14% 11%; /* #1F2937 */
-  --sidebar-border: 210 11% 89%; /* #E5E7EB */
-  --sidebar-ring: 217 91% 60%; /* #3B82F6 */
+  /* === SIDEBAR (bleu marine profond) === */
+  --sidebar-background: 222 47% 11%;        /* #0F172A — Fond principal */
+  --sidebar-foreground: 213 31% 91%;        /* #E2E8F0 — Texte clair principal */
+  --sidebar-primary: 199 89% 48%;           /* #0EA5E9 — Cyan vif pour items actifs */
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 217 33% 17%;            /* #1E293B — Hover/fond secondaire */
+  --sidebar-accent-foreground: 210 40% 98%; /* Blanc cassé */
+  --sidebar-border: 215 25% 20%;            /* Bordure visible mais subtile */
+  --sidebar-ring: 199 89% 48%;
+  --sidebar-muted: 215 20% 65%;             /* Texte secondaire (labels groupes) */
 
-  /* Dégradé par défaut (devient actif en thème navy) */
-  --navy-grad-from: var(--card);
-  --navy-grad-to: var(--card);
+  /* === HEADER (même base que sidebar, gradient subtil) === */
+  --navy-grad-from: 222 47% 11%;     /* Même que sidebar-background */
+  --navy-grad-to: 217 33% 17%;       /* Légèrement plus clair vers la droite */
+  --header-foreground: 210 40% 98%;  /* Blanc cassé */
 }
 
-.dark {
-  --background: 224 71% 4%; /* #0F172A */
-  --foreground: 213 31% 91%; /* #E2E8F0 */
-  --muted: 223 47% 11%; /* #1E293B */
-  --muted-foreground: 215 16% 57%; /* #64748B */
-  --popover: 224 71% 4%; /* #0F172A */
-  --popover-foreground: 213 31% 91%; /* #E2E8F0 */
-  --card: 224 71% 4%; /* #0F172A */
-  --card-foreground: 213 31% 91%; /* #E2E8F0 */
-  --border: 216 34% 17%; /* #334155 */
-  --input: 216 34% 17%; /* #334155 */
-  --primary: 217 91% 60%; /* #3B82F6 */
-  --primary-foreground: 0 0% 100%; /* #FFFFFF */
-  --secondary: 223 47% 11%; /* #1E293B */
-  --secondary-foreground: 213 31% 91%; /* #E2E8F0 */
-  --accent: 223 47% 11%; /* #1E293B */
-  --accent-foreground: 213 31% 91%; /* #E2E8F0 */
-  --destructive: 0 84% 60%; /* #EF4444 */
-  --destructive-foreground: 0 0% 100%; /* #FFFFFF */
-  --ring: 217 91% 60%; /* #3B82F6 */
-
-  /* Chart colors */
-  --chart-1: 217 91% 60%; /* #3B82F6 */
-  --chart-2: 142 76% 36%; /* #10B981 */
-  --chart-3: 45 93% 47%; /* #F59E0B */
-  --chart-4: 262 83% 58%; /* #8B5CF6 */
-  --chart-5: 340 82% 52%; /* #EF4444 */
-
-  /* Sidebar colors */
-  --sidebar-background: 224 71% 4%; /* #0F172A */
-  --sidebar-foreground: 213 31% 91%; /* #E2E8F0 */
-  --sidebar-primary: 217 91% 60%; /* #3B82F6 */
-  --sidebar-primary-foreground: 0 0% 100%; /* #FFFFFF */
-  --sidebar-accent: 223 47% 11%; /* #1E293B */
-  --sidebar-accent-foreground: 213 31% 91%; /* #E2E8F0 */
-  --sidebar-border: 216 34% 17%; /* #334155 */
-  --sidebar-ring: 217 91% 60%; /* #3B82F6 */
-}
-
-/* Thème Navy personnalisé (n'affecte QUE le header/menu) */
-.navy {
-  /* Sidebar uniquement en navy avec gradient 0f172a → 1e293b */
-  --sidebar-background: 224 71% 4%; /* #0F172A */
-  --sidebar-foreground: 213 31% 91%; /* #E2E8F0 */
-  --sidebar-primary: 217 91% 60%; /* #3B82F6 */
-  --sidebar-primary-foreground: 0 0% 100%; /* #FFFFFF */
-  --sidebar-accent: 223 47% 11%; /* #1E293B */
-  --sidebar-accent-foreground: 213 31% 91%; /* #E2E8F0 */
-  --sidebar-border: 216 34% 17%; /* #334155 */
-  --sidebar-ring: 217 91% 60%; /* #3B82F6 */
-
-  /* Header gradient (0f172a -> 1e293b) */
-  --navy-grad-from: 224 71% 4%;  /* #0F172A */
-  --navy-grad-to: 223 47% 11%;   /* #1E293B */
-  /* Header text should be light over the navy gradient */
-  --header-foreground: 213 31% 91%; /* #E2E8F0 */
-}
 
 @layer base {
   * {
@@ -127,35 +89,35 @@
   }
 
   .status-development {
-    @apply bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100;
+    @apply bg-gray-100 text-gray-800;
   }
 
   .status-testing {
-    @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100;
+    @apply bg-yellow-100 text-yellow-800;
   }
 
   .status-preproduction {
-    @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100;
+    @apply bg-blue-100 text-blue-800;
   }
 
   .status-production {
-    @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100;
+    @apply bg-green-100 text-green-800;
   }
 
   .priority-low {
-    @apply bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100;
+    @apply bg-gray-100 text-gray-800;
   }
 
   .priority-medium {
-    @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100;
+    @apply bg-blue-100 text-blue-800;
   }
 
   .priority-high {
-    @apply bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100;
+    @apply bg-orange-100 text-orange-800;
   }
 
   .priority-critical {
-    @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100;
+    @apply bg-red-100 text-red-800;
   }
 }
 
@@ -191,25 +153,6 @@
   font-style: normal !important;
 }
 
-.dark .ql-toolbar .ql-stroke {
-  stroke: hsl(var(--foreground)) !important;
-}
-
-.dark .ql-toolbar .ql-fill {
-  fill: hsl(var(--foreground)) !important;
-}
-
-.dark .ql-toolbar .ql-picker-label {
-  color: hsl(var(--foreground)) !important;
-}
-
-.dark .ql-toolbar button:hover {
-  background: hsl(var(--accent)) !important;
-}
-
-.dark .ql-toolbar button.ql-active {
-  background: hsl(var(--accent)) !important;
-}
 
 /* Bouton personnalisé pour les tableaux */
 .ql-toolbar button.ql-table-insert {

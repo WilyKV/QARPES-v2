@@ -46,11 +46,15 @@ COPY server ./server
 COPY client ./client
 COPY shared ./shared
 
+# Copy development entrypoint script
+COPY docker-entrypoint.dev.sh /usr/local/bin/docker-entrypoint.dev.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.dev.sh
+
 # Expose dev server ports (8080=backend, 5173=vite, 5555=prisma studio)
 EXPOSE 8080 5173 5555
 
-# Keep container alive for manual dev server start
-CMD ["tail", "-f", "/dev/null"]
+# Auto-start development server on container startup
+CMD ["docker-entrypoint.dev.sh"]
 
 # ============================================================================
 # STAGE: builder

@@ -4,7 +4,7 @@
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
-// Prisma schema for QARPES-v2 (généré à partir du schéma Drizzle)
+// Prisma schema for ROVER (généré à partir du schéma Drizzle)
 
 generator client {
   provider = "prisma-client-js"
@@ -29,6 +29,8 @@ model User {
   approvedArbs   Arb[]     @relation("ApproverArbs")
   auditLogs      AuditLog[]
   member         Member?   @relation("UserMember")
+  notifications          Notification[]          @relation("NotificationCreator")
+  securityAnnouncements  SecurityAnnouncement[]  @relation("AnnouncementCreator")
 }
 
 model Member {
@@ -262,4 +264,35 @@ model Session {
 
   @@index([expire])
   @@map("sessions")
+}
+
+/// Paramètres globaux de l'application (clé-valeur)
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+/// Notifications popup créées par les admins
+model Notification {
+  id          Int       @id @default(autoincrement())
+  message     String
+  color       String    @default("blue")
+  isActive    Boolean   @default(true)
+  createdById String    @db.VarChar(255)
+  createdBy   User      @relation("NotificationCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+}
+
+/// Annonces de sécurité avec système "à la une"
+model SecurityAnnouncement {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String
+  isFeatured  Boolean  @default(false)
+  createdById String   @db.VarChar(255)
+  createdBy   User     @relation("AnnouncementCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 }

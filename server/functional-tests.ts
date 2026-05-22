@@ -1,5 +1,5 @@
 /**
- * Tests fonctionnels pour QARPES-v2
+ * Tests fonctionnels pour ROVER
  * Exécuté automatiquement au démarrage de l'application
  */
 

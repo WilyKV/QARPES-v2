@@ -12,7 +12,7 @@
  * - viewer: Alias pour invite
  */
 
-export type UserRole = 'admin' | 'prod' | 'architecte' | 'po' | 'chef_projet' | 'invite' | 'viewer';
+export type UserRole = 'admin' | 'prod' | 'architecte' | 'po' | 'chef_projet' | 'securite' | 'invite' | 'viewer';
 
 export type Permission =
   | 'view_all'
@@ -22,6 +22,7 @@ export type Permission =
   | 'edit_arb'
   | 'edit_git_repos'
   | 'edit_procedures'
+  | 'edit_security'
   | 'delete_teams'
   | 'delete_projects'
   | 'delete_releases'
@@ -40,6 +41,7 @@ export const rolePermissions: Record<UserRole, Permission[]> = {
     'edit_arb',
     'edit_git_repos',
     'edit_procedures',
+    'edit_security',
     'delete_teams',
     'delete_projects',
     'delete_releases',
@@ -73,6 +75,10 @@ export const rolePermissions: Record<UserRole, Permission[]> = {
     'edit_projects',
     'edit_git_repos',
     'delete_projects',
+  ],
+  securite: [
+    'view_all',
+    'edit_security',
   ],
   invite: ['view_all'],
   viewer: ['view_all'],
@@ -182,6 +188,7 @@ export function getRoleDescription(role: string): string {
     architecte: 'Architecte - Peut tout voir et modifier uniquement les ARB',
     po: 'Product Owner - Peut tout voir et modifier équipes et projets',
     chef_projet: 'Chef de Projet - Peut tout voir et modifier équipes et projets',
+    securite: 'Équipe Sécurité - Peut tout voir et gérer les annonces de sécurité',
     invite: 'Invité - Lecture seule sur toutes les fonctionnalités',
     viewer: 'Visualiseur - Lecture seule sur toutes les fonctionnalités',
   };
@@ -218,6 +225,11 @@ export const AVAILABLE_ROLES: Array<{ value: UserRole; label: string; descriptio
     value: 'chef_projet',
     label: 'Chef de Projet',
     description: 'Peut tout voir et modifier équipes et projets',
+  },
+  {
+    value: 'securite',
+    label: 'Équipe Sécurité',
+    description: 'Peut tout voir et gérer les annonces de sécurité',
   },
   {
     value: 'invite',

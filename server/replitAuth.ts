@@ -20,7 +20,7 @@ export function getSession() {
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
-    name: "qarpes.sid",
+    name: "rover.sid",
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -247,7 +247,7 @@ export async function setupAuth(app: Express) {
     try {
       // Récupérer le rôle depuis les query params (par défaut: viewer)
       const requestedRole = String(req.query.role ?? "viewer");
-      const validRoles = ["admin", "prod", "architecte", "po", "chef_projet", "viewer"];
+      const validRoles = ["admin", "prod", "architecte", "po", "chef_projet", "securite", "viewer"];
       const role = validRoles.includes(requestedRole) ? requestedRole : "viewer";
 
       const demoEmail = `demo.${role}@omneseducation.com`;
@@ -310,7 +310,7 @@ export async function setupAuth(app: Express) {
         console.error("Error destroying session:", err);
         return res.status(500).json({ error: "Failed to logout" });
       }
-      res.clearCookie('qarpes.sid');
+      res.clearCookie('rover.sid');
       res.json({ message: "Logged out successfully" });
     });
   });

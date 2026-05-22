@@ -379,3 +379,40 @@ export type GitRepoWithDetails = GitRepo & {
 
 // Les schémas de validation insert*Schema ne sont plus exportés ici (Drizzle/zod supprimés)
 // Il faut supprimer ces imports dans server/routes.ts
+
+// === Settings ===
+export interface SiteSetting {
+  key: string;
+  value: string;
+  updatedAt: Date;
+}
+
+// === Notifications ===
+export interface Notification {
+  id: number;
+  message: string;
+  color: string;
+  isActive: boolean;
+  createdById: string;
+  createdAt: Date;
+  expiresAt: Date | null;
+}
+
+export interface NotificationWithCreator extends Notification {
+  createdBy: { firstName: string | null; lastName: string | null; email: string | null };
+}
+
+// === Security Announcements ===
+export interface SecurityAnnouncement {
+  id: number;
+  title: string;
+  content: string;
+  isFeatured: boolean;
+  createdById: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SecurityAnnouncementWithCreator extends SecurityAnnouncement {
+  createdBy: { firstName: string | null; lastName: string | null; email: string | null };
+}
