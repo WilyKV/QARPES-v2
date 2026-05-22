@@ -1,7 +1,7 @@
 # TODO.md — Plan d'action QARPES-v2
 
 > Plan d'amélioration priorisé pour faire passer le projet de 25/100 à 70/100+.
-> Dernière mise à jour : 20 mai 2026
+> Dernière mise à jour : 22 mai 2026
 
 ---
 
@@ -9,9 +9,22 @@
 
 **Score technique global : 25/100 (CRITIQUE)**
 
-Le projet fonctionne en développement (Docker + Vite + Express sur localhost:3000). Après nettoyage du 20 mai 2026 : **0 erreur TypeScript**, **214 tests passent** (9 skippés, 0 échoués), ESLint 0 erreurs (17 warnings). Le build esbuild backend est réparé. Restent des failles de sécurité critiques (backdoor demo auth, 23 endpoints non protégés), une architecture monolithique (routes.ts 1072 lignes, storage.ts 1015 lignes), 51 `as any`, 64 `parseInt()` non validés, et 119 `console.log` en production.
+Le projet fonctionne en développement (Docker + Vite + Express sur localhost:3000). Après nettoyage du 20 mai 2026 : **0 erreur TypeScript**, **214 tests passent** (9 skippés, 0 échoués), ESLint 0 erreurs (17 warnings). Le build esbuild backend est réparé. Restent des failles de sécurité critiques (backdoor demo auth, 23 endpoints non protégés), une architecture monolithique (routes.ts 1072 lignes, storage.ts 1015 lignes), 45 `as any`, 47 `parseInt()` non validés dans routes.ts seul, et 117 `console.log` en production.
 
 **Priorités** : Sécurité d'abord, puis stabilité, puis architecture, puis qualité.
+
+---
+
+## ⚠️ Problèmes techniques connus
+
+| Problème | Impact | Solution | Effort |
+|----------|--------|----------|--------|
+| **Crash Vitest local (Node 18)** | Tests non exécutables localement, TDD impossible | Upgrade Node local vers v22 (comme CI GitHub Actions) | 30 min |
+| **`package-lock.json` modifié** | Changement nom package `rest-express` → `qarpes-v2` non commité | Commiter la modification | 2 min |
+| **Fichiers sensibles locaux** | `.env` et `cookies.txt` présents sur disque (non trackés git) | Supprimer manuellement, vérifier `.gitignore` | 5 min |
+| **Node local vs CI** | Node 18.19.1 local vs Node 22 en CI — incompatibilité `rolldown/styleText` | Standardiser sur Node 22 (`.nvmrc` ou `engines` dans package.json) | 15 min |
+
+> **Note :** La CI GitHub Actions fonctionne correctement avec Node 22. Les tests passent en CI mais crashent en local avec Node 18.
 
 ---
 
@@ -44,9 +57,8 @@ Actions immédiates à faire en priorité :
   - Ajouter condition : `...(process.env.NODE_ENV === 'development' ? ['/api/auth/demo'] : [])`
   - Ou exclure `/api/auth/demo` de `PUBLIC_API_ROUTES` et gérer la condition dans `replitAuth.ts`
 
-- [ ] **Supprimer le bloc debug `=== ASSOCIATION DEBUG START ===`** (5 min)
-  - Fichier : `server/routes.ts` lignes ~446-489
-  - Code mort qui pollue les logs
+- [x] **Supprimer le bloc debug `=== ASSOCIATION DEBUG START ===`** (5 min) ✅
+  - Supprimé lors du cleanup du 20 mai 2026
 
 - [x] **Installer les dépendances de test manquantes** (10 min) ✅
   - Toutes les dépendances sont installées dans le container Docker
@@ -73,28 +85,39 @@ Actions immédiates à faire en priorité :
   ```
 
 - [ ] **Ajouter `requirePermission` sur les 23 endpoints mutants sans protection** (2h)
-  - Identifier tous les endpoints POST/PUT/PATCH/DELETE sans middleware RBAC
+  - Les 12 endpoints déjà protégés servent de modèle
+  - Endpoints à protéger par domaine :
+    - **Teams** : POST/PUT/DELETE `/api/teams/*`, `/api/members/*`
+    - **Projects** : POST/PUT/DELETE `/api/projects/*`
+    - **Releases** : POST/PUT/DELETE `/api/releases/*`
+    - **Git** : POST/PUT/DELETE `/api/git-repos/*`
+    - **Procedures** : POST/PUT/DELETE `/api/procedures/*`
+    - **CAB** : POST/PUT/DELETE `/api/cabs/*`
+    - **ARB** : POST/PUT/DELETE `/api/arbs/*`
+    - **PV** : POST/PUT/DELETE `/api/project-pvs/*`, `/api/pv-files/*`
+    - **Versions** : POST/PUT/DELETE `/api/project-versions/*`
+  - Mapper chaque endpoint à la permission appropriée (voir `shared/permissions.ts`)
   - Liste partielle à vérifier :
-    - `POST /api/teams/:id/members` (ligne 178)
-    - `DELETE /api/teams/:teamId/members/:userId` (ligne 215)
-    - `POST /api/projects/:id/versions` (ligne 560)
-    - `PATCH /api/project-versions/:id/note` (ligne 585)
-    - `POST /api/users` (ligne 608)
-    - `PUT /api/users/:id` (ligne 634)
-    - `POST /api/project-versions/:id/pvs` (ligne 705)
-    - `PATCH /api/project-pvs/:id` (ligne 717)
-    - `DELETE /api/project-pvs/:id` (ligne 727)
-    - `POST /api/project-versions/:id/cabs` (ligne 740)
-    - `PATCH /api/cabs/:id` (ligne 751)
-    - `DELETE /api/cabs/:id` (ligne 762)
-    - `POST /api/projects/:projectId/versions/:versionId/git-repos` (ligne 813)
-    - `PUT /api/git-repos/:id` (ligne 839)
-    - `DELETE /api/git-repos/:id` (ligne 850)
-    - `POST /api/git-repos/:gitRepoId/procedures` (ligne 875)
-    - `PATCH /api/procedures/:id` (ligne 900)
-    - `DELETE /api/procedures/:id` (ligne 910)
-    - `POST /api/version-git-repos/:versionGitRepoId/commits` (ligne 959)
-    - `POST /api/version-git-repos/:versionGitRepoId/procedures` (ligne 981)
+    - `POST /api/teams/:id/members` (ligne 178) → `edit_teams`
+    - `DELETE /api/teams/:teamId/members/:userId` (ligne 215) → `edit_teams`
+    - `POST /api/projects/:id/versions` (ligne 560) → `edit_projects`
+    - `PATCH /api/project-versions/:id/note` (ligne 585) → `edit_projects`
+    - `POST /api/users` (ligne 608) → `admin`
+    - `PUT /api/users/:id` (ligne 634) → `admin`
+    - `POST /api/project-versions/:id/pvs` (ligne 705) → `edit_releases`
+    - `PATCH /api/project-pvs/:id` (ligne 717) → `edit_releases`
+    - `DELETE /api/project-pvs/:id` (ligne 727) → `delete_projects`
+    - `POST /api/project-versions/:id/cabs` (ligne 740) → `edit_releases`
+    - `PATCH /api/cabs/:id` (ligne 751) → `edit_releases`
+    - `DELETE /api/cabs/:id` (ligne 762) → `delete_releases`
+    - `POST /api/projects/:projectId/versions/:versionId/git-repos` (ligne 813) → `edit_git_repos`
+    - `PUT /api/git-repos/:id` (ligne 839) → `edit_git_repos`
+    - `DELETE /api/git-repos/:id` (ligne 850) → `edit_git_repos`
+    - `POST /api/git-repos/:gitRepoId/procedures` (ligne 875) → `edit_procedures`
+    - `PATCH /api/procedures/:id` (ligne 900) → `edit_procedures`
+    - `DELETE /api/procedures/:id` (ligne 910) → `edit_procedures`
+    - `POST /api/version-git-repos/:versionGitRepoId/commits` (ligne 959) → `edit_git_repos`
+    - `POST /api/version-git-repos/:versionGitRepoId/procedures` (ligne 981) → `edit_procedures`
 
 ### 1.2 Sécuriser les réponses d'erreur
 
@@ -148,11 +171,23 @@ Actions immédiates à faire en priorité :
 
 ## Priorité 2 — Stabilité (URGENT)
 
-### 2.1 Corriger les erreurs TypeScript
+### 2.1 Standardiser la version Node.js
+
+- [ ] **Standardiser la version Node.js** (30 min)
+  - Créer `.nvmrc` avec `22` à la racine
+  - Ajouter `"engines": { "node": ">=22" }` dans `package.json`
+  - Mettre à jour `README.md` (quand il existera) avec la version Node requise
+  - Vérifier que `npm test` passe localement avec Node 22
+
+- [ ] **Commiter le `package-lock.json` modifié** (2 min)
+  - Le changement de nom `rest-express` → `qarpes-v2` a modifié le lockfile
+  - Faire un commit `chore: update package-lock.json after package rename`
+
+### 2.2 Corriger les erreurs TypeScript
 
 - [x] **~~Corriger les 7 erreurs TypeScript~~** → **Résolu** : 0 erreurs TypeScript (`npm run check` passe sans erreur) ✅
 
-### 2.2 Réparer les tests
+### 2.3 Réparer les tests
 
 - [x] **~~Faire passer les 42 tests échoués~~** → **Résolu** : 214 tests passent, 0 échoués ✅
 
@@ -163,7 +198,7 @@ Actions immédiates à faire en priorité :
   - 1 test skip dans auth-middleware
   - Analyser chaque skip et décider : activer ou documenter pourquoi skippé
 
-### 2.3 Tester le build Docker complet
+### 2.4 Tester le build Docker complet
 
 - [ ] **Tester le build Docker avec le nouveau script esbuild** (1h)
   - `make build`
@@ -286,13 +321,13 @@ Objectif : 6+ repositories par agrégat métier.
 
 ### 4.1 Remplacer les `as any`
 
-- [ ] **Remplacer les 51 `as any`** (6h)
+- [ ] **Remplacer les 45 `as any`** (5h)
   - `server/storage.ts` : 6 occurrences → utiliser les types Prisma
   - `server/routes.ts` : 5 occurrences → utiliser `SessionUser` et types Prisma
   - `server/replitAuth.ts` : 10 occurrences → typer correctement `req.session`
   - `server/middleware/` : 5 occurrences → typer correctement les types Express
   - `client/pages/project-detail.tsx` : 9 occurrences → typer les données API
-  - Autres fichiers : 16 occurrences
+  - Autres fichiers : 10 occurrences
 
 ### 4.2 Appliquer la validation Zod partout
 
@@ -314,7 +349,7 @@ Objectif : 6+ repositories par agrégat métier.
 
 ### 4.3 Remplacer les `parseInt()` non validés
 
-- [ ] **Remplacer les 64 `parseInt()` non validés** (2h)
+- [ ] **Remplacer les 47 `parseInt()` non validés dans routes.ts** (1h30)
   - Pattern actuel : `const id = parseInt(req.params.id)`
   - Pattern cible : `validate(IdParamSchema, "params")` déjà en place sur certaines routes
   - Appliquer systématiquement `IdParamSchema` sur toutes les routes avec `:id`
@@ -338,8 +373,8 @@ Objectif : 6+ repositories par agrégat métier.
   - Créer `server/lib/logger.ts`
   - Exporter un logger configuré
 
-- [ ] **Remplacer les 119 `console.log/error/warn`** (3h)
-  - `server/routes.ts` : 60 occurrences
+- [ ] **Remplacer les 117 `console.log/error/warn`** (3h)
+  - `server/routes.ts` : 58 occurrences
   - `server/fixtures-complete.ts` : 11 occurrences (OK pour du seeding)
   - `server/functional-tests.ts` : 10 occurrences (OK pour des tests)
   - Autres fichiers : 38 occurrences
@@ -660,31 +695,31 @@ Idées pour améliorer le projet après avoir atteint 70/100.
 
 ## Métriques de suivi
 
-| Métrique                        | Avant   | Après nettoyage | Cible   | Progression |
-| ------------------------------- | ------- | --------------- | ------- | ----------- |
-| **Score global**                | 25/100  | ~30/100         | 70/100  | 🟡          |
-| Dette technique                 | 18/100  | 25/100          | 60/100  | 🔴          |
-| Complexité                      | 15/100  | 15/100          | 60/100  | 🔴          |
-| Architecture                    | 22/100  | 22/100          | 70/100  | 🔴          |
-| Tests                           | 22/100  | 55/100          | 70/100  | 🟡          |
-| Maintenabilité                  | 28/100  | 35/100          | 70/100  | 🟡          |
-| Sécurité                        | 35/100  | 35/100          | 80/100  | 🔴          |
-| Configuration                   | 35/100  | 60/100          | 70/100  | 🟡          |
-| **Erreurs TypeScript**          | 7       | **0** ✅        | 0       | ✅          |
-| **Tests passants**              | 26      | **214** ✅      | 200+    | ✅          |
-| **Tests échoués**               | 42      | **0** ✅        | 0       | ✅          |
-| **Tests skippés**               | 136     | **9**           | 0       | 🟡          |
-| **ESLint erreurs**              | N/A     | **0** ✅        | 0       | ✅          |
-| **ESLint warnings**             | N/A     | **17**          | 0       | 🟡          |
-| **Couverture de code**          | <20%    | <20%            | 60%+    | 🔴          |
-| **`as any`**                    | 51      | 51              | 0       | 🔴          |
-| **`parseInt()` non validés**    | 64      | 64              | 0       | 🔴          |
-| **`console.log` en prod**       | 119     | 119             | 0       | 🔴          |
-| **Endpoints sans RBAC**         | 23      | 23              | 0       | 🔴          |
-| **Fichiers > 500 lignes**       | 5       | 5               | 0       | 🔴          |
-| **Build backend**               | ❌ cassé | ✅ esbuild     | ✅      | ✅          |
-| **CI GitHub Actions**           | ❌ absent | ✅ créé        | ✅      | ✅          |
-| **Husky pre-commit**            | ❌ vide  | ✅ lint+check  | ✅      | ✅          |
+| Métrique                        | 20 mai 2026 | 22 mai 2026 | Cible   | Progression |
+| ------------------------------- | ----------- | ----------- | ------- | ----------- |
+| **Score global**                | 25/100      | 25/100      | 70/100  | 🟡          |
+| Dette technique                 | 25/100      | 25/100      | 60/100  | 🔴          |
+| Complexité                      | 15/100      | 15/100      | 60/100  | 🔴          |
+| Architecture                    | 22/100      | 22/100      | 70/100  | 🔴          |
+| Tests                           | 55/100      | 55/100      | 70/100  | 🟡          |
+| Maintenabilité                  | 35/100      | 35/100      | 70/100  | 🟡          |
+| Sécurité                        | 35/100      | 35/100      | 80/100  | 🔴          |
+| Configuration                   | 60/100      | 60/100      | 70/100  | 🟡          |
+| **Erreurs TypeScript**          | **0** ✅    | **0** ✅    | 0       | ✅          |
+| **Tests passants**              | **214** ✅  | **214** ✅  | 200+    | ✅          |
+| **Tests échoués**               | **0** ✅    | **0** ✅    | 0       | ✅          |
+| **Tests skippés**               | 9           | 9           | 0       | 🟡          |
+| **ESLint erreurs**              | **0** ✅    | **0** ✅    | 0       | ✅          |
+| **ESLint warnings**             | 17          | 17          | 0       | 🟡          |
+| **Couverture de code**          | ~20%        | ~20%        | 60%+    | 🔴          |
+| **`as any`**                    | 51          | **45**      | 0       | 🔴          |
+| **`parseInt()` non validés**    | 64          | **47**      | 0       | 🔴          |
+| **`console.log` en prod**       | 119         | **117**     | 0       | 🔴          |
+| **Endpoints sans RBAC**         | 23          | 23          | 0       | 🔴          |
+| **Fichiers > 500 lignes**       | 5           | 5           | 0       | 🔴          |
+| **Build backend**               | ✅ esbuild  | ✅ esbuild  | ✅      | ✅          |
+| **CI GitHub Actions**           | ✅ créé     | ✅ créé     | ✅      | ✅          |
+| **Husky pre-commit**            | ✅ lint+check | ✅ lint+check | ✅  | ✅          |
 
 ---
 
@@ -694,17 +729,17 @@ Idées pour améliorer le projet après avoir atteint 70/100.
 | ---------- | ------------- |
 | Quick Wins | 1h            |
 | Sécurité   | 10h           |
-| Stabilité  | 10h           |
+| Stabilité  | 11h           |
 | Architecture | 30h         |
-| Qualité    | 20h           |
+| Qualité    | 19h           |
 | Tests      | 40h           |
 | Documentation | 30h        |
 | **TOTAL**  | **141h**      |
 
 **Répartition recommandée** :
-- Sprint 1 (1 semaine) : Quick Wins + Sécurité + Stabilité = 21h
+- Sprint 1 (1 semaine) : Quick Wins + Sécurité + Stabilité = 22h
 - Sprint 2 (2 semaines) : Architecture routes/storage = 30h
-- Sprint 3 (2 semaines) : Qualité de code = 20h
+- Sprint 3 (2 semaines) : Qualité de code = 19h
 - Sprint 4 (2 semaines) : Tests = 40h
 - Sprint 5 (1 semaine) : Documentation = 30h
 
@@ -712,7 +747,16 @@ Idées pour améliorer le projet après avoir atteint 70/100.
 
 ---
 
-**Dernière mise à jour** : 20 mai 2026 (post-nettoyage)
-**Score actuel** : ~30/100 (en progression)
+## 📅 Historique des mises à jour
+
+| Date | Changements |
+|------|-------------|
+| 20 mai 2026 | Création initiale — audit multi-agent, nettoyage complet, CI/Husky configurés |
+| 22 mai 2026 | Mise à jour métriques (45 as any, 117 console.log), ajout section problèmes connus, standardisation Node 22, détail endpoints RBAC |
+
+---
+
+**Dernière mise à jour** : 22 mai 2026
+**Score actuel** : 25/100 (CRITIQUE)
 **Score cible** : 70/100 (production-ready)
-**Temps total estimé** : ~130 heures restantes
+**Temps total estimé** : ~141 heures
