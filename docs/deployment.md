@@ -5,33 +5,37 @@
 Le deploiement de ROVER suit un flux automatise a 2 environnements : **staging** et **production**.
 Chaque environnement dispose de sa propre infrastructure Azure (Container App, base de donnees, variables).
 
+Le code source transite de GitHub vers Azure DevOps Git, ou le pipeline Azure DevOps prend le relais
+pour builder l'image Docker, la pousser vers ACR, migrer la base de donnees et deployer.
+
 ```
-Tag Git
+GitHub (code source)
   |
-  |--- staging-vX.Y.Z --------+
-  |                            |
-  |--- release-vX.Y.Z ---+    |
-                          |    |
-                          v    v
-                GitHub Actions CD (.github/workflows/cd.yml)
-                    |   - Lint, typecheck, tests
-                    |   - Build image Docker production
-                    |   - Push vers Azure Container Registry
-                    v
-                Azure Container Registry (ACR)
-                    |
-       +------------+------------+
-       |                         |
-       v                         v
-  rover:staging-X.Y.Z      rover:X.Y.Z
-  rover:staging-latest      rover:latest
-       |                         |
-       v                         v
-  Azure DevOps Pipeline     Azure DevOps Pipeline
-  (env: staging)            (env: production)
-       |                         |
-       v                         v
-  Container App STAGING     Container App PRODUCTION
+  +-- push main → CI (lint, typecheck, tests, build, docker validation)
+  |
+  +-- tag staging-vX.Y.Z ou release-vX.Y.Z
+        |
+        → GitHub Actions CD :
+            1. Relance CI (qualite + build)
+            2. Push le code source vers Azure DevOps Git
+        |
+        → Azure DevOps Pipeline (declenche par le tag) :
+            1. Detecte l'environnement depuis le tag
+            2. Build image Docker production
+            3. Push image vers ACR
+               +-----------------------------+
+               |                             |
+               v                             v
+          rover:staging-X.Y.Z          rover:X.Y.Z
+          rover:staging-latest          rover:latest
+               |                             |
+               v                             v
+            4. Migrate DB (Prisma)
+            5. Deploy sur Container App
+            6. Health check
+               |                             |
+               v                             v
+          Container App STAGING     Container App PRODUCTION
 ```
 
 ---
@@ -47,9 +51,9 @@ Le deploiement suit un flux staging-first pour minimiser les risques :
 ```
 main (stable)
   |
-  +-- staging-v1.2.3  →  CI/CD staging  →  test  →  OK ?
-  |                                                    |
-  +-- release-v1.2.3  ←  ←  ←  ←  ←  ←  ←  ←  ←  ← oui
+  +-- staging-v1.2.3  →  CI + push Azure DevOps  →  build + deploy staging  →  test  →  OK ?
+  |                                                                                       |
+  +-- release-v1.2.3  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ← oui
 ```
 
 ---
@@ -72,7 +76,7 @@ La version doit suivre le format **semver** : `X.Y.Z` (ex: `1.2.3`, `2.0.0`).
 - **Azure Container Registry (ACR)** : registre Docker pour stocker les images
 - **Azure Container Apps (x2)** : une Container App par environnement (staging + production)
 - **Azure Database for PostgreSQL (x2)** : une base par environnement
-- **Azure DevOps** : pipeline de deploiement avec 2 environnements configures
+- **Azure DevOps** : repo Git (miroir) + pipeline de deploiement avec 2 environnements configures
 
 ### Outils locaux
 
@@ -82,21 +86,54 @@ La version doit suivre le format **semver** : `X.Y.Z` (ex: `1.2.3`, `2.0.0`).
 
 ---
 
-## Configuration des secrets GitHub
+## Configuration de l'environnement GitHub `ToAzureDevOps`
 
-Dans le depot GitHub, aller dans **Settings > Secrets and variables > Actions** et creer les secrets suivants :
+L'environnement GitHub `ToAzureDevOps` est utilise par le workflow CD pour pousser le code vers
+Azure DevOps Git. Il isole les credentials Azure DevOps du reste du repo.
 
-| Secret                       | Description                                    | Exemple                        |
-| ---------------------------- | ---------------------------------------------- | ------------------------------ |
-| `AZURE_REGISTRY_URL`        | URL du registre ACR                            | `monregistry.azurecr.io`      |
-| `AZURE_REGISTRY_USERNAME`   | Nom d'utilisateur ACR                          | `monregistry`                  |
-| `AZURE_REGISTRY_PASSWORD`   | Mot de passe ACR                               | `xxxxxxxxxxxxxxxxxxxxxxxx`     |
+### Creation de l'environnement
 
-Ces secrets sont partages entre les deploiements staging et production (meme registre ACR).
+1. Dans le depot GitHub, aller dans **Settings > Environments**
+2. Cliquer sur **New environment**
+3. Nommer l'environnement : `ToAzureDevOps`
+4. (Optionnel) Ajouter des regles de protection (branches autorisees, reviewers)
+
+### Secret a configurer
+
+| Secret               | Description                                           |
+| -------------------- | ----------------------------------------------------- |
+| `AZURE_DEVOPS_PAT`  | Personal Access Token Azure DevOps avec permission **Code (Read & Write)** sur le repo cible |
+
+Pour generer le PAT :
+1. Aller dans Azure DevOps > **User Settings** (icone profil) > **Personal access tokens**
+2. Cliquer sur **New Token**
+3. Configurer :
+   - **Name** : `rover-github-push` (ou similaire)
+   - **Organization** : selectionner l'organisation cible
+   - **Scopes** : **Code** > **Read & Write**
+   - **Expiration** : selon la politique de securite (max 1 an)
+4. Copier le token et le sauvegarder dans le secret GitHub
+
+### Variables a configurer
+
+| Variable              | Description                                           | Exemple                    |
+| --------------------- | ----------------------------------------------------- | -------------------------- |
+| `AZURE_DEVOPS_ORG`   | Nom de l'organisation Azure DevOps                    | `MonOrg`                  |
+| `AZURE_DEVOPS_PROJECT`| Nom du projet Azure DevOps                           | `ROVER`                   |
+| `AZURE_DEVOPS_REPO`  | Nom du repo Git Azure DevOps (miroir)                 | `rover`                   |
 
 ---
 
 ## Configuration Azure DevOps
+
+### Repo Git Azure DevOps
+
+Le repo Azure DevOps est un **miroir** du repo GitHub. Il est mis a jour automatiquement par
+le workflow CD GitHub via un `git push --force`. Ne pas modifier directement le code dans ce repo.
+
+1. Creer un repo Git dans Azure DevOps : **Repos > New repository**
+2. Nommer le repo (ex: `rover`)
+3. Ne pas initialiser avec un README (le contenu viendra de GitHub)
 
 ### Variable Groups
 
@@ -166,6 +203,16 @@ Pour configurer les approbations :
 - Aller dans le menu **...** > **Approvals and checks**
 - Ajouter une approbation avec les personnes autorisees
 
+### Configuration du pipeline
+
+1. Aller dans **Pipelines > New pipeline**
+2. Selectionner **Azure Repos Git** comme source
+3. Selectionner le repo miroir (ex: `rover`)
+4. Selectionner **Existing Azure Pipelines YAML file**
+5. Pointer vers `azure-pipelines.yml` a la racine
+
+Le pipeline se declenchera automatiquement quand GitHub Actions poussera un tag.
+
 ---
 
 ## Deploiement
@@ -189,16 +236,16 @@ Pour configurer les approbations :
 
 3. **Le workflow GitHub CD se declenche automatiquement** :
    - Execute la CI complete (lint, typecheck, tests)
+   - Build applicatif (esbuild + Vite) pour validation
+   - Pousse le code source + le tag vers Azure DevOps Git
+
+4. **Le pipeline Azure DevOps se declenche automatiquement** :
+   - Detecte l'environnement depuis le tag (`staging`)
    - Build l'image Docker production
    - Pousse l'image vers ACR avec les tags `rover:staging-1.2.3` et `rover:staging-latest`
-
-4. **Declencher le pipeline Azure DevOps** :
-   - Aller dans Azure DevOps > Pipelines
-   - Selectionner le pipeline ROVER
-   - Cliquer sur **Run pipeline**
-   - Choisir `environment` = **staging**
-   - Renseigner `imageTag` = **staging-1.2.3** (ou **staging-latest**)
-   - Le pipeline execute : migration DB staging, deploiement, health check
+   - Execute la migration Prisma sur la base staging
+   - Deploie sur la Container App staging
+   - Effectue un health check
 
 5. **Tester manuellement** l'application sur l'URL staging
 
@@ -214,13 +261,27 @@ Une fois le staging valide :
 
 2. **Le workflow GitHub CD se declenche automatiquement** :
    - Meme CI que le staging
-   - Pousse l'image vers ACR avec les tags `rover:1.2.3` et `rover:latest`
+   - Pousse le code source + le tag vers Azure DevOps Git
 
-3. **Declencher le pipeline Azure DevOps** :
-   - Choisir `environment` = **production**
-   - Renseigner `imageTag` = **1.2.3** (ou **latest**)
+3. **Le pipeline Azure DevOps se declenche automatiquement** :
+   - Detecte l'environnement depuis le tag (`production`)
+   - Build l'image Docker production
+   - Pousse l'image vers ACR avec les tags `rover:1.2.3` et `rover:latest`
    - L'approbation manuelle sera demandee si configuree sur l'environnement `production`
-   - Le pipeline execute : migration DB production, deploiement, health check
+   - Execute la migration Prisma sur la base production
+   - Deploie sur la Container App production
+   - Effectue un health check
+
+### Deploiement manuel (fallback)
+
+Si le declenchement automatique ne fonctionne pas, le pipeline Azure DevOps peut etre lance
+manuellement :
+
+1. Aller dans Azure DevOps > Pipelines
+2. Selectionner le pipeline ROVER
+3. Cliquer sur **Run pipeline**
+4. Choisir `environment` = **staging** ou **production**
+5. Le pipeline detectera automatiquement le tag si present, sinon utilisera le parametre
 
 ### Verifier le deploiement
 
@@ -243,8 +304,8 @@ curl -s -o /dev/null -w "%{http_code}" https://<PRODUCTION_FQDN>/api/auth/user
 ### Rollback staging
 
 1. **Via Azure DevOps** :
-   - Relancer le pipeline avec `environment` = **staging** et le tag de la version precedente
-     (ex: `imageTag` = `staging-1.1.0`)
+   - Relancer le pipeline manuellement avec `environment` = **staging**
+   - Pousser un ancien tag depuis GitHub pour re-declencher le flux complet
 
 2. **Via Azure CLI** (urgence) :
    ```bash
@@ -257,8 +318,8 @@ curl -s -o /dev/null -w "%{http_code}" https://<PRODUCTION_FQDN>/api/auth/user
 ### Rollback production
 
 1. **Via Azure DevOps** :
-   - Relancer le pipeline avec `environment` = **production** et le tag de la version precedente
-     (ex: `imageTag` = `1.1.0`)
+   - Relancer le pipeline manuellement avec `environment` = **production**
+   - Pousser un ancien tag depuis GitHub pour re-declencher le flux complet
 
 2. **Via Azure CLI** (urgence) :
    ```bash
@@ -335,25 +396,43 @@ Taille estimee : ~250-350 Mo (selon les dependances).
 La meme image Docker est utilisee en staging et en production. Seules les variables
 d'environnement different (configurees via les Variable Groups Azure DevOps).
 
+**Important** : L'image Docker est maintenant buildee par le pipeline Azure DevOps (et non plus
+par GitHub Actions). Les credentials ACR ne sont plus necessaires dans les secrets GitHub.
+
 ---
 
 ## Resume des fichiers CI/CD
 
-| Fichier                             | Role                                            | Declenchement                        |
-| ----------------------------------- | ----------------------------------------------- | ------------------------------------ |
-| `.github/workflows/ci.yml`         | CI : lint, typecheck, tests, build Docker (dry)  | Push main, PR vers main              |
-| `.github/workflows/cd.yml`         | CD : CI + build + push Docker vers ACR           | Tags `staging-v*` et `release-v*`   |
-| `azure-pipelines.yml`              | Deploiement : migration, deploy, health check    | Manuel (Run pipeline)                |
+| Fichier                             | Role                                                        | Declenchement                        |
+| ----------------------------------- | ----------------------------------------------------------- | ------------------------------------ |
+| `.github/workflows/ci.yml`         | CI : lint, typecheck, tests, build, Docker validation (dry) | Push main, PR vers main              |
+| `.github/workflows/cd.yml`         | CD : CI + push code vers Azure DevOps Git                   | Tags `staging-v*` et `release-v*`   |
+| `azure-pipelines.yml`              | Build Docker, push ACR, migration, deploy, health check     | Tags pousses par GitHub Actions (auto) ou manuel |
 
 ---
 
 ## Depannage
 
-### L'image Docker ne se build pas en CI
+### Le push vers Azure DevOps echoue
 
-- Verifier que le `Dockerfile` est a la racine du projet
+- Verifier que le PAT (`AZURE_DEVOPS_PAT`) est valide et non expire
+- Verifier que le PAT a la permission **Code (Read & Write)** sur le repo cible
+- Verifier les variables `AZURE_DEVOPS_ORG`, `AZURE_DEVOPS_PROJECT`, `AZURE_DEVOPS_REPO`
+  dans l'environnement GitHub `ToAzureDevOps`
+- Verifier que le repo Azure DevOps existe et est accessible
+
+### Le pipeline Azure DevOps ne se declenche pas
+
+- Verifier que le tag a bien ete pousse vers Azure DevOps (`git tag -l` dans le repo Azure DevOps)
+- Verifier que le pipeline est configure avec le trigger sur les tags `staging-v*` et `release-v*`
+- Verifier que le pipeline pointe vers le bon fichier YAML (`azure-pipelines.yml`)
+- En fallback, lancer le pipeline manuellement
+
+### L'image Docker ne se build pas dans Azure DevOps
+
+- Verifier que le `Dockerfile` est present dans le repo miroir Azure DevOps
 - Verifier que `.dockerignore` n'exclut pas de fichiers necessaires
-- Consulter les logs du job `docker-build-push` dans GitHub Actions
+- Consulter les logs du stage `BuildAndPush` dans le pipeline
 
 ### La migration echoue
 
@@ -368,15 +447,15 @@ d'environnement different (configurees via les Variable Groups Azure DevOps).
 - Verifier que `CONTAINER_APP_FQDN` est correct dans le Variable Group
 - Verifier que l'ingress est configure sur le port 8080
 
-### Problemes de connexion a ACR
+### Problemes de connexion a ACR depuis Azure DevOps
 
-- Verifier que les credentials ACR sont corrects dans les secrets GitHub
-- Verifier que le registre ACR autorise les connexions depuis GitHub Actions
+- Verifier que les credentials ACR sont corrects dans le Variable Group
+  (`AZURE_REGISTRY_URL`, `AZURE_REGISTRY_USERNAME`, `AZURE_REGISTRY_PASSWORD`)
+- Verifier que le registre ACR autorise les connexions depuis Azure DevOps
 - Tester la connexion manuellement : `docker login <registry>.azurecr.io`
 
 ### Mauvais environnement deploye
 
 - Verifier le prefixe du tag Git (`staging-v` vs `release-v`)
-- Verifier le parametre `environment` dans Azure DevOps lors du Run pipeline
-- Verifier que le `imageTag` correspond au bon environnement
-  (ex: `staging-1.2.3` pour staging, `1.2.3` pour production)
+- Verifier que le tag a ete correctement detecte dans le stage `DetectEnvironment`
+- En run manuel, verifier le parametre `environment` dans Azure DevOps

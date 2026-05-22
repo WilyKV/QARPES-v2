@@ -2,11 +2,16 @@
 # CD — Deploiement continu ROVER (staging + production)
 #
 # Declenchement :
-#   - Tag `staging-vX.Y.Z`  → build + push image Docker vers ACR (staging)
-#   - Tag `release-vX.Y.Z`  → build + push image Docker vers ACR (production)
+#   - Tag `staging-vX.Y.Z`  → push code vers Azure DevOps Git (staging)
+#   - Tag `release-vX.Y.Z`  → push code vers Azure DevOps Git (production)
+#
+# Nouveau flux :
+#   1. GitHub detecte le tag et relance la CI (qualite + build)
+#   2. GitHub pousse le code source + le tag vers un repo Git Azure DevOps
+#   3. Azure DevOps Pipeline (declenche par le push) :
+#      build Docker, push ACR, migration DB, deploiement Container App
 #
 # L'environnement est detecte automatiquement a partir du prefixe du tag.
-# La CI complete (lint, typecheck, tests) est reexecutee avant le build Docker.
 # =============================================================================
 
 name: CD
@@ -37,7 +42,6 @@ jobs:
     outputs:
       environment: ${{ steps.detect.outputs.environment }}
       version: ${{ steps.detect.outputs.version }}
-      image_prefix: ${{ steps.detect.outputs.image_prefix }}
 
     steps:
       - name: Detecter environnement et version depuis le tag
@@ -50,11 +54,9 @@ jobs:
           if [[ "${TAG}" == staging-v* ]]; then
             ENVIRONMENT="staging"
             VERSION="${TAG#staging-v}"
-            IMAGE_PREFIX="staging-"
           elif [[ "${TAG}" == release-v* ]]; then
             ENVIRONMENT="production"
             VERSION="${TAG#release-v}"
-            IMAGE_PREFIX=""
           else
             echo "::error::Tag invalide : ${TAG}. Attendu : staging-vX.Y.Z ou release-vX.Y.Z"
             exit 1
@@ -68,12 +70,12 @@ jobs:
 
           echo "environment=${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "image_prefix=${IMAGE_PREFIX}" >> "$GITHUB_OUTPUT"
 
-          echo "## Resultat de la detection"
-          echo "- Environnement : ${ENVIRONMENT}"
-          echo "- Version       : ${VERSION}"
-          echo "- Prefixe image : ${IMAGE_PREFIX:-'(aucun)'}"
+          # Resume dans le job summary
+          echo "## Resultat de la detection" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Environnement** : ${ENVIRONMENT}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version** : ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag** : ${TAG}" >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # Job 1 : Qualite du code — lint, typecheck, tests
@@ -139,58 +141,82 @@ jobs:
         run: npm run build
 
   # ---------------------------------------------------------------------------
-  # Job 3 : Build image Docker + push vers Azure Container Registry
+  # Job 3 : Pousser le code source vers Azure DevOps Git
   #
-  # Tags Docker selon l'environnement :
-  #   staging    → rover:staging-<version>, rover:staging-latest
-  #   production → rover:<version>, rover:latest
+  # Le repo Azure DevOps est un miroir du repo GitHub.
+  # Le pipeline Azure DevOps se declenche sur le push du tag et prend le relais :
+  # build Docker, push ACR, migration DB, deploiement Container App.
+  #
+  # Environnement GitHub : ToAzureDevOps
+  #   - Secret : AZURE_DEVOPS_PAT
+  #   - Variables : AZURE_DEVOPS_ORG, AZURE_DEVOPS_PROJECT, AZURE_DEVOPS_REPO
   # ---------------------------------------------------------------------------
-  docker-build-push:
-    name: "Build & Push Docker [${{ needs.detect-environment.outputs.environment }}]"
+  push-to-azure-devops:
+    name: "Push vers Azure DevOps [${{ needs.detect-environment.outputs.environment }}]"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     needs: [detect-environment, quality, build]
+
+    # L'environnement GitHub donne acces aux secrets et variables
+    environment: ToAzureDevOps
 
     env:
       ENVIRONMENT: ${{ needs.detect-environment.outputs.environment }}
       VERSION: ${{ needs.detect-environment.outputs.version }}
-      IMAGE_PREFIX: ${{ needs.detect-environment.outputs.image_prefix }}
 
     steps:
-      - name: Checkout du code
+      - name: Checkout du code avec historique complet
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Afficher les informations de build
+      - name: Configurer Git
         run: |
-          echo "## Informations de build"
-          echo "- Environnement : ${ENVIRONMENT}"
-          echo "- Version       : ${VERSION}"
-          echo "- Tag image 1   : rover:${IMAGE_PREFIX}${VERSION}"
-          echo "- Tag image 2   : rover:${IMAGE_PREFIX}latest"
+          git config user.name "ROVER CI"
+          git config user.email "ci@rover.dev"
 
-      - name: Configuration Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Pousser le code vers Azure DevOps Git
+        env:
+          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+          AZURE_DEVOPS_ORG: ${{ vars.AZURE_DEVOPS_ORG }}
+          AZURE_DEVOPS_PROJECT: ${{ vars.AZURE_DEVOPS_PROJECT }}
+          AZURE_DEVOPS_REPO: ${{ vars.AZURE_DEVOPS_REPO }}
+        run: |
+          # Masquer le PAT dans les logs GitHub Actions
+          echo "::add-mask::${AZURE_DEVOPS_PAT}"
 
-      - name: Connexion a Azure Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.AZURE_REGISTRY_URL }}
-          username: ${{ secrets.AZURE_REGISTRY_USERNAME }}
-          password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
+          # Construire l'URL du repo Azure DevOps (HTTPS avec PAT)
+          AZURE_REPO_URL="https://${AZURE_DEVOPS_PAT}@dev.azure.com/${AZURE_DEVOPS_ORG}/${AZURE_DEVOPS_PROJECT}/_git/${AZURE_DEVOPS_REPO}"
 
-      - name: Build et push de l'image Docker
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: production
-          push: true
-          tags: |
-            ${{ secrets.AZURE_REGISTRY_URL }}/rover:${{ env.IMAGE_PREFIX }}${{ env.VERSION }}
-            ${{ secrets.AZURE_REGISTRY_URL }}/rover:${{ env.IMAGE_PREFIX }}latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.environment=${{ env.ENVIRONMENT }}
+          # Ajouter le remote Azure DevOps
+          git remote add azure "${AZURE_REPO_URL}"
+
+          # Pousser la branche main (force car miroir)
+          echo "## Push de la branche main vers Azure DevOps..."
+          git push azure HEAD:main --force
+
+          # Pousser le tag pour que le pipeline Azure DevOps detecte la version
+          TAG="${GITHUB_REF_NAME}"
+          echo "## Push du tag ${TAG} vers Azure DevOps..."
+          git push azure "refs/tags/${TAG}" --force
+
+          echo "## Push termine avec succes"
+
+      - name: Afficher le resume
+        env:
+          AZURE_DEVOPS_ORG: ${{ vars.AZURE_DEVOPS_ORG }}
+          AZURE_DEVOPS_PROJECT: ${{ vars.AZURE_DEVOPS_PROJECT }}
+          AZURE_DEVOPS_REPO: ${{ vars.AZURE_DEVOPS_REPO }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+
+          echo "## Resume du push vers Azure DevOps" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Environnement** : ${ENVIRONMENT}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version** : ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag** : ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Organisation** : ${AZURE_DEVOPS_ORG}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Projet** : ${AZURE_DEVOPS_PROJECT}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Repo cible** : ${AZURE_DEVOPS_REPO}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branche** : main (force push)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Le pipeline Azure DevOps va se declencher automatiquement sur le tag \`${TAG}\`." >> "$GITHUB_STEP_SUMMARY"
