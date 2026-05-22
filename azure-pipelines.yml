@@ -1,8 +1,14 @@
 # =============================================================================
 # Azure DevOps Pipeline — Deploiement ROVER sur Azure Container Apps
 #
-# Declenchement : manuel ou webhook ACR (pas de trigger automatique).
-# Prerequis : Variable Group "rover-prod" configure dans Azure DevOps.
+# Supporte 2 environnements : staging et production.
+#
+# Declenchement : manuel uniquement (Run pipeline).
+# L'operateur choisit l'environnement et le tag de l'image a deployer.
+#
+# Selon l'environnement choisi :
+#   - staging    → Variable Group "rover-staging", environnement "staging"
+#   - production → Variable Group "rover-prod", environnement "production"
 #
 # Stages :
 #   1. Migrate  — Migration Prisma via Azure Container Instance ephemere
@@ -12,15 +18,39 @@
 
 trigger: none
 
-# Parametres d'entree pour specifier la version a deployer
+# ---------------------------------------------------------------------------
+# Parametres d'entree
+# L'operateur choisit l'environnement cible et le tag de l'image Docker.
+# ---------------------------------------------------------------------------
 parameters:
-  - name: imageTag
-    displayName: "Tag de l'image Docker a deployer (ex: 1.2.3 ou latest)"
+  - name: environment
+    displayName: "Environnement cible"
     type: string
-    default: latest
+    default: staging
+    values:
+      - staging
+      - production
 
+  - name: imageTag
+    displayName: "Tag de l'image Docker a deployer (ex: staging-1.2.3, 1.2.3, staging-latest, latest)"
+    type: string
+    default: staging-latest
+
+# ---------------------------------------------------------------------------
+# Variables : selection du Variable Group selon l'environnement
+#
+# Chaque Variable Group doit contenir :
+#   DATABASE_URL, SESSION_SECRET, MICROSOFT_CLIENT_ID, MICROSOFT_TENANT_ID,
+#   MICROSOFT_CLIENT_SECRET, ALLOWED_DOMAIN, ALLOWED_ORIGINS,
+#   AZURE_REGISTRY_URL, AZURE_REGISTRY_USERNAME, AZURE_REGISTRY_PASSWORD,
+#   AZURE_SERVICE_CONNECTION, CONTAINER_APP_NAME, RESOURCE_GROUP,
+#   CONTAINER_APP_FQDN
+# ---------------------------------------------------------------------------
 variables:
-  - group: rover-prod
+  - ${{ if eq(parameters.environment, 'staging') }}:
+      - group: rover-staging
+  - ${{ if eq(parameters.environment, 'production') }}:
+      - group: rover-prod
 
 stages:
   # ---------------------------------------------------------------------------
@@ -29,7 +59,7 @@ stages:
   # L'ACI est creee, execute la migration, puis supprimee automatiquement.
   # ---------------------------------------------------------------------------
   - stage: Migrate
-    displayName: Migration base de donnees
+    displayName: "Migration base de donnees [${{ parameters.environment }}]"
     jobs:
       - job: PrismaMigrate
         displayName: Prisma migrate deploy
@@ -48,8 +78,8 @@ stages:
                 ACI_NAME="rover-migrate-$(Build.BuildId)"
                 IMAGE="${AZURE_REGISTRY_URL}/rover:${{ parameters.imageTag }}"
 
-                echo "## Creation de l'ACI ephemere pour la migration"
-                echo "Image : ${IMAGE}"
+                echo "## Migration pour l'environnement : ${{ parameters.environment }}"
+                echo "## Image : ${IMAGE}"
 
                 # Creer une ACI ephemere pour executer la migration
                 az container create \
@@ -115,16 +145,20 @@ stages:
 
   # ---------------------------------------------------------------------------
   # Stage 2 : Deploiement de la nouvelle image sur Container Apps
+  # L'environnement Azure DevOps (staging ou production) controle
+  # les approbations manuelles si configurees.
   # ---------------------------------------------------------------------------
   - stage: Deploy
-    displayName: Deploiement Container App
+    displayName: "Deploiement Container App [${{ parameters.environment }}]"
     dependsOn: Migrate
     jobs:
       - deployment: DeployContainerApp
         displayName: Mise a jour Container App
         pool:
           vmImage: ubuntu-latest
-        environment: production
+        # L'environnement Azure DevOps correspond au parametre choisi.
+        # Configurer les approbations dans Pipelines > Environments.
+        environment: ${{ parameters.environment }}
         strategy:
           runOnce:
             deploy:
@@ -140,8 +174,9 @@ stages:
 
                       IMAGE="${AZURE_REGISTRY_URL}/rover:${{ parameters.imageTag }}"
 
-                      echo "## Deploiement de l'image : ${IMAGE}"
-                      echo "## Container App : $(CONTAINER_APP_NAME)"
+                      echo "## Deploiement [${{ parameters.environment }}]"
+                      echo "## Image          : ${IMAGE}"
+                      echo "## Container App  : $(CONTAINER_APP_NAME)"
                       echo "## Resource Group : $(RESOURCE_GROUP)"
 
                       # Mise a jour de l'image et des variables d'environnement
@@ -175,7 +210,7 @@ stages:
   # Stage 3 : Verification post-deploiement (health check)
   # ---------------------------------------------------------------------------
   - stage: Verify
-    displayName: Verification post-deploiement
+    displayName: "Verification post-deploiement [${{ parameters.environment }}]"
     dependsOn: Deploy
     jobs:
       - job: HealthCheck
@@ -188,7 +223,8 @@ stages:
 
               URL="https://$(CONTAINER_APP_FQDN)/api/auth/user"
 
-              echo "## Health check sur : ${URL}"
+              echo "## Health check [${{ parameters.environment }}]"
+              echo "## URL : ${URL}"
               echo "## Attente de 30 secondes pour laisser le conteneur demarrer..."
               sleep 30
 

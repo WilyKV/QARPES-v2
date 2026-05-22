@@ -2,27 +2,66 @@
 
 ## Vue d'ensemble
 
-Le deploiement de ROVER suit un flux automatise en 4 etapes :
+Le deploiement de ROVER suit un flux automatise a 2 environnements : **staging** et **production**.
+Chaque environnement dispose de sa propre infrastructure Azure (Container App, base de donnees, variables).
 
 ```
-Git tag (v1.2.3)
-    |
-    v
-GitHub Actions CI/CD (.github/workflows/cd.yml)
-    |   - Lint, typecheck, tests
-    |   - Build image Docker production
-    |   - Push vers Azure Container Registry
-    v
-Azure Container Registry (ACR)
-    |
-    v
-Azure DevOps Pipeline (azure-pipelines.yml)
-    |   - Migration Prisma (ACI ephemere)
-    |   - Mise a jour Container App
-    |   - Health check post-deploiement
-    v
-Azure Container Apps (production)
+Tag Git
+  |
+  |--- staging-vX.Y.Z --------+
+  |                            |
+  |--- release-vX.Y.Z ---+    |
+                          |    |
+                          v    v
+                GitHub Actions CD (.github/workflows/cd.yml)
+                    |   - Lint, typecheck, tests
+                    |   - Build image Docker production
+                    |   - Push vers Azure Container Registry
+                    v
+                Azure Container Registry (ACR)
+                    |
+       +------------+------------+
+       |                         |
+       v                         v
+  rover:staging-X.Y.Z      rover:X.Y.Z
+  rover:staging-latest      rover:latest
+       |                         |
+       v                         v
+  Azure DevOps Pipeline     Azure DevOps Pipeline
+  (env: staging)            (env: production)
+       |                         |
+       v                         v
+  Container App STAGING     Container App PRODUCTION
 ```
+
+---
+
+## Workflow recommande
+
+Le deploiement suit un flux staging-first pour minimiser les risques :
+
+1. **Deployer en staging** d'abord pour valider les changements
+2. **Tester manuellement** sur l'environnement staging
+3. **Deployer en production** une fois le staging valide
+
+```
+main (stable)
+  |
+  +-- staging-v1.2.3  →  CI/CD staging  →  test  →  OK ?
+  |                                                    |
+  +-- release-v1.2.3  ←  ←  ←  ←  ←  ←  ←  ←  ←  ← oui
+```
+
+---
+
+## Conventions de tags Git
+
+| Prefixe du tag       | Environnement cible | Tags image Docker                          |
+| -------------------- | ------------------- | ------------------------------------------ |
+| `staging-vX.Y.Z`    | Staging             | `rover:staging-X.Y.Z`, `rover:staging-latest` |
+| `release-vX.Y.Z`    | Production          | `rover:X.Y.Z`, `rover:latest`             |
+
+La version doit suivre le format **semver** : `X.Y.Z` (ex: `1.2.3`, `2.0.0`).
 
 ---
 
@@ -31,9 +70,9 @@ Azure Container Apps (production)
 ### Infrastructure Azure
 
 - **Azure Container Registry (ACR)** : registre Docker pour stocker les images
-- **Azure Container Apps** : service de deploiement pour l'application
-- **Azure Database for PostgreSQL** : base de donnees de production
-- **Azure DevOps** : pipeline de deploiement
+- **Azure Container Apps (x2)** : une Container App par environnement (staging + production)
+- **Azure Database for PostgreSQL (x2)** : une base par environnement
+- **Azure DevOps** : pipeline de deploiement avec 2 environnements configures
 
 ### Outils locaux
 
@@ -51,34 +90,59 @@ Dans le depot GitHub, aller dans **Settings > Secrets and variables > Actions** 
 | ---------------------------- | ---------------------------------------------- | ------------------------------ |
 | `AZURE_REGISTRY_URL`        | URL du registre ACR                            | `monregistry.azurecr.io`      |
 | `AZURE_REGISTRY_USERNAME`   | Nom d'utilisateur ACR                          | `monregistry`                  |
-| `AZURE_REGISTRY_PASSWORD`   | Mot de passe ou PAT Azure DevOps               | `xxxxxxxxxxxxxxxxxxxxxxxx`     |
+| `AZURE_REGISTRY_PASSWORD`   | Mot de passe ACR                               | `xxxxxxxxxxxxxxxxxxxxxxxx`     |
 
-Ces secrets sont utilises par le workflow `cd.yml` pour pousser l'image Docker vers ACR.
+Ces secrets sont partages entre les deploiements staging et production (meme registre ACR).
 
 ---
 
 ## Configuration Azure DevOps
 
-### Variable Group "rover-prod"
+### Variable Groups
 
-Dans Azure DevOps, aller dans **Pipelines > Library** et creer un Variable Group nomme `rover-prod` avec les variables suivantes :
+Deux Variable Groups sont necessaires dans **Azure DevOps > Pipelines > Library** :
+
+#### Variable Group `rover-staging`
+
+Variables pour l'environnement staging :
 
 | Variable                    | Type   | Description                                        |
 | --------------------------- | ------ | -------------------------------------------------- |
-| `DATABASE_URL`             | Secret | URL PostgreSQL de production                       |
-| `SESSION_SECRET`           | Secret | Secret de session (min 64 chars, `crypto.randomBytes(64).toString('hex')`) |
-| `MICROSOFT_CLIENT_ID`     | Secret | App Registration Azure AD                          |
+| `DATABASE_URL`             | Secret | URL PostgreSQL de staging                          |
+| `SESSION_SECRET`           | Secret | Secret de session staging (min 64 chars)           |
+| `MICROSOFT_CLIENT_ID`     | Secret | App Registration Azure AD (staging)                |
 | `MICROSOFT_TENANT_ID`     | Secret | Tenant Azure AD                                    |
-| `MICROSOFT_CLIENT_SECRET` | Secret | Secret Azure AD                                    |
+| `MICROSOFT_CLIENT_SECRET` | Secret | Secret Azure AD (staging)                          |
 | `ALLOWED_DOMAIN`          | Normal | Domaine autorise (ex: `omneseducation.com`)        |
-| `ALLOWED_ORIGINS`         | Normal | Origines CORS (ex: `https://rover.omneseducation.com`) |
+| `ALLOWED_ORIGINS`         | Normal | Origines CORS staging (ex: `https://rover-staging.omneseducation.com`) |
 | `AZURE_REGISTRY_URL`      | Normal | URL du registre ACR                                |
 | `AZURE_REGISTRY_USERNAME` | Normal | Nom d'utilisateur ACR                              |
 | `AZURE_REGISTRY_PASSWORD` | Secret | Mot de passe ACR                                   |
 | `AZURE_SERVICE_CONNECTION`| Normal | Nom de la connexion de service Azure               |
-| `CONTAINER_APP_NAME`      | Normal | Nom de la Container App                            |
-| `RESOURCE_GROUP`           | Normal | Nom du Resource Group Azure                        |
-| `CONTAINER_APP_FQDN`      | Normal | FQDN de la Container App (ex: `rover.bluedesert-xxxx.westeurope.azurecontainerapps.io`) |
+| `CONTAINER_APP_NAME`      | Normal | Nom de la Container App staging                    |
+| `RESOURCE_GROUP`           | Normal | Nom du Resource Group staging                      |
+| `CONTAINER_APP_FQDN`      | Normal | FQDN de la Container App staging                   |
+
+#### Variable Group `rover-prod`
+
+Meme structure que `rover-staging`, mais avec les valeurs de production :
+
+| Variable                    | Type   | Description                                        |
+| --------------------------- | ------ | -------------------------------------------------- |
+| `DATABASE_URL`             | Secret | URL PostgreSQL de production                       |
+| `SESSION_SECRET`           | Secret | Secret de session production (min 64 chars)        |
+| `MICROSOFT_CLIENT_ID`     | Secret | App Registration Azure AD (production)             |
+| `MICROSOFT_TENANT_ID`     | Secret | Tenant Azure AD                                    |
+| `MICROSOFT_CLIENT_SECRET` | Secret | Secret Azure AD (production)                       |
+| `ALLOWED_DOMAIN`          | Normal | Domaine autorise (ex: `omneseducation.com`)        |
+| `ALLOWED_ORIGINS`         | Normal | Origines CORS production (ex: `https://rover.omneseducation.com`) |
+| `AZURE_REGISTRY_URL`      | Normal | URL du registre ACR                                |
+| `AZURE_REGISTRY_USERNAME` | Normal | Nom d'utilisateur ACR                              |
+| `AZURE_REGISTRY_PASSWORD` | Secret | Mot de passe ACR                                   |
+| `AZURE_SERVICE_CONNECTION`| Normal | Nom de la connexion de service Azure               |
+| `CONTAINER_APP_NAME`      | Normal | Nom de la Container App production                 |
+| `RESOURCE_GROUP`           | Normal | Nom du Resource Group production                   |
+| `CONTAINER_APP_FQDN`      | Normal | FQDN de la Container App production                |
 
 ### Connexion de service Azure
 
@@ -87,17 +151,26 @@ Dans Azure DevOps, aller dans **Pipelines > Library** et creer un Variable Group
 3. Utiliser le mode **Service principal (automatic)** ou **manual** selon les permissions
 4. Nommer la connexion et utiliser ce nom dans la variable `AZURE_SERVICE_CONNECTION`
 
-### Environnement de deploiement
+Note : La meme connexion de service peut etre partagee entre staging et production si les deux
+environnements sont dans le meme abonnement Azure. Sinon, creer une connexion par environnement.
 
-1. Aller dans **Pipelines > Environments**
-2. Creer un environnement nomme `production`
-3. Optionnel : ajouter des approbations manuelles pour securiser le deploiement
+### Environnements de deploiement
+
+Creer 2 environnements dans **Pipelines > Environments** :
+
+1. **`staging`** : deploiement sans approbation manuelle (flux rapide)
+2. **`production`** : ajouter une approbation manuelle pour securiser le deploiement
+
+Pour configurer les approbations :
+- Cliquer sur l'environnement `production`
+- Aller dans le menu **...** > **Approvals and checks**
+- Ajouter une approbation avec les personnes autorisees
 
 ---
 
 ## Deploiement
 
-### Processus standard
+### Deploiement staging
 
 1. **Verifier que la branche `main` est stable** :
    ```bash
@@ -108,32 +181,57 @@ Dans Azure DevOps, aller dans **Pipelines > Library** et creer un Variable Group
    npm test
    ```
 
-2. **Creer un tag de version** :
+2. **Creer un tag staging** :
    ```bash
-   # Versioning semantique : majeur.mineur.patch
-   git tag -a v1.2.3 -m "Release 1.2.3 : description des changements"
-   git push origin v1.2.3
+   git tag -a staging-v1.2.3 -m "Staging 1.2.3 : description des changements"
+   git push origin staging-v1.2.3
    ```
 
 3. **Le workflow GitHub CD se declenche automatiquement** :
    - Execute la CI complete (lint, typecheck, tests)
    - Build l'image Docker production
-   - Pousse l'image vers ACR avec les tags `rover:1.2.3` et `rover:latest`
+   - Pousse l'image vers ACR avec les tags `rover:staging-1.2.3` et `rover:staging-latest`
 
 4. **Declencher le pipeline Azure DevOps** :
    - Aller dans Azure DevOps > Pipelines
    - Selectionner le pipeline ROVER
    - Cliquer sur **Run pipeline**
-   - Renseigner le tag de l'image (ex: `1.2.3`)
-   - Le pipeline execute : migration DB, deploiement, health check
+   - Choisir `environment` = **staging**
+   - Renseigner `imageTag` = **staging-1.2.3** (ou **staging-latest**)
+   - Le pipeline execute : migration DB staging, deploiement, health check
+
+5. **Tester manuellement** l'application sur l'URL staging
+
+### Deploiement production
+
+Une fois le staging valide :
+
+1. **Creer un tag release** (meme version que le staging valide) :
+   ```bash
+   git tag -a release-v1.2.3 -m "Release 1.2.3 : description des changements"
+   git push origin release-v1.2.3
+   ```
+
+2. **Le workflow GitHub CD se declenche automatiquement** :
+   - Meme CI que le staging
+   - Pousse l'image vers ACR avec les tags `rover:1.2.3` et `rover:latest`
+
+3. **Declencher le pipeline Azure DevOps** :
+   - Choisir `environment` = **production**
+   - Renseigner `imageTag` = **1.2.3** (ou **latest**)
+   - L'approbation manuelle sera demandee si configuree sur l'environnement `production`
+   - Le pipeline execute : migration DB production, deploiement, health check
 
 ### Verifier le deploiement
 
 Apres le deploiement, verifier manuellement :
 
 ```bash
-# Health check basique
-curl -s -o /dev/null -w "%{http_code}" https://<CONTAINER_APP_FQDN>/api/auth/user
+# Health check staging
+curl -s -o /dev/null -w "%{http_code}" https://<STAGING_FQDN>/api/auth/user
+
+# Health check production
+curl -s -o /dev/null -w "%{http_code}" https://<PRODUCTION_FQDN>/api/auth/user
 
 # Doit retourner 401 (non authentifie) ou 200 (si cookie valide)
 ```
@@ -142,20 +240,31 @@ curl -s -o /dev/null -w "%{http_code}" https://<CONTAINER_APP_FQDN>/api/auth/use
 
 ## Rollback
 
-### Rollback rapide (image precedente)
-
-Si un deploiement pose probleme, revenir a l'image precedente :
+### Rollback staging
 
 1. **Via Azure DevOps** :
-   - Relancer le pipeline avec le tag de la version precedente (ex: `1.1.0`)
-   - Le pipeline redeploiera l'ancienne image
+   - Relancer le pipeline avec `environment` = **staging** et le tag de la version precedente
+     (ex: `imageTag` = `staging-1.1.0`)
 
 2. **Via Azure CLI** (urgence) :
    ```bash
-   # Remplacer par la version stable precedente
    az containerapp update \
-     --name <CONTAINER_APP_NAME> \
-     --resource-group <RESOURCE_GROUP> \
+     --name <STAGING_CONTAINER_APP_NAME> \
+     --resource-group <STAGING_RESOURCE_GROUP> \
+     --image <AZURE_REGISTRY_URL>/rover:staging-<VERSION_PRECEDENTE>
+   ```
+
+### Rollback production
+
+1. **Via Azure DevOps** :
+   - Relancer le pipeline avec `environment` = **production** et le tag de la version precedente
+     (ex: `imageTag` = `1.1.0`)
+
+2. **Via Azure CLI** (urgence) :
+   ```bash
+   az containerapp update \
+     --name <PROD_CONTAINER_APP_NAME> \
+     --resource-group <PROD_RESOURCE_GROUP> \
      --image <AZURE_REGISTRY_URL>/rover:<VERSION_PRECEDENTE>
    ```
 
@@ -164,15 +273,16 @@ Si un deploiement pose probleme, revenir a l'image precedente :
 Les rollbacks de migration Prisma ne sont pas automatises. En cas de besoin :
 
 1. Identifier la migration problematique dans `prisma/migrations/`
-2. Se connecter a la base de donnees de production
+2. Se connecter a la base de donnees de l'environnement concerne (staging ou production)
 3. Executer manuellement les operations inverses
 4. Marquer la migration comme rollbackee dans `_prisma_migrations`
 
-**Important** : Toujours tester les migrations sur un environnement de staging avant la production.
+**Important** : Toujours tester les migrations sur staging avant la production. C'est l'un des
+principaux avantages du flux staging-first.
 
 ---
 
-## Variables d'environnement de production
+## Variables d'environnement
 
 | Variable                    | Obligatoire | Description                                        |
 | --------------------------- | ----------- | -------------------------------------------------- |
@@ -188,7 +298,13 @@ Les rollbacks de migration Prisma ne sont pas automatises. En cas de besoin :
 
 ### Generation du SESSION_SECRET
 
+Generer un secret different pour chaque environnement :
+
 ```bash
+# Secret pour staging
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+
+# Secret pour production (different de staging !)
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
@@ -200,10 +316,10 @@ Le Dockerfile multi-stage produit une image de production minimale :
 
 ```
 base (node:22-alpine)
-  └─ dependencies (npm ci avec toutes les deps)
-       ├─ development (pour le dev local avec hot reload)
-       └─ builder (compile TypeScript + build Vite)
-            └─ production (image finale, deps prod uniquement)
+  +-- dependencies (npm ci avec toutes les deps)
+       +-- development (pour le dev local avec hot reload)
+       +-- builder (compile TypeScript + build Vite)
+            +-- production (image finale, deps prod uniquement)
 ```
 
 L'image de production contient :
@@ -216,6 +332,19 @@ L'image de production contient :
 
 Taille estimee : ~250-350 Mo (selon les dependances).
 
+La meme image Docker est utilisee en staging et en production. Seules les variables
+d'environnement different (configurees via les Variable Groups Azure DevOps).
+
+---
+
+## Resume des fichiers CI/CD
+
+| Fichier                             | Role                                            | Declenchement                        |
+| ----------------------------------- | ----------------------------------------------- | ------------------------------------ |
+| `.github/workflows/ci.yml`         | CI : lint, typecheck, tests, build Docker (dry)  | Push main, PR vers main              |
+| `.github/workflows/cd.yml`         | CD : CI + build + push Docker vers ACR           | Tags `staging-v*` et `release-v*`   |
+| `azure-pipelines.yml`              | Deploiement : migration, deploy, health check    | Manuel (Run pipeline)                |
+
 ---
 
 ## Depannage
@@ -224,11 +353,11 @@ Taille estimee : ~250-350 Mo (selon les dependances).
 
 - Verifier que le `Dockerfile` est a la racine du projet
 - Verifier que `.dockerignore` n'exclut pas de fichiers necessaires
-- Consulter les logs du job `docker` dans GitHub Actions
+- Consulter les logs du job `docker-build-push` dans GitHub Actions
 
 ### La migration echoue
 
-- Verifier que `DATABASE_URL` est correct dans le Variable Group
+- Verifier que `DATABASE_URL` est correct dans le Variable Group (staging ou prod)
 - Verifier que la base de donnees est accessible depuis Azure (firewall, VNet)
 - Consulter les logs de l'ACI ephemere dans le portail Azure
 
@@ -236,7 +365,7 @@ Taille estimee : ~250-350 Mo (selon les dependances).
 
 - Verifier que la Container App est en cours d'execution (`az containerapp show`)
 - Verifier les logs de la Container App (`az containerapp logs show`)
-- Verifier que le FQDN est correct dans le Variable Group
+- Verifier que `CONTAINER_APP_FQDN` est correct dans le Variable Group
 - Verifier que l'ingress est configure sur le port 8080
 
 ### Problemes de connexion a ACR
@@ -244,3 +373,10 @@ Taille estimee : ~250-350 Mo (selon les dependances).
 - Verifier que les credentials ACR sont corrects dans les secrets GitHub
 - Verifier que le registre ACR autorise les connexions depuis GitHub Actions
 - Tester la connexion manuellement : `docker login <registry>.azurecr.io`
+
+### Mauvais environnement deploye
+
+- Verifier le prefixe du tag Git (`staging-v` vs `release-v`)
+- Verifier le parametre `environment` dans Azure DevOps lors du Run pipeline
+- Verifier que le `imageTag` correspond au bon environnement
+  (ex: `staging-1.2.3` pour staging, `1.2.3` pour production)

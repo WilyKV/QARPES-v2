@@ -1,7 +1,12 @@
 # =============================================================================
-# CD — Deploiement continu ROVER
-# Declenche UNIQUEMENT sur creation d'un tag v* (ex: v1.2.3) sur main.
-# Relance la CI, puis build et push l'image Docker vers Azure Container Registry.
+# CD — Deploiement continu ROVER (staging + production)
+#
+# Declenchement :
+#   - Tag `staging-vX.Y.Z`  → build + push image Docker vers ACR (staging)
+#   - Tag `release-vX.Y.Z`  → build + push image Docker vers ACR (production)
+#
+# L'environnement est detecte automatiquement a partir du prefixe du tag.
+# La CI complete (lint, typecheck, tests) est reexecutee avant le build Docker.
 # =============================================================================
 
 name: CD
@@ -9,19 +14,76 @@ name: CD
 on:
   push:
     tags:
-      - "v*"
+      - "staging-v*"
+      - "release-v*"
+
+# Annuler les runs precedents sur le meme tag/ref
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job 1 : Relancer la CI complete (quality + build)
+  # Job 0 : Detecter l'environnement et extraire la version depuis le tag
+  # ---------------------------------------------------------------------------
+  detect-environment:
+    name: Detection environnement
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    outputs:
+      environment: ${{ steps.detect.outputs.environment }}
+      version: ${{ steps.detect.outputs.version }}
+      image_prefix: ${{ steps.detect.outputs.image_prefix }}
+
+    steps:
+      - name: Detecter environnement et version depuis le tag
+        id: detect
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "Tag detecte : ${TAG}"
+
+          # Determiner l'environnement et extraire la version selon le prefixe
+          if [[ "${TAG}" == staging-v* ]]; then
+            ENVIRONMENT="staging"
+            VERSION="${TAG#staging-v}"
+            IMAGE_PREFIX="staging-"
+          elif [[ "${TAG}" == release-v* ]]; then
+            ENVIRONMENT="production"
+            VERSION="${TAG#release-v}"
+            IMAGE_PREFIX=""
+          else
+            echo "::error::Tag invalide : ${TAG}. Attendu : staging-vX.Y.Z ou release-vX.Y.Z"
+            exit 1
+          fi
+
+          # Validation du format de version (semver basique)
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Format de version invalide : ${VERSION}. Attendu : X.Y.Z (ex: 1.2.3)"
+            exit 1
+          fi
+
+          echo "environment=${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "image_prefix=${IMAGE_PREFIX}" >> "$GITHUB_OUTPUT"
+
+          echo "## Resultat de la detection"
+          echo "- Environnement : ${ENVIRONMENT}"
+          echo "- Version       : ${VERSION}"
+          echo "- Prefixe image : ${IMAGE_PREFIX:-'(aucun)'}"
+
+  # ---------------------------------------------------------------------------
+  # Job 1 : Qualite du code — lint, typecheck, tests
+  # Identique pour staging et production.
   # ---------------------------------------------------------------------------
   quality:
     name: Lint, Typecheck, Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: [detect-environment]
 
     steps:
       - name: Checkout du code
@@ -48,10 +110,14 @@ jobs:
       - name: Tests unitaires (Vitest)
         run: npm test
 
+  # ---------------------------------------------------------------------------
+  # Job 2 : Build applicatif — backend (esbuild) + frontend (Vite)
+  # ---------------------------------------------------------------------------
   build:
     name: Build backend + frontend
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: [detect-environment]
 
     steps:
       - name: Checkout du code
@@ -73,25 +139,34 @@ jobs:
         run: npm run build
 
   # ---------------------------------------------------------------------------
-  # Job 2 : Build image Docker production + push vers ACR
+  # Job 3 : Build image Docker + push vers Azure Container Registry
+  #
+  # Tags Docker selon l'environnement :
+  #   staging    → rover:staging-<version>, rover:staging-latest
+  #   production → rover:<version>, rover:latest
   # ---------------------------------------------------------------------------
   docker-build-push:
-    name: Build & Push Docker vers ACR
+    name: "Build & Push Docker [${{ needs.detect-environment.outputs.environment }}]"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [quality, build]
+    needs: [detect-environment, quality, build]
+
+    env:
+      ENVIRONMENT: ${{ needs.detect-environment.outputs.environment }}
+      VERSION: ${{ needs.detect-environment.outputs.version }}
+      IMAGE_PREFIX: ${{ needs.detect-environment.outputs.image_prefix }}
 
     steps:
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Extraction de la version depuis le tag git
-        id: version
+      - name: Afficher les informations de build
         run: |
-          # Extraire la version du tag (v1.2.3 -> 1.2.3)
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Version detectee : ${VERSION}"
+          echo "## Informations de build"
+          echo "- Environnement : ${ENVIRONMENT}"
+          echo "- Version       : ${VERSION}"
+          echo "- Tag image 1   : rover:${IMAGE_PREFIX}${VERSION}"
+          echo "- Tag image 2   : rover:${IMAGE_PREFIX}latest"
 
       - name: Configuration Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -110,11 +185,12 @@ jobs:
           target: production
           push: true
           tags: |
-            ${{ secrets.AZURE_REGISTRY_URL }}/rover:${{ steps.version.outputs.version }}
-            ${{ secrets.AZURE_REGISTRY_URL }}/rover:latest
+            ${{ secrets.AZURE_REGISTRY_URL }}/rover:${{ env.IMAGE_PREFIX }}${{ env.VERSION }}
+            ${{ secrets.AZURE_REGISTRY_URL }}/rover:${{ env.IMAGE_PREFIX }}latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.environment=${{ env.ENVIRONMENT }}
