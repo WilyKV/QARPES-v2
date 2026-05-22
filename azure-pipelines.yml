@@ -1,0 +1,213 @@
+# =============================================================================
+# Azure DevOps Pipeline — Deploiement ROVER sur Azure Container Apps
+#
+# Declenchement : manuel ou webhook ACR (pas de trigger automatique).
+# Prerequis : Variable Group "rover-prod" configure dans Azure DevOps.
+#
+# Stages :
+#   1. Migrate  — Migration Prisma via Azure Container Instance ephemere
+#   2. Deploy   — Mise a jour de la Container App avec la nouvelle image
+#   3. Verify   — Health check post-deploiement
+# =============================================================================
+
+trigger: none
+
+# Parametres d'entree pour specifier la version a deployer
+parameters:
+  - name: imageTag
+    displayName: "Tag de l'image Docker a deployer (ex: 1.2.3 ou latest)"
+    type: string
+    default: latest
+
+variables:
+  - group: rover-prod
+
+stages:
+  # ---------------------------------------------------------------------------
+  # Stage 1 : Migration de la base de donnees
+  # Execute les migrations Prisma via une Azure Container Instance ephemere.
+  # L'ACI est creee, execute la migration, puis supprimee automatiquement.
+  # ---------------------------------------------------------------------------
+  - stage: Migrate
+    displayName: Migration base de donnees
+    jobs:
+      - job: PrismaMigrate
+        displayName: Prisma migrate deploy
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: AzureCLI@2
+            displayName: Executer la migration via ACI ephemere
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+
+                ACI_NAME="rover-migrate-$(Build.BuildId)"
+                IMAGE="${AZURE_REGISTRY_URL}/rover:${{ parameters.imageTag }}"
+
+                echo "## Creation de l'ACI ephemere pour la migration"
+                echo "Image : ${IMAGE}"
+
+                # Creer une ACI ephemere pour executer la migration
+                az container create \
+                  --resource-group "$(RESOURCE_GROUP)" \
+                  --name "${ACI_NAME}" \
+                  --image "${IMAGE}" \
+                  --registry-login-server "$(AZURE_REGISTRY_URL)" \
+                  --registry-username "$(AZURE_REGISTRY_USERNAME)" \
+                  --registry-password "$(AZURE_REGISTRY_PASSWORD)" \
+                  --environment-variables \
+                    DATABASE_URL="$(DATABASE_URL)" \
+                    NODE_ENV=production \
+                  --command-line "npx prisma migrate deploy" \
+                  --restart-policy Never \
+                  --cpu 0.5 \
+                  --memory 1
+
+                echo "## Attente de la fin de la migration..."
+
+                # Attendre la fin de l'execution (max 5 minutes)
+                for i in $(seq 1 30); do
+                  STATE=$(az container show \
+                    --resource-group "$(RESOURCE_GROUP)" \
+                    --name "${ACI_NAME}" \
+                    --query "containers[0].instanceView.currentState.state" \
+                    --output tsv 2>/dev/null || echo "Unknown")
+
+                  echo "  Tentative ${i}/30 — Etat : ${STATE}"
+
+                  if [ "${STATE}" = "Terminated" ]; then
+                    break
+                  fi
+                  sleep 10
+                done
+
+                # Recuperer le code de sortie
+                EXIT_CODE=$(az container show \
+                  --resource-group "$(RESOURCE_GROUP)" \
+                  --name "${ACI_NAME}" \
+                  --query "containers[0].instanceView.currentState.exitCode" \
+                  --output tsv)
+
+                # Afficher les logs de la migration
+                echo "## Logs de la migration :"
+                az container logs \
+                  --resource-group "$(RESOURCE_GROUP)" \
+                  --name "${ACI_NAME}" || true
+
+                # Nettoyage : supprimer l'ACI ephemere
+                echo "## Suppression de l'ACI ephemere..."
+                az container delete \
+                  --resource-group "$(RESOURCE_GROUP)" \
+                  --name "${ACI_NAME}" \
+                  --yes || true
+
+                # Verifier le resultat
+                if [ "${EXIT_CODE}" != "0" ]; then
+                  echo "##vso[task.logissue type=error]La migration a echoue (code: ${EXIT_CODE})"
+                  exit 1
+                fi
+
+                echo "## Migration terminee avec succes"
+
+  # ---------------------------------------------------------------------------
+  # Stage 2 : Deploiement de la nouvelle image sur Container Apps
+  # ---------------------------------------------------------------------------
+  - stage: Deploy
+    displayName: Deploiement Container App
+    dependsOn: Migrate
+    jobs:
+      - deployment: DeployContainerApp
+        displayName: Mise a jour Container App
+        pool:
+          vmImage: ubuntu-latest
+        environment: production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: Mettre a jour la Container App
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+
+                      IMAGE="${AZURE_REGISTRY_URL}/rover:${{ parameters.imageTag }}"
+
+                      echo "## Deploiement de l'image : ${IMAGE}"
+                      echo "## Container App : $(CONTAINER_APP_NAME)"
+                      echo "## Resource Group : $(RESOURCE_GROUP)"
+
+                      # Mise a jour de l'image et des variables d'environnement
+                      az containerapp update \
+                        --name "$(CONTAINER_APP_NAME)" \
+                        --resource-group "$(RESOURCE_GROUP)" \
+                        --image "${IMAGE}" \
+                        --set-env-vars \
+                          DATABASE_URL="$(DATABASE_URL)" \
+                          SESSION_SECRET="$(SESSION_SECRET)" \
+                          MICROSOFT_CLIENT_ID="$(MICROSOFT_CLIENT_ID)" \
+                          MICROSOFT_TENANT_ID="$(MICROSOFT_TENANT_ID)" \
+                          MICROSOFT_CLIENT_SECRET="$(MICROSOFT_CLIENT_SECRET)" \
+                          ALLOWED_DOMAIN="$(ALLOWED_DOMAIN)" \
+                          ALLOWED_ORIGINS="$(ALLOWED_ORIGINS)" \
+                          NODE_ENV=production \
+                          PORT=8080
+
+                      echo "## Deploiement termine"
+
+                      # Recuperer le FQDN de la Container App
+                      FQDN=$(az containerapp show \
+                        --name "$(CONTAINER_APP_NAME)" \
+                        --resource-group "$(RESOURCE_GROUP)" \
+                        --query "properties.configuration.ingress.fqdn" \
+                        --output tsv)
+
+                      echo "## Application accessible sur : https://${FQDN}"
+
+  # ---------------------------------------------------------------------------
+  # Stage 3 : Verification post-deploiement (health check)
+  # ---------------------------------------------------------------------------
+  - stage: Verify
+    displayName: Verification post-deploiement
+    dependsOn: Deploy
+    jobs:
+      - job: HealthCheck
+        displayName: Health check
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - script: |
+              set -euo pipefail
+
+              URL="https://$(CONTAINER_APP_FQDN)/api/auth/user"
+
+              echo "## Health check sur : ${URL}"
+              echo "## Attente de 30 secondes pour laisser le conteneur demarrer..."
+              sleep 30
+
+              # Verifier que l'endpoint repond (200 = authentifie, 401 = non authentifie)
+              # Les deux sont des reponses valides prouvant que le serveur fonctionne
+              for i in $(seq 1 5); do
+                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${URL}" || echo "000")
+
+                echo "  Tentative ${i}/5 — Code HTTP : ${HTTP_CODE}"
+
+                if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "401" ]; then
+                  echo "## Health check reussi (HTTP ${HTTP_CODE})"
+                  exit 0
+                fi
+
+                echo "  Reponse inattendue, nouvel essai dans 15 secondes..."
+                sleep 15
+              done
+
+              echo "##vso[task.logissue type=error]Health check echoue apres 5 tentatives"
+              exit 1
+            displayName: Verifier la reponse du serveur

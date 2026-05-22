@@ -1,28 +1,22 @@
 # =============================================================================
-# CI — Integration continue ROVER
-# Declenche sur chaque push vers main et chaque PR vers main.
-# 3 jobs independants : quality, build, docker
+# CD — Deploiement continu ROVER
+# Declenche UNIQUEMENT sur creation d'un tag v* (ex: v1.2.3) sur main.
+# Relance la CI, puis build et push l'image Docker vers Azure Container Registry.
 # =============================================================================
 
-name: CI
+name: CD
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-# Annuler les runs precedents sur la meme branche/PR
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+    tags:
+      - "v*"
 
 permissions:
   contents: read
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job 1 : Qualite du code (lint, typecheck, tests)
+  # Job 1 : Relancer la CI complete (quality + build)
   # ---------------------------------------------------------------------------
   quality:
     name: Lint, Typecheck, Tests
@@ -54,9 +48,6 @@ jobs:
       - name: Tests unitaires (Vitest)
         run: npm test
 
-  # ---------------------------------------------------------------------------
-  # Job 2 : Verification du build complet
-  # ---------------------------------------------------------------------------
   build:
     name: Build backend + frontend
     runs-on: ubuntu-latest
@@ -81,33 +72,49 @@ jobs:
       - name: Build complet (esbuild + Vite)
         run: npm run build
 
-      - name: Verification des artefacts de build
-        run: |
-          test -f dist/server/index.js || (echo "ERREUR: dist/server/index.js manquant" && exit 1)
-          test -d dist/public || (echo "ERREUR: dist/public/ manquant" && exit 1)
-          echo "Build verifie avec succes"
-
   # ---------------------------------------------------------------------------
-  # Job 3 : Validation du build Docker (sans push)
+  # Job 2 : Build image Docker production + push vers ACR
   # ---------------------------------------------------------------------------
-  docker:
-    name: Build image Docker
+  docker-build-push:
+    name: Build & Push Docker vers ACR
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    needs: [quality, build]
 
     steps:
       - name: Checkout du code
         uses: actions/checkout@v4
 
+      - name: Extraction de la version depuis le tag git
+        id: version
+        run: |
+          # Extraire la version du tag (v1.2.3 -> 1.2.3)
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version detectee : ${VERSION}"
+
       - name: Configuration Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image Docker production (sans push)
+      - name: Connexion a Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.AZURE_REGISTRY_URL }}
+          username: ${{ secrets.AZURE_REGISTRY_USERNAME }}
+          password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
+
+      - name: Build et push de l'image Docker
         uses: docker/build-push-action@v6
         with:
           context: .
           target: production
-          push: false
-          tags: rover:ci-${{ github.sha }}
+          push: true
+          tags: |
+            ${{ secrets.AZURE_REGISTRY_URL }}/rover:${{ steps.version.outputs.version }}
+            ${{ secrets.AZURE_REGISTRY_URL }}/rover:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
