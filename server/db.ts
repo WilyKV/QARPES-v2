@@ -1,16 +1,26 @@
-import pkg from 'pg';
-const { Pool } = pkg;
-// Prisma version (remplace Drizzle)
-// Utilisation de require pour compatibilité Node.js/Docker
 import { PrismaClient } from '@prisma/client';
 
-export const prisma = new PrismaClient();
+// Client Prisma instancié de manière lazy.
+// Évite de crasher à l'import quand DATABASE_URL n'est pas défini
+// (ex: CI GitHub Actions qui exécute uniquement lint/typecheck/tests unitaires).
+let _prisma: PrismaClient | null = null;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+export function getPrisma(): PrismaClient {
+  if (!_prisma) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error(
+        "DATABASE_URL must be set. Did you forget to provision a database?",
+      );
+    }
+    _prisma = new PrismaClient();
+  }
+  return _prisma;
 }
 
-// Optionnel : supprimer l'ancien Pool si non utilisé
-// export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Re-export pour compatibilité avec les imports existants.
+// En environnement de test sans DB, les mocks interceptent avant l'appel réel.
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    return getPrisma()[prop as keyof PrismaClient];
+  },
+});
