@@ -1,17 +1,12 @@
 # =============================================================================
 # CD — Deploiement continu ROVER (staging + production)
 #
-# Declenchement :
-#   - Tag `staging-vX.Y.Z`  → push code vers Azure DevOps Git (staging)
-#   - Tag `release-vX.Y.Z`  → push code vers Azure DevOps Git (production)
+# Declenchement : tag staging-vX.Y.Z ou release-vX.Y.Z sur main
 #
-# Nouveau flux :
-#   1. GitHub detecte le tag et relance la CI (qualite + build)
-#   2. GitHub pousse le code source + le tag vers un repo Git Azure DevOps
-#   3. Azure DevOps Pipeline (declenche par le push) :
-#      build Docker, push ACR, migration DB, deploiement Container App
-#
-# L'environnement est detecte automatiquement a partir du prefixe du tag.
+# Flux :
+#   1. CI rapide (lint + typecheck) — validation minimale avant push
+#   2. Push du code + tag vers le repo Azure DevOps
+#   3. Azure DevOps prend le relais : CI complete, Docker build, push ACR
 # =============================================================================
 
 name: CD
@@ -22,7 +17,6 @@ on:
       - "staging-v*"
       - "release-v*"
 
-# Annuler les runs precedents sur le meme tag/ref
 concurrency:
   group: cd-${{ github.ref }}
   cancel-in-progress: true
@@ -32,25 +26,20 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job 0 : Detecter l'environnement et extraire la version depuis le tag
+  # Job 1 : Detection de l'environnement depuis le tag
   # ---------------------------------------------------------------------------
   detect-environment:
     name: Detection environnement
     runs-on: ubuntu-latest
     timeout-minutes: 2
-
     outputs:
       environment: ${{ steps.detect.outputs.environment }}
       version: ${{ steps.detect.outputs.version }}
-
     steps:
       - name: Detecter environnement et version depuis le tag
         id: detect
         run: |
           TAG="${GITHUB_REF_NAME}"
-          echo "Tag detecte : ${TAG}"
-
-          # Determiner l'environnement et extraire la version selon le prefixe
           if [[ "${TAG}" == staging-v* ]]; then
             ENVIRONMENT="staging"
             VERSION="${TAG#staging-v}"
@@ -58,117 +47,53 @@ jobs:
             ENVIRONMENT="production"
             VERSION="${TAG#release-v}"
           else
-            echo "::error::Tag invalide : ${TAG}. Attendu : staging-vX.Y.Z ou release-vX.Y.Z"
+            echo "::error::Tag invalide : ${TAG}"
             exit 1
           fi
-
-          # Validation du format de version (semver basique)
           if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Format de version invalide : ${VERSION}. Attendu : X.Y.Z (ex: 1.2.3)"
+            echo "::error::Format de version invalide : ${VERSION}. Attendu : X.Y.Z"
             exit 1
           fi
-
           echo "environment=${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-          # Resume dans le job summary
-          echo "## Resultat de la detection" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Detection" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Environnement** : ${ENVIRONMENT}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Version** : ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Tag** : ${TAG}" >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
-  # Job 1 : Qualite du code — lint, typecheck, tests
-  # Identique pour staging et production.
+  # Job 2 : CI rapide — lint + typecheck (pas de build complet)
   # ---------------------------------------------------------------------------
-  quality:
-    name: Lint, Typecheck, Tests
+  quick-ci:
+    name: CI rapide (lint + typecheck)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     needs: [detect-environment]
-
     steps:
-      - name: Checkout du code
-        uses: actions/checkout@v4
-
-      - name: Configuration Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Installation des dependances
-        run: npm ci --legacy-peer-deps
-
-      - name: Generation du client Prisma
-        run: npx prisma generate
-
-      - name: Lint (ESLint)
-        run: npm run lint
-
-      - name: Typecheck (tsc --noEmit)
-        run: npm run check
-
-      - name: Tests unitaires — hors integration (Vitest)
-        run: npm run test:ci
-        env:
-          SESSION_SECRET: ci-test-secret-not-for-production-use-xxxxxxxxxxxxxxxx
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm run check
 
   # ---------------------------------------------------------------------------
-  # Job 2 : Build applicatif — backend (esbuild) + frontend (Vite)
-  # ---------------------------------------------------------------------------
-  build:
-    name: Build backend + frontend
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [detect-environment]
-
-    steps:
-      - name: Checkout du code
-        uses: actions/checkout@v4
-
-      - name: Configuration Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Installation des dependances
-        run: npm ci --legacy-peer-deps
-
-      - name: Generation du client Prisma
-        run: npx prisma generate
-
-      - name: Build complet (esbuild + Vite)
-        run: npm run build
-
-  # ---------------------------------------------------------------------------
-  # Job 3 : Pousser le code source vers Azure DevOps Git
-  #
-  # Le repo Azure DevOps est un miroir du repo GitHub.
-  # Le pipeline Azure DevOps se declenche sur le push du tag et prend le relais :
-  # build Docker, push ACR, migration DB, deploiement Container App.
-  #
-  # Environnement GitHub : ToAzureDevOps
-  #   - Secret : AZURE_DEVOPS_PAT
-  #   - Variables : AZURE_DEVOPS_ORG, AZURE_DEVOPS_PROJECT, AZURE_DEVOPS_REPO
+  # Job 3 : Push code + tag vers Azure DevOps
+  # Azure DevOps prend le relais : CI complete, Docker build, push ACR
   # ---------------------------------------------------------------------------
   push-to-azure-devops:
     name: "Push vers Azure DevOps [${{ needs.detect-environment.outputs.environment }}]"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [detect-environment, quality, build]
-
-    # L'environnement GitHub donne acces aux secrets et variables
+    needs: [detect-environment, quick-ci]
     environment: ToAzureDevOps
-
     env:
       ENVIRONMENT: ${{ needs.detect-environment.outputs.environment }}
       VERSION: ${{ needs.detect-environment.outputs.version }}
-
     steps:
-      - name: Checkout du code avec historique complet
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -177,48 +102,34 @@ jobs:
           git config user.name "ROVER CI"
           git config user.email "ci@rover.dev"
 
-      - name: Pousser le code vers Azure DevOps Git
+      - name: Push vers Azure DevOps
         env:
           AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
           AZURE_DEVOPS_ORG: ${{ vars.AZURE_DEVOPS_ORG }}
           AZURE_DEVOPS_PROJECT: ${{ vars.AZURE_DEVOPS_PROJECT }}
           AZURE_DEVOPS_REPO: ${{ vars.AZURE_DEVOPS_REPO }}
         run: |
-          # Masquer le PAT dans les logs GitHub Actions
           echo "::add-mask::${AZURE_DEVOPS_PAT}"
-
-          # Construire l'URL du repo Azure DevOps (HTTPS avec PAT)
           AZURE_REPO_URL="https://${AZURE_DEVOPS_PAT}@dev.azure.com/${AZURE_DEVOPS_ORG}/${AZURE_DEVOPS_PROJECT}/_git/${AZURE_DEVOPS_REPO}"
-
-          # Ajouter le remote Azure DevOps
           git remote add azure "${AZURE_REPO_URL}"
 
-          # Pousser la branche main (force car miroir)
-          echo "## Push de la branche main vers Azure DevOps..."
+          echo "## Push branche main..."
           git push azure HEAD:main --force
 
-          # Pousser le tag pour que le pipeline Azure DevOps detecte la version
           TAG="${GITHUB_REF_NAME}"
-          echo "## Push du tag ${TAG} vers Azure DevOps..."
+          echo "## Push tag ${TAG}..."
           git push azure "refs/tags/${TAG}" --force
 
-          echo "## Push termine avec succes"
-
-      - name: Afficher le resume
+      - name: Resume
         env:
           AZURE_DEVOPS_ORG: ${{ vars.AZURE_DEVOPS_ORG }}
           AZURE_DEVOPS_PROJECT: ${{ vars.AZURE_DEVOPS_PROJECT }}
           AZURE_DEVOPS_REPO: ${{ vars.AZURE_DEVOPS_REPO }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
-
-          echo "## Resume du push vers Azure DevOps" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Environnement** : ${ENVIRONMENT}" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Push Azure DevOps OK" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Env** : ${ENVIRONMENT}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Version** : ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Tag** : ${TAG}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Organisation** : ${AZURE_DEVOPS_ORG}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Projet** : ${AZURE_DEVOPS_PROJECT}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Repo cible** : ${AZURE_DEVOPS_REPO}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Branche** : main (force push)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Org** : ${AZURE_DEVOPS_ORG}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Repo** : ${AZURE_DEVOPS_REPO}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Le pipeline Azure DevOps va se declencher automatiquement sur le tag \`${TAG}\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Azure DevOps pipeline va se declencher automatiquement." >> "$GITHUB_STEP_SUMMARY"
