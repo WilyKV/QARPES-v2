@@ -51,8 +51,8 @@ jobs:
       - name: Typecheck (tsc --noEmit)
         run: npm run check
 
-      - name: Tests unitaires (Vitest)
-        run: npm test
+      - name: Tests unitaires — hors integration (Vitest)
+        run: npm run test:ci
         env:
           SESSION_SECRET: ci-test-secret-not-for-production-use-xxxxxxxxxxxxxxxx
 
