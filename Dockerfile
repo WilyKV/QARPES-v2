@@ -71,6 +71,7 @@ COPY prisma ./prisma
 COPY server ./server
 COPY client ./client
 COPY shared ./shared
+COPY scripts ./scripts
 
 # Generate Prisma client
 RUN npx prisma generate
