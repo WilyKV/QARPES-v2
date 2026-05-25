@@ -19,7 +19,7 @@ COPY prisma ./prisma
 # Separate stage to cache dependency installation
 # ============================================================================
 FROM base AS dependencies
-RUN npm ci --include=dev
+RUN npm ci --include=dev --legacy-peer-deps
 
 # ============================================================================
 # STAGE: development
@@ -94,7 +94,7 @@ COPY package.json package-lock.json ./
 COPY --from=builder /app/prisma ./prisma
 
 # Install ONLY production dependencies (postinstall will run prisma generate)
-RUN npm ci --omit=dev --omit=optional
+RUN npm ci --omit=dev --omit=optional --legacy-peer-deps --ignore-scripts
 
 # Copy generated Prisma client from builder (in case postinstall didn't run)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
