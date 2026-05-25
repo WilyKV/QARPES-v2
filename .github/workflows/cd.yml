@@ -111,6 +111,8 @@ jobs:
 
       - name: Tests unitaires (Vitest)
         run: npm test
+        env:
+          SESSION_SECRET: ci-test-secret-not-for-production-use-xxxxxxxxxxxxxxxx
 
   # ---------------------------------------------------------------------------
   # Job 2 : Build applicatif — backend (esbuild) + frontend (Vite)
