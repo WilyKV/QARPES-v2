@@ -1,418 +1,91 @@
 # =============================================================================
-# Azure DevOps Pipeline — Build, Push et Deploiement ROVER
+# Azure DevOps Pipeline — CI + Build Docker ROVER
 #
-# Supporte 2 environnements : staging et production.
+# Declenchement : chaque modification de la branche "main"
+# (poussee par GitHub Actions CD apres un tag staging-v* ou release-v*)
 #
-# Declenchement :
-#   - Automatique : sur les tags `staging-v*` et `release-v*` pousses par GitHub Actions
-#   - Manuel      : via Run pipeline (parametre `environment` en fallback)
+# Etapes :
+#   1. CI    — Lint, typecheck, tests unitaires, build applicatif
+#   2. Docker — Build image + push vers ACR (rover:<BuildId>)
 #
-# Stages :
-#   1. DetectEnvironment — Detecter l'environnement depuis le tag ou le parametre
-#   2. BuildAndPush      — Build image Docker production + push vers ACR
-#   3. Migrate           — Migration Prisma via ACI ephemere
-#   4. Deploy            — Mise a jour de la Container App
-#   5. Verify            — Health check post-deploiement
+# La release (deploiement) est geree manuellement via Azure DevOps Releases.
 # =============================================================================
 
-# Declenchement automatique sur les tags pousses par GitHub Actions
 trigger:
-  tags:
-    include:
-      - staging-v*
-      - release-v*
   branches:
-    exclude:
-      - "*"
+    include:
+      - main
 
-# ---------------------------------------------------------------------------
-# Parametres d'entree (fallback pour le declenchement manuel)
-# ---------------------------------------------------------------------------
-parameters:
-  - name: environment
-    displayName: "Environnement cible (utilise uniquement en run manuel, sans tag)"
-    type: string
-    default: staging
-    values:
-      - staging
-      - production
+pool:
+  vmImage: ubuntu-latest
 
-# ---------------------------------------------------------------------------
-# Variables : selection dynamique du Variable Group selon l'environnement
-#
-# Note : En declenchement automatique (tag), l'environnement est detecte au
-# stage DetectEnvironment. Les Variable Groups sont charges conditionnellement
-# via le parametre (qui sert de fallback en run manuel).
-#
-# Chaque Variable Group doit contenir :
-#   DATABASE_URL, SESSION_SECRET, MICROSOFT_CLIENT_ID, MICROSOFT_TENANT_ID,
-#   MICROSOFT_CLIENT_SECRET, ALLOWED_DOMAIN, ALLOWED_ORIGINS,
-#   AZURE_REGISTRY_URL, AZURE_REGISTRY_USERNAME, AZURE_REGISTRY_PASSWORD,
-#   AZURE_SERVICE_CONNECTION, CONTAINER_APP_NAME, RESOURCE_GROUP,
-#   CONTAINER_APP_FQDN
-# ---------------------------------------------------------------------------
 variables:
-  - ${{ if eq(parameters.environment, 'staging') }}:
-      - group: rover-staging
-  - ${{ if eq(parameters.environment, 'production') }}:
-      - group: rover-prod
+  nodeVersion: "22"
+  imageName: "rover"
+  # Connexion de service vers le registre ACR
+  serviceConnection: "TechLeads-Inseecacr-DEV-sc"
 
 stages:
   # ---------------------------------------------------------------------------
-  # Stage 1 : Detection de l'environnement
-  #
-  # Detecte l'environnement et la version depuis le tag Git.
-  # Si aucun tag n'est present (run manuel), utilise le parametre `environment`.
+  # Stage 1 : CI — Qualite du code et build applicatif
   # ---------------------------------------------------------------------------
-  - stage: DetectEnvironment
-    displayName: "Detection de l'environnement"
+  - stage: CI
+    displayName: "CI — Lint, Typecheck, Tests, Build"
     jobs:
-      - job: Detect
-        displayName: Detecter environnement et version
-        pool:
-          vmImage: ubuntu-latest
+      - job: Quality
+        displayName: "Lint + Typecheck + Tests"
         steps:
-          - checkout: none
-
-          - script: |
-              set -euo pipefail
-
-              # Recuperer le nom du tag depuis la variable Azure DevOps
-              TAG_NAME="$(Build.SourceBranch)"
-              echo "Source branch : ${TAG_NAME}"
-
-              # Extraire le nom court du tag (refs/tags/staging-v1.2.3 → staging-v1.2.3)
-              if [[ "${TAG_NAME}" == refs/tags/* ]]; then
-                TAG="${TAG_NAME#refs/tags/}"
-                echo "Tag detecte : ${TAG}"
-
-                if [[ "${TAG}" == staging-v* ]]; then
-                  ENVIRONMENT="staging"
-                  VERSION="${TAG#staging-v}"
-                  IMAGE_PREFIX="staging-"
-                elif [[ "${TAG}" == release-v* ]]; then
-                  ENVIRONMENT="production"
-                  VERSION="${TAG#release-v}"
-                  IMAGE_PREFIX=""
-                else
-                  echo "##vso[task.logissue type=error]Tag invalide : ${TAG}. Attendu : staging-vX.Y.Z ou release-vX.Y.Z"
-                  exit 1
-                fi
-
-                # Validation du format de version (semver basique)
-                if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                  echo "##vso[task.logissue type=error]Format de version invalide : ${VERSION}. Attendu : X.Y.Z"
-                  exit 1
-                fi
-              else
-                # Run manuel : pas de tag, utiliser le parametre
-                echo "Aucun tag detecte — utilisation du parametre environment"
-                ENVIRONMENT="${{ parameters.environment }}"
-                VERSION="manual-$(Build.BuildId)"
-                if [ "${ENVIRONMENT}" = "staging" ]; then
-                  IMAGE_PREFIX="staging-"
-                else
-                  IMAGE_PREFIX=""
-                fi
-              fi
-
-              echo "## Resultat de la detection"
-              echo "  Environnement : ${ENVIRONMENT}"
-              echo "  Version       : ${VERSION}"
-              echo "  Prefixe image : ${IMAGE_PREFIX:-'(aucun)'}"
-
-              # Exporter les variables pour les stages suivants
-              echo "##vso[task.setvariable variable=DETECTED_ENVIRONMENT;isOutput=true]${ENVIRONMENT}"
-              echo "##vso[task.setvariable variable=DETECTED_VERSION;isOutput=true]${VERSION}"
-              echo "##vso[task.setvariable variable=DETECTED_IMAGE_PREFIX;isOutput=true]${IMAGE_PREFIX}"
-            displayName: Detecter environnement et version depuis le tag
-            name: detect
-
-  # ---------------------------------------------------------------------------
-  # Stage 2 : Build image Docker + push vers Azure Container Registry
-  #
-  # Build l'image Docker avec le stage production du Dockerfile.
-  # Tags Docker selon l'environnement :
-  #   staging    → rover:staging-<version>, rover:staging-latest
-  #   production → rover:<version>, rover:latest
-  # ---------------------------------------------------------------------------
-  - stage: BuildAndPush
-    displayName: "Build & Push Docker"
-    dependsOn: DetectEnvironment
-    variables:
-      DETECTED_ENVIRONMENT: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_ENVIRONMENT'] ]
-      DETECTED_VERSION: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_VERSION'] ]
-      DETECTED_IMAGE_PREFIX: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_IMAGE_PREFIX'] ]
-    jobs:
-      - job: BuildPush
-        displayName: "Build et push image Docker"
-        pool:
-          vmImage: ubuntu-latest
-        steps:
-          - checkout: self
-            fetchDepth: 0
-
-          - script: |
-              echo "## Informations de build"
-              echo "  Environnement : $(DETECTED_ENVIRONMENT)"
-              echo "  Version       : $(DETECTED_VERSION)"
-              echo "  Tag image 1   : rover:$(DETECTED_IMAGE_PREFIX)$(DETECTED_VERSION)"
-              echo "  Tag image 2   : rover:$(DETECTED_IMAGE_PREFIX)latest"
-              echo "  Registre      : $(AZURE_REGISTRY_URL)"
-            displayName: Afficher les informations de build
-
-          - script: |
-              set -euo pipefail
-
-              echo "## Connexion au registre ACR..."
-              echo "$(AZURE_REGISTRY_PASSWORD)" | docker login \
-                "$(AZURE_REGISTRY_URL)" \
-                --username "$(AZURE_REGISTRY_USERNAME)" \
-                --password-stdin
-            displayName: Connexion au registre ACR
-
-          - script: |
-              set -euo pipefail
-
-              REGISTRY="$(AZURE_REGISTRY_URL)"
-              PREFIX="$(DETECTED_IMAGE_PREFIX)"
-              VERSION="$(DETECTED_VERSION)"
-
-              IMAGE_TAG_VERSION="${REGISTRY}/rover:${PREFIX}${VERSION}"
-              IMAGE_TAG_LATEST="${REGISTRY}/rover:${PREFIX}latest"
-
-              echo "## Build de l'image Docker..."
-              echo "  Tag version : ${IMAGE_TAG_VERSION}"
-              echo "  Tag latest  : ${IMAGE_TAG_LATEST}"
-
-              # Build l'image avec le stage production du Dockerfile
-              docker build \
-                --target production \
-                --tag "${IMAGE_TAG_VERSION}" \
-                --tag "${IMAGE_TAG_LATEST}" \
-                --label "org.opencontainers.image.version=${VERSION}" \
-                --label "org.opencontainers.image.environment=$(DETECTED_ENVIRONMENT)" \
-                --label "org.opencontainers.image.revision=$(Build.SourceVersion)" \
-                .
-
-              echo "## Push de l'image vers ACR..."
-              docker push "${IMAGE_TAG_VERSION}"
-              docker push "${IMAGE_TAG_LATEST}"
-
-              echo "## Build et push termines avec succes"
-            displayName: Build et push image Docker
-            env:
-              DOCKER_BUILDKIT: 1
-
-  # ---------------------------------------------------------------------------
-  # Stage 3 : Migration de la base de donnees
-  # Execute les migrations Prisma via une Azure Container Instance ephemere.
-  # L'ACI est creee, execute la migration, puis supprimee automatiquement.
-  # ---------------------------------------------------------------------------
-  - stage: Migrate
-    displayName: "Migration base de donnees"
-    dependsOn:
-      - DetectEnvironment
-      - BuildAndPush
-    variables:
-      DETECTED_ENVIRONMENT: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_ENVIRONMENT'] ]
-      DETECTED_VERSION: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_VERSION'] ]
-      DETECTED_IMAGE_PREFIX: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_IMAGE_PREFIX'] ]
-    jobs:
-      - job: PrismaMigrate
-        displayName: Prisma migrate deploy
-        pool:
-          vmImage: ubuntu-latest
-        steps:
-          - task: AzureCLI@2
-            displayName: Executer la migration via ACI ephemere
+          - task: NodeTool@0
+            displayName: "Installer Node.js $(nodeVersion)"
             inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                set -euo pipefail
+              versionSpec: $(nodeVersion)
 
-                ACI_NAME="rover-migrate-$(Build.BuildId)"
-                IMAGE="$(AZURE_REGISTRY_URL)/rover:$(DETECTED_IMAGE_PREFIX)$(DETECTED_VERSION)"
+          - script: npm ci --legacy-peer-deps
+            displayName: "Installation des dependances"
 
-                echo "## Migration pour l'environnement : $(DETECTED_ENVIRONMENT)"
-                echo "## Image : ${IMAGE}"
+          - script: npx prisma generate
+            displayName: "Generation du client Prisma"
 
-                # Creer une ACI ephemere pour executer la migration
-                az container create \
-                  --resource-group "$(RESOURCE_GROUP)" \
-                  --name "${ACI_NAME}" \
-                  --image "${IMAGE}" \
-                  --registry-login-server "$(AZURE_REGISTRY_URL)" \
-                  --registry-username "$(AZURE_REGISTRY_USERNAME)" \
-                  --registry-password "$(AZURE_REGISTRY_PASSWORD)" \
-                  --environment-variables \
-                    DATABASE_URL="$(DATABASE_URL)" \
-                    NODE_ENV=production \
-                  --command-line "npx prisma migrate deploy" \
-                  --restart-policy Never \
-                  --cpu 0.5 \
-                  --memory 1
+          - script: npm run lint
+            displayName: "Lint (ESLint)"
 
-                echo "## Attente de la fin de la migration..."
+          - script: npm run check
+            displayName: "Typecheck (tsc --noEmit)"
 
-                # Attendre la fin de l'execution (max 5 minutes)
-                for i in $(seq 1 30); do
-                  STATE=$(az container show \
-                    --resource-group "$(RESOURCE_GROUP)" \
-                    --name "${ACI_NAME}" \
-                    --query "containers[0].instanceView.currentState.state" \
-                    --output tsv 2>/dev/null || echo "Unknown")
+          - script: npm run test:ci
+            displayName: "Tests unitaires (Vitest)"
+            env:
+              SESSION_SECRET: ci-test-secret-not-for-production-use-xxxxxxxxxxxxxxxx
 
-                  echo "  Tentative ${i}/30 — Etat : ${STATE}"
+          - script: npm run build
+            displayName: "Build complet (esbuild + Vite)"
 
-                  if [ "${STATE}" = "Terminated" ]; then
-                    break
-                  fi
-                  sleep 10
-                done
-
-                # Recuperer le code de sortie
-                EXIT_CODE=$(az container show \
-                  --resource-group "$(RESOURCE_GROUP)" \
-                  --name "${ACI_NAME}" \
-                  --query "containers[0].instanceView.currentState.exitCode" \
-                  --output tsv)
-
-                # Afficher les logs de la migration
-                echo "## Logs de la migration :"
-                az container logs \
-                  --resource-group "$(RESOURCE_GROUP)" \
-                  --name "${ACI_NAME}" || true
-
-                # Nettoyage : supprimer l'ACI ephemere
-                echo "## Suppression de l'ACI ephemere..."
-                az container delete \
-                  --resource-group "$(RESOURCE_GROUP)" \
-                  --name "${ACI_NAME}" \
-                  --yes || true
-
-                # Verifier le resultat
-                if [ "${EXIT_CODE}" != "0" ]; then
-                  echo "##vso[task.logissue type=error]La migration a echoue (code: ${EXIT_CODE})"
-                  exit 1
-                fi
-
-                echo "## Migration terminee avec succes"
-
-  # ---------------------------------------------------------------------------
-  # Stage 4 : Deploiement de la nouvelle image sur Container Apps
-  # L'environnement Azure DevOps (staging ou production) controle
-  # les approbations manuelles si configurees.
-  # ---------------------------------------------------------------------------
-  - stage: Deploy
-    displayName: "Deploiement Container App"
-    dependsOn:
-      - DetectEnvironment
-      - Migrate
-    variables:
-      DETECTED_ENVIRONMENT: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_ENVIRONMENT'] ]
-      DETECTED_VERSION: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_VERSION'] ]
-      DETECTED_IMAGE_PREFIX: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_IMAGE_PREFIX'] ]
-    jobs:
-      - deployment: DeployContainerApp
-        displayName: Mise a jour Container App
-        pool:
-          vmImage: ubuntu-latest
-        # L'environnement Azure DevOps correspond a l'environnement detecte.
-        # En run manuel, le parametre est utilise directement.
-        # Configurer les approbations dans Pipelines > Environments.
-        environment: ${{ parameters.environment }}
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: AzureCLI@2
-                  displayName: Mettre a jour la Container App
-                  inputs:
-                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      set -euo pipefail
-
-                      IMAGE="$(AZURE_REGISTRY_URL)/rover:$(DETECTED_IMAGE_PREFIX)$(DETECTED_VERSION)"
-
-                      echo "## Deploiement [$(DETECTED_ENVIRONMENT)]"
-                      echo "## Image          : ${IMAGE}"
-                      echo "## Container App  : $(CONTAINER_APP_NAME)"
-                      echo "## Resource Group : $(RESOURCE_GROUP)"
-
-                      # Mise a jour de l'image et des variables d'environnement
-                      az containerapp update \
-                        --name "$(CONTAINER_APP_NAME)" \
-                        --resource-group "$(RESOURCE_GROUP)" \
-                        --image "${IMAGE}" \
-                        --set-env-vars \
-                          DATABASE_URL="$(DATABASE_URL)" \
-                          SESSION_SECRET="$(SESSION_SECRET)" \
-                          MICROSOFT_CLIENT_ID="$(MICROSOFT_CLIENT_ID)" \
-                          MICROSOFT_TENANT_ID="$(MICROSOFT_TENANT_ID)" \
-                          MICROSOFT_CLIENT_SECRET="$(MICROSOFT_CLIENT_SECRET)" \
-                          ALLOWED_DOMAIN="$(ALLOWED_DOMAIN)" \
-                          ALLOWED_ORIGINS="$(ALLOWED_ORIGINS)" \
-                          NODE_ENV=production \
-                          PORT=8080
-
-                      echo "## Deploiement termine"
-
-                      # Recuperer le FQDN de la Container App
-                      FQDN=$(az containerapp show \
-                        --name "$(CONTAINER_APP_NAME)" \
-                        --resource-group "$(RESOURCE_GROUP)" \
-                        --query "properties.configuration.ingress.fqdn" \
-                        --output tsv)
-
-                      echo "## Application accessible sur : https://${FQDN}"
-
-  # ---------------------------------------------------------------------------
-  # Stage 5 : Verification post-deploiement (health check)
-  # ---------------------------------------------------------------------------
-  - stage: Verify
-    displayName: "Verification post-deploiement"
-    dependsOn:
-      - DetectEnvironment
-      - Deploy
-    variables:
-      DETECTED_ENVIRONMENT: $[ stageDependencies.DetectEnvironment.Detect.outputs['detect.DETECTED_ENVIRONMENT'] ]
-    jobs:
-      - job: HealthCheck
-        displayName: Health check
-        pool:
-          vmImage: ubuntu-latest
-        steps:
           - script: |
-              set -euo pipefail
+              test -f dist/server/index.js || (echo "ERREUR: dist/server/index.js manquant" && exit 1)
+              test -d dist/public || (echo "ERREUR: dist/public/ manquant" && exit 1)
+              echo "Build verifie avec succes"
+            displayName: "Verification des artefacts"
 
-              URL="https://$(CONTAINER_APP_FQDN)/api/auth/user"
-
-              echo "## Health check [$(DETECTED_ENVIRONMENT)]"
-              echo "## URL : ${URL}"
-              echo "## Attente de 30 secondes pour laisser le conteneur demarrer..."
-              sleep 30
-
-              # Verifier que l'endpoint repond (200 = authentifie, 401 = non authentifie)
-              # Les deux sont des reponses valides prouvant que le serveur fonctionne
-              for i in $(seq 1 5); do
-                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${URL}" || echo "000")
-
-                echo "  Tentative ${i}/5 — Code HTTP : ${HTTP_CODE}"
-
-                if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "401" ]; then
-                  echo "## Health check reussi (HTTP ${HTTP_CODE})"
-                  exit 0
-                fi
-
-                echo "  Reponse inattendue, nouvel essai dans 15 secondes..."
-                sleep 15
-              done
-
-              echo "##vso[task.logissue type=error]Health check echoue apres 5 tentatives"
-              exit 1
-            displayName: Verifier la reponse du serveur
+  # ---------------------------------------------------------------------------
+  # Stage 2 : Build image Docker + push vers ACR
+  # Tag de l'image : rover:<BuildId>
+  # ---------------------------------------------------------------------------
+  - stage: Docker
+    displayName: "Docker — Build & Push ACR"
+    dependsOn: CI
+    condition: succeeded()
+    jobs:
+      - job: BuildAndPush
+        displayName: "Build rover:$(Build.BuildId)"
+        steps:
+          - task: Docker@2
+            displayName: "Build et push image Docker"
+            inputs:
+              containerRegistry: $(serviceConnection)
+              repository: $(imageName)
+              command: buildAndPush
+              Dockerfile: "$(Build.SourcesDirectory)/Dockerfile"
+              buildContext: "$(Build.SourcesDirectory)"
+              tags: |
+                $(Build.BuildId)
+                latest
